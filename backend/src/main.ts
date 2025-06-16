@@ -3,10 +3,11 @@ import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  app.setGlobalPrefix('api');
-  app.enableCors({
-  origin: '*', // ★★★ 全てのアクセスを許可する（デモ用） ★★★
-});
-  await app.listen(3001);
+
+  // ★★★ 下の行をコメントアウトして、グローバルプレフィックスを無効化します ★★★
+  // app.setGlobalPrefix('api');
+
+  app.enableCors();
+  await app.listen(3002);
 }
 bootstrap();

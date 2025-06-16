@@ -1,9 +1,10 @@
-// backend/src/app.module.ts
 import { Module } from '@nestjs/common';
 import { SchedulesModule } from './schedules/schedules.module';
-import { PrismaModule } from './prisma.module'; // ★★★ 修正点 ★★★
+import { PrismaModule } from './prisma.module';
 
 @Module({
-  imports: [PrismaModule, SchedulesModule], // ★★★ 修正点 ★★★
+  imports: [SchedulesModule, PrismaModule],
+  controllers: [],
+  providers: [],
 })
 export class AppModule {}

@@ -1,25 +1,28 @@
-// backend/src/schedules/schedules.controller.ts
-
-import { Controller, Get, Post, Body, Delete, Param, ParseIntPipe } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Delete, Patch, Query } from '@nestjs/common';
 import { SchedulesService } from './schedules.service';
 
-@Controller('schedules')
+@Controller('api/schedules')
 export class SchedulesController {
   constructor(private readonly schedulesService: SchedulesService) {}
 
-  @Get()
-  findAll() {
-    return this.schedulesService.findAll();
-  }
-
   @Post()
-  create(@Body() createScheduleDto: any) {
+  create(@Body() createScheduleDto: { staffId: number; status: string; start: number; end: number; date: string; }) {
     return this.schedulesService.create(createScheduleDto);
   }
 
-  // ★★★ 新しい機能: 削除API ★★★
+  // ★★★ @Query('date') を追加 ★★★
+  @Get()
+  findAll(@Query('date') date: string) {
+    return this.schedulesService.findAll(date);
+  }
+
+  @Patch(':id')
+  update(@Param('id') id: string, @Body() updateScheduleDto: { status?: string; start?: number; end?: number; date: string; }) {
+    return this.schedulesService.update(+id, updateScheduleDto);
+  }
+
   @Delete(':id')
-  remove(@Param('id', ParseIntPipe) id: number) {
-    return this.schedulesService.remove(id);
+  remove(@Param('id') id: string) {
+    return this.schedulesService.remove(+id);
   }
 }

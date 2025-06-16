@@ -1,9 +1,11 @@
-// backend/src/schedules/schedules.gateway.ts
-
-import { WebSocketGateway, WebSocketServer } from '@nestjs/websockets';
+import { WebSocketGateway, WebSocketServer, SubscribeMessage, MessageBody } from '@nestjs/websockets';
 import { Server } from 'socket.io';
 
-@WebSocketGateway({ cors: { origin: '*' } })
+@WebSocketGateway({
+  cors: {
+    origin: '*', // 開発のため全許可
+  },
+})
 export class SchedulesGateway {
   @WebSocketServer()
   server: Server;
@@ -12,8 +14,13 @@ export class SchedulesGateway {
     this.server.emit('schedule:new', schedule);
   }
 
-  // ★★★ 新しい機能: 削除通知 ★★★
-  sendScheduleDeleted(deletedScheduleId: number) {
-    this.server.emit('schedule:deleted', deletedScheduleId);
+  sendScheduleDeleted(id: number) {
+    this.server.emit('schedule:deleted', id);
   }
+
+  // ★★★ ここからが追加箇所 ★★★
+  sendScheduleUpdated(schedule: any) {
+    this.server.emit('schedule:updated', schedule);
+  }
+  // ★★★ ここまでが追加箇所 ★★★
 }

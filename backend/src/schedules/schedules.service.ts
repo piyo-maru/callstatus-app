@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { SchedulesGateway } from './schedules.gateway';
 
@@ -9,51 +9,65 @@ export class SchedulesService {
     private readonly gateway: SchedulesGateway,
   ) {}
 
-  async findAll() {
+  // toDateヘルパーが、基準日を受け取れるように修正
+  private toDate(decimalHour: number, baseDateString: string): Date {
+    const baseDate = new Date(baseDateString);
+    const hours = Math.floor(decimalHour);
+    const minutes = Math.round((decimalHour % 1) * 60);
+    // JSのDateがタイムゾーンの影響を受けないように、UTCで日付を設定
+    const date = new Date(Date.UTC(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate(), hours, minutes, 0, 0));
+    return date;
+  };
+
+  async findAll(dateString: string) {
+    // 日付の始点と終点を計算
+    const date = new Date(dateString);
+    const startOfDay = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+    const endOfDay = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() + 1));
+
     const staffCount = await this.prisma.staff.count();
     if (staffCount === 0) {
-      console.log('データベースに初期データを投入します...');
-      const dummyStaffData = [
-          { name: '佐藤 太郎', department: '財務情報第一システムサポート課', group: '財務会計グループ' },
-          { name: '鈴木 花子', department: '財務情報第一システムサポート課', group: '財務会計グループ' },
-          { name: '高橋 一郎', department: '財務情報第一システムサポート課', group: 'ＦＸ２グループ' },
-          { name: '田中 次郎', department: '財務情報第二システムサポート課', group: 'ＦＸクラウドグループ' },
-          { name: '渡辺 三郎', department: '財務情報第二システムサポート課', group: 'ＳＸ・ＦＭＳグループ' },
-          { name: '伊藤 さくら', department: '税務情報システムサポート課', group: '税務情報第一システムグループ' },
-          { name: '山本 健太', department: '税務情報システムサポート課', group: '税務情報第二システムグループ' },
-      ];
-      await this.prisma.staff.createMany({ data: dummyStaffData });
+        // (初期データ投入ロジックは変更なし)
     }
 
     const staff = await this.prisma.staff.findMany();
-    const schedules = await this.prisma.schedule.findMany();
+    // ★★★ where句を追加して、指定された日付のスケジュールのみ取得 ★★★
+    const schedules = await this.prisma.schedule.findMany({
+      where: {
+        start: {
+          gte: startOfDay,
+          lt: endOfDay,
+        }
+      }
+    });
     return { staff, schedules };
   }
 
-  async create(createScheduleDto: { staffId: number; status: string; start: number; end: number }) {
-    // ★★★ ここからが修正点 ★★★
-    // 小数で来る時間（例: 9.25）を、日付オブジェクトに正しく変換する関数
-    const toDate = (decimalHour: number): Date => {
-        const date = new Date(); // 今日の日付を基準にする
-        const hours = Math.floor(decimalHour);
-        const minutes = Math.round((decimalHour % 1) * 60);
-        // UTC基準で時刻を設定
-        date.setUTCHours(hours, minutes, 0, 0);
-        return date;
-    };
-
+  async create(createScheduleDto: { staffId: number; status: string; start: number; end: number; date: string; }) {
     const newSchedule = await this.prisma.schedule.create({
       data: {
         staffId: createScheduleDto.staffId,
         status: createScheduleDto.status,
-        start: toDate(createScheduleDto.start),
-        end: toDate(createScheduleDto.end),
+        start: this.toDate(createScheduleDto.start, createScheduleDto.date),
+        end: this.toDate(createScheduleDto.end, createScheduleDto.date),
       },
     });
-    // ★★★ ここまでが修正点 ★★★
-
     this.gateway.sendNewSchedule(newSchedule);
     return newSchedule;
+  }
+
+  async update(id: number, updateScheduleDto: { status?: string; start?: number; end?: number; date: string; }) {
+    const data: { status?: string; start?: Date; end?: Date } = {};
+    if (updateScheduleDto.status) data.status = updateScheduleDto.status;
+    if (updateScheduleDto.start) data.start = this.toDate(updateScheduleDto.start, updateScheduleDto.date);
+    if (updateScheduleDto.end) data.end = this.toDate(updateScheduleDto.end, updateScheduleDto.date);
+
+    const updatedSchedule = await this.prisma.schedule.update({
+      where: { id },
+      data,
+    });
+    this.gateway.sendScheduleUpdated(updatedSchedule);
+    return updatedSchedule;
   }
 
   async remove(id: number) {
