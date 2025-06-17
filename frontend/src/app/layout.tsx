@@ -13,6 +13,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ja">
+      <head>
+        <script src="/config.js"></script>
+      </head>
       <body>{children}</body>
     </html>
   );

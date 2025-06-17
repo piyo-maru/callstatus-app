@@ -20,6 +20,7 @@ model Schedule {
   status    String
   start     DateTime
   end       DateTime
+  memo      String?
   staff     Staff    @relation(fields: [staffId], references: [id])
   staffId   Int
 }

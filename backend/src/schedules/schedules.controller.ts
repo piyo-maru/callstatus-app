@@ -6,8 +6,16 @@ export class SchedulesController {
   constructor(private readonly schedulesService: SchedulesService) {}
 
   @Post()
-  create(@Body() createScheduleDto: { staffId: number; status: string; start: number; end: number; date: string; }) {
-    return this.schedulesService.create(createScheduleDto);
+  async create(@Body() createScheduleDto: { staffId: number; status: string; start: number; end: number; date: string; }) {
+    try {
+      console.log('Creating schedule with data:', createScheduleDto);
+      const result = await this.schedulesService.create(createScheduleDto);
+      console.log('Schedule created successfully:', result);
+      return result;
+    } catch (error) {
+      console.error('Error creating schedule:', error);
+      throw error;
+    }
   }
 
   // ★★★ @Query('date') を追加 ★★★

@@ -1,0 +1,13 @@
+// CallStatus App Configuration Sample
+// このファイルをconfig.jsにコピーして使用してください
+
+window.APP_CONFIG = {
+  // 開発環境用（localhost）
+  API_HOST: 'http://localhost:3002',
+  
+  // 社内テスト環境用
+  // API_HOST: 'http://10.99.129.21:3002',
+  
+  // 本番環境用（必要に応じて設定）
+  // API_HOST: 'http://your-production-server:3002',
+};
