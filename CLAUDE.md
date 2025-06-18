@@ -1,10 +1,23 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+このファイルは、このリポジトリでコードを扱う際のClaude Code (claude.ai/code) へのガイダンスを提供します。
 
 ## 会話ガイドライン
 
 - 常に日本語で会話する
+
+## 開発理念
+
+### テスト駆動開発（TDD）
+
+- 原則としてテスト駆動開発（TDD）で進める
+- 期待される入出力に基づき、まずテストを作成する
+- 実装コードは書かず、テストのみを用意する
+- テストを実行し、失敗を確認する
+- テストが正しいことを確認できた段階でコミットする
+- その後、テストをパスさせる実装を進める
+- 実装中はテストを変更せず、コードを修正し続ける
+- すべてのテストが通過するまで繰り返す
 
 ## プロジェクト概要
 
@@ -72,7 +85,7 @@ npm run lint          # Next.jsリンティング
 - **WebSocketゲートウェイ** (`schedules.gateway.ts`) - リアルタイム更新用
 - **Prismaサービス** - PostgreSQLデータベース連携
 - **RESTful API** - パフォーマンス向上のための日付フィルタークエリ
-- **UTC基準時間処理** - タイムゾーン問題回避
+- **JST基準時間処理** - 日本時間での一貫した時刻管理
 
 **主要ファイル:**
 - `src/schedules/schedules.service.ts` - 時間変換を含むコアビジネスロジック
@@ -81,19 +94,20 @@ npm run lint          # Next.jsリンティング
 - `prisma/schema.prisma` - データベーススキーマ（StaffとScheduleテーブル）
 
 ### フロントエンドアーキテクチャ
-- **シングルページアプリケーション** - 全機能が`src/app/page.tsx`に集約（548行）
+- **シングルページアプリケーション** - 全機能が`src/app/page.tsx`に集約
 - **リアルタイムWebSocket統合** - Socket.IOクライアント
 - **カスタムモーダルシステム** - Reactポータル使用
 - **インタラクティブタイムラインUI** - ドラッグ&ドロップでスケジュール作成
 - **日本語ローカライゼーション** - date-fns使用
 
 **主要機能:**
-- 非線形タイムラインスケーリング（9:00-18:00 vs 18:00以降の時間）
+- 8:00-21:00タイムライン（15分間隔、4マス=1時間）
+- 早朝（8:00-9:00）・夜間（18:00-21:00）の色分け表示
 - 多段階フィルタリング（部署、グループ、在席状況）
 - リアルタイム現在時刻インジケーター
-- 15分間隔対応のカスタム時間変換関数
+- メモ機能（Meeting・Training用）
 
-### Database Schema
+### データベーススキーマ
 ```prisma
 model Staff {
   id          Int        @id @default(autoincrement())
@@ -105,90 +119,197 @@ model Staff {
 
 model Schedule {
   id        Int      @id @default(autoincrement())
-  status    String   # 'working', 'break', 'unavailable', etc.
+  status    String   # 'Online', 'Meeting', 'Training', 'Break', 'Off', 'Night Duty'
   start     DateTime
   end       DateTime
+  memo      String?  # メモ（Meeting・Training用）
   staff     Staff    @relation(fields: [staffId], references: [id])
   staffId   Int
 }
 ```
 
-## API Structure
+## API構造
 
-### REST Endpoints
-- `GET /api/schedules?date=YYYY-MM-DD` - Get schedules for specific date
-- `POST /api/schedules` - Create new schedule
-- `PATCH /api/schedules/:id` - Update existing schedule  
-- `DELETE /api/schedules/:id` - Delete schedule
+### RESTエンドポイント
+- `GET /api/schedules?date=YYYY-MM-DD` - 指定日の予定を取得
+- `POST /api/schedules` - 新しい予定を作成
+- `PATCH /api/schedules/:id` - 既存の予定を更新
+- `DELETE /api/schedules/:id` - 予定を削除
 
-### WebSocket Events
-- `schedule:new` - Broadcast new schedule creation
-- `schedule:updated` - Broadcast schedule updates
-- `schedule:deleted` - Broadcast schedule deletion
+### WebSocketイベント
+- `schedule:new` - 新しい予定作成を配信
+- `schedule:updated` - 予定更新を配信
+- `schedule:deleted` - 予定削除を配信
 
-## Development Patterns
+## 開発パターン
 
-### Time Handling
-- All database times stored in UTC
-- Frontend displays in local timezone
-- Date parameter passed separately from time for proper conversion
-- Special `toDate()` helper in service handles decimal hours → Date conversion
+### 時刻処理
+- データベースにはUTC時刻として保存
+- フロントエンドではJST（日本時間）で表示
+- バックエンドでJST→UTC変換を実行（JST時刻-9時間でUTC保存）
+- 日付パラメータは時刻とは別に渡して適切な変換を実行
+- サービス内の特別な`toDate()`ヘルパーが小数点時間→Dateオブジェクト変換を処理
 
-### Real-time Updates
-- All CRUD operations broadcast via WebSocket
-- Frontend automatically updates UI on receiving WebSocket events
-- Socket.IO rooms not used - all clients receive all updates
+### リアルタイム更新
+- すべてのCRUD操作をWebSocket経由で配信
+- フロントエンドはWebSocketイベント受信時にUIを自動更新
+- Socket.IOルームは使用せず、全クライアントが全更新を受信
 
-### Frontend State Management
-- React hooks (useState, useEffect, useMemo, useCallback)
-- No external state management library
-- Real-time data synchronized via WebSocket events
+### フロントエンド状態管理
+- Reactフック（useState、useEffect、useMemo、useCallback）
+- 外部状態管理ライブラリは使用しない
+- WebSocketイベント経由でリアルタイムデータ同期
 
-## Configuration Notes
+## 設定ノート
 
-### Docker Development Setup
-- Frontend runs on port 3000
-- Backend runs on port 3002 (modified from default 3001)
-- PostgreSQL on port 5432
-- Volume mounts enabled for live code reloading
-- Database connection: `postgresql://user:password@db:5432/mydb`
+### Docker開発セットアップ
+- フロントエンド: ポート3000
+- バックエンド: ポート3002（デフォルトの3001から変更）
+- PostgreSQL: ポート5432
+- ライブコードリロードのためのボリュームマウントが有効
+- データベース接続: `postgresql://user:password@db:5432/mydb`
 
-### Japanese Localization
-- All UI text in Japanese
-- Date formats using Japanese locale (年月日)
-- React DatePicker configured with Japanese locale
+### 日本語ローカライゼーション
+- すべてのUIテキストが日本語
+- 日本語ロケールを使用した日付フォーマット（年月日）
+- React DatePickerを日本語ロケールで設定
 
-### API Configuration
-- CORS enabled for all origins in development
-- No global API prefix (disabled in main.ts)
-- Socket.IO CORS configured for development
+### API設定
+- 開発環境でCORSを有効化（localhost + 10.99.129.21の両方に対応）
+- グローバルAPIプレフィックスなし（main.tsで無効化）
+- 開発用のSocket.IO CORS設定
+- 動的API URL判定機能（アクセス元ホストに基づく自動切り替え）
 
-## Testing Notes
-- Jest configured for both unit and e2e tests
-- Minimal test coverage currently exists
-- Test environment properly set up for expansion
-- Database testing would require test database setup
+## テストノート
+- ユニットテストとe2eテストの両方でJestを設定
+- 現在のテストカバレッジは最小限
+- 拡張用のテスト環境は適切に設定済み
+- データベーステストにはテスト用データベースセットアップが必要
 
-## Common Development Tasks
+## よくある開発タスク
 
-### Adding New Schedule Status
-1. Update frontend status options in page.tsx
-2. Update backend validation if needed
-3. Consider adding database enum constraint
+### 新しいスケジュールステータスの追加
+1. page.tsxのフロントエンドステータスオプションを更新
+2. 必要に応じてバックエンドバリデーションを更新
+3. データベースのenum制約追加を検討
 
-### Modifying Time Intervals
-- Update `STEP_MINUTES` constant in frontend
-- Adjust time conversion logic in backend service
-- Update timeline rendering calculations
+### 時間間隔の変更
+- フロントエンドの`STEP_MINUTES`定数を更新
+- バックエンドサービスの時間変換ロジックを調整
+- タイムライン描画計算を更新
 
-### Adding Staff Management
-- Create new staff module in backend
-- Add staff CRUD endpoints
-- Extend frontend with staff management UI
-- Update WebSocket events for staff changes
+### スタッフ管理機能の追加
+- バックエンドに新しいstaffモジュールを作成
+- スタッフCRUDエンドポイントを追加
+- スタッフ管理UIでフロントエンドを拡張
+- スタッフ変更用のWebSocketイベントを更新
 
-# important-instruction-reminders
-Do what has been asked; nothing more, nothing less.
-NEVER create files unless they're absolutely necessary for achieving your goal.
-ALWAYS prefer editing an existing file to creating a new one.
-NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.
+## 文字サポートと国際化
+
+### 文字チェック機能
+- JIS第1-2水準漢字 + ひらがな + カタカナ + 英数字 + 基本記号をサポート
+- ファイルアップロード時の文字検証機能
+- サポート外文字の検出とエラー表示
+
+### タイムゾーン統一
+- PostgreSQL: Asia/Tokyoタイムゾーン
+- バックエンド: JST基準での時刻処理
+- フロントエンド: JST基準での表示
+- 全システムで日本時間に統一
+
+## 機能拡張プロジェクト進行状況
+
+### 🎯 プロジェクト概要
+3層データ階層による大規模機能拡張（契約・月次・個別調整）
+- **開始日**: 2025-06-18
+- **目的**: シンプルな単層構造から企業レベルの3層データ管理システムへの移行
+
+### 📋 実装フェーズ
+
+#### フェーズ1: データ構造基盤 【完了】
+- [x] データベーススキーマ拡張（3層構造用テーブル追加）
+- [x] データ優先順位ロジック（3層データ取得・統合API）
+- **目標**: 既存システムと並行稼働可能な基盤構築 ✅
+- **リスク**: 低
+- **完了日**: 2025-06-18
+- **実装内容**:
+  - Contract、MonthlySchedule、Adjustmentテーブル追加
+  - LayerManagerService実装（3層データ統合ロジック）
+  - /api/schedules/layered エンドポイント追加
+  - 既存APIとの並行稼働を確保
+
+#### フェーズ2: JSON投入機能 【未着手】
+- [ ] スタッフマスタ投入（JSON形式、レイヤー1生成）
+- [ ] 文字チェック機能（JIS第1-2水準）
+- **目標**: 契約データの一括投入機能
+- **リスク**: 低
+
+#### フェーズ3: CSV投入機能 【未着手】
+- [ ] CSV基本投入（レイヤー2への投入）
+- [ ] 競合管理機能（レイヤー3との競合検出・詳細レポート）
+- **目標**: 月次スケジュールの効率的管理
+- **リスク**: 中
+
+#### フェーズ4: UI機能強化 【未着手】
+- [ ] ドラッグ&ドロップ制限（online移動不可制御）
+- [ ] 表示制御強化（今日のみ表示切り替え、対応可能人数）
+- **目標**: 3層データに対応したUI改善
+- **リスク**: 中
+
+#### フェーズ5: データ移行・統合 【未着手】
+- [ ] 既存データ移行（現在のスケジュール → レイヤー3）
+- [ ] 旧システム廃止（既存APIの段階的廃止）
+- **目標**: 完全な3層システムへの移行
+- **リスク**: 高
+
+### 🔧 技術仕様詳細
+
+#### 3層データ階層設計
+```
+優先順位: レイヤー3（個別調整）> レイヤー2（月次/CSV）> レイヤー1（契約）
+
+レイヤー1（契約）:
+- 契約による基本勤務時間
+- 年次更新時に洗い替え
+- 移動不可
+
+レイヤー2（月次/CSV）:
+- 月次基本スケジュール
+- 契約より優先、移動可能
+- CSV一括投入対応
+
+レイヤー3（個別調整）:
+- 個別調整・例外予定
+- 最優先、移動可能
+- UI操作対応
+```
+
+#### 競合管理仕様
+```json
+{
+  "success": true,
+  "imported": 45,
+  "conflicts": [
+    {
+      "date": "2025-06-18",
+      "staff": "田中太郎",
+      "csvSchedule": {"type": "Training", "time": "10:00-12:00"},
+      "existingSchedule": {"type": "Meeting", "time": "10:00-12:00", "layer": "個別調整"},
+      "result": "個別調整を優先（CSVの予定は無効）"
+    }
+  ]
+}
+```
+
+### 📊 進捗管理
+- **各フェーズ完了後**: Gitコミット + GitHubプッシュ
+- **進捗更新**: 本セクションを随時更新
+- **ロールバック**: 各フェーズ間で問題発生時は前フェーズに復帰可能
+
+---
+
+# 重要な指示リマインダー
+求められたことを行う。それ以上でも以下でもない。
+目標達成に絶対必要でない限り、ファイルを作成しない。
+新しいファイルを作成するよりも、既存のファイルを編集することを常に優先する。
+ドキュメントファイル（*.md）やREADMEファイルを積極的に作成しない。ユーザーから明示的に要求された場合のみドキュメントファイルを作成する。

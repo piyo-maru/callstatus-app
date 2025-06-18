@@ -13,6 +13,11 @@ model Staff {
   department  String
   group       String
   schedules   Schedule[]
+  
+  // 3層構造用のリレーション
+  contracts        Contract[]
+  monthlySchedules MonthlySchedule[]
+  adjustments      Adjustment[]
 }
 
 model Schedule {
@@ -21,6 +26,60 @@ model Schedule {
   start     DateTime
   end       DateTime
   memo      String?
+  staff     Staff    @relation(fields: [staffId], references: [id])
+  staffId   Int
+}
+
+// レイヤー1: 契約による基本勤務時間（年次更新、移動不可）
+model Contract {
+  id          Int      @id @default(autoincrement())
+  empNo       String   // 社員番号
+  name        String
+  department  String
+  team        String
+  email       String?
+  workDays    String[] // ["mon","tue","wed","thu","fri"]
+  workHours   String   // "8:30-18:00"
+  breakHours  String?  // "12:00-13:00"
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  staff       Staff    @relation(fields: [staffId], references: [id])
+  staffId     Int
+  
+  @@unique([empNo])
+}
+
+// レイヤー2: 月次基本スケジュール（CSV投入、契約より優先、移動可能）
+model MonthlySchedule {
+  id        Int      @id @default(autoincrement())
+  date      DateTime // 日付（時刻情報なし）
+  status    String   // 'online', 'meeting', 'training', 'break', 'off', 'night_duty'
+  start     DateTime
+  end       DateTime
+  memo      String?
+  source    String   @default("csv") // 'csv', 'manual'
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  staff     Staff    @relation(fields: [staffId], references: [id])
+  staffId   Int
+  
+  @@unique([staffId, date, start, end])
+}
+
+// レイヤー3: 個別調整・例外予定（最優先、移動可能、UI操作）
+model Adjustment {
+  id        Int      @id @default(autoincrement())
+  date      DateTime // 日付（時刻情報なし）
+  status    String   // 'online', 'meeting', 'training', 'break', 'off', 'night_duty'
+  start     DateTime
+  end       DateTime
+  memo      String?
+  reason    String?  // 調整理由
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
   staff     Staff    @relation(fields: [staffId], references: [id])
   staffId   Int
 }
