@@ -6,7 +6,7 @@ import { io, Socket } from 'socket.io-client';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 // ★★★ カレンダーライブラリをインポート ★★★
 import DatePicker, { registerLocale } from 'react-datepicker';
-import ja from 'date-fns/locale/ja';
+import { ja } from 'date-fns/locale/ja';
 import "react-datepicker/dist/react-datepicker.css";
 
 // ★★★ カレンダーの表示言語を日本語に設定 ★★★
@@ -27,7 +27,17 @@ type Staff = {
   name: string;
   department: string;
   group: string;
-  currentStatus: string; 
+  currentStatus: string;
+  isSupporting?: boolean;
+  originalDept?: string;
+  originalGroup?: string;
+  currentDept?: string;
+  currentGroup?: string;
+  supportInfo?: {
+    startDate: string;
+    endDate: string;
+    reason: string;
+  } | null;
 };
 
 type ScheduleFromDB = {
@@ -91,33 +101,33 @@ const checkSupportedCharacters = (data: Array<{name: string; dept: string; team:
   data.forEach((item, index) => {
     // 名前をチェック
     if (!supportedCharsRegex.test(item.name)) {
-      const invalidChars = [...item.name].filter(char => !supportedCharsRegex.test(char));
+      const invalidChars = Array.from(item.name).filter(char => !supportedCharsRegex.test(char));
       errors.push({
         field: 'name',
         value: item.name,
-        invalidChars: [...new Set(invalidChars)],
+        invalidChars: Array.from(new Set(invalidChars)),
         position: index + 1
       });
     }
     
     // 部署をチェック
     if (!supportedCharsRegex.test(item.dept)) {
-      const invalidChars = [...item.dept].filter(char => !supportedCharsRegex.test(char));
+      const invalidChars = Array.from(item.dept).filter(char => !supportedCharsRegex.test(char));
       errors.push({
         field: 'dept',
         value: item.dept,
-        invalidChars: [...new Set(invalidChars)],
+        invalidChars: Array.from(new Set(invalidChars)),
         position: index + 1
       });
     }
     
     // チーム/グループをチェック
     if (!supportedCharsRegex.test(item.team)) {
-      const invalidChars = [...item.team].filter(char => !supportedCharsRegex.test(char));
+      const invalidChars = Array.from(item.team).filter(char => !supportedCharsRegex.test(char));
       errors.push({
         field: 'team',
         value: item.team,
-        invalidChars: [...new Set(invalidChars)],
+        invalidChars: Array.from(new Set(invalidChars)),
         position: index + 1
       });
     }
@@ -296,6 +306,183 @@ const ConfirmationModal = ({ isOpen, onClose, onConfirm, message }: { isOpen: bo
         </div>,
         document.body
     );
+};
+
+// --- 支援設定モーダルコンポーネント ---
+const AssignmentModal = ({ isOpen, onClose, staff, staffList, onSave }: {
+  isOpen: boolean;
+  onClose: () => void;
+  staff: Staff | null;
+  staffList: Staff[];
+  onSave: (data: {
+    staffId: number;
+    startDate: string;
+    endDate: string;
+    department: string;
+    group: string;
+  }) => void;
+}) => {
+  const [startDate, setStartDate] = useState<Date | null>(null);
+  const [endDate, setEndDate] = useState<Date | null>(null);
+  const [department, setDepartment] = useState('');
+  const [group, setGroup] = useState('');
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  // 既存の支援設定がある場合は初期値として設定
+  useEffect(() => {
+    if (isOpen && staff) {
+      if (staff.supportInfo) {
+        setStartDate(new Date(staff.supportInfo.startDate));
+        setEndDate(new Date(staff.supportInfo.endDate));
+        setDepartment(staff.currentDept || '');
+        setGroup(staff.currentGroup || '');
+      } else {
+        // 新規の場合は明日から開始
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        setStartDate(tomorrow);
+        setEndDate(tomorrow);
+        setDepartment('');
+        setGroup('');
+      }
+    } else if (!isOpen) {
+      setStartDate(null);
+      setEndDate(null);
+      setDepartment('');
+      setGroup('');
+    }
+  }, [isOpen, staff]);
+
+  // 利用可能な部署とグループを取得
+  const availableDepartments = useMemo(() => {
+    return Array.from(new Set(staffList.map(s => s.department)));
+  }, [staffList]);
+
+  const availableGroups = useMemo(() => {
+    if (!department) return [];
+    return Array.from(new Set(staffList.filter(s => s.department === department).map(s => s.group)));
+  }, [staffList, department]);
+
+  // 部署が変更されたらグループをリセット
+  useEffect(() => {
+    if (department && !availableGroups.includes(group)) {
+      setGroup('');
+    }
+  }, [department, availableGroups, group]);
+
+  if (!isOpen || !isClient || !staff) return null;
+
+  const handleSave = () => {
+    if (!startDate || !endDate || !department || !group) {
+      alert('すべての項目を入力してください。');
+      return;
+    }
+
+    if (startDate > endDate) {
+      alert('開始日は終了日より前の日付を選択してください。');
+      return;
+    }
+
+    onSave({
+      staffId: staff.id,
+      startDate: startDate.toISOString().split('T')[0],
+      endDate: endDate.toISOString().split('T')[0],
+      department,
+      group,
+    });
+    onClose();
+  };
+
+  return createPortal(
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-[9998] flex justify-center items-center">
+      <div className="bg-white rounded-lg p-6 shadow-xl w-full max-w-md">
+        <h3 className="text-lg font-medium leading-6 text-gray-900">
+          {staff.supportInfo ? '支援設定を編集' : '支援設定を追加'} - {staff.name}
+        </h3>
+        <div className="mt-4 space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">開始日</label>
+              <DatePicker
+                selected={startDate}
+                onChange={(date: Date | null) => setStartDate(date)}
+                locale="ja"
+                dateFormat="yyyy年M月d日(E)"
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                placeholderText="開始日を選択"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">終了日</label>
+              <DatePicker
+                selected={endDate}
+                onChange={(date: Date | null) => setEndDate(date)}
+                locale="ja"
+                dateFormat="yyyy年M月d日(E)"
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                placeholderText="終了日を選択"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">支援先部署</label>
+            <select
+              value={department}
+              onChange={(e) => setDepartment(e.target.value)}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+            >
+              <option value="">選択してください</option>
+              {availableDepartments.map(dept => (
+                <option key={dept} value={dept}>{dept}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">支援先グループ</label>
+            <select
+              value={group}
+              onChange={(e) => setGroup(e.target.value)}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+              disabled={!department}
+            >
+              <option value="">選択してください</option>
+              {availableGroups.map(grp => (
+                <option key={grp} value={grp}>{grp}</option>
+              ))}
+            </select>
+          </div>
+          {staff.supportInfo && (
+            <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
+              <p className="text-sm text-blue-800">
+                現在の支援先: {staff.currentDept} / {staff.currentGroup}
+              </p>
+            </div>
+          )}
+        </div>
+        <div className="mt-6 flex justify-end space-x-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+          >
+            キャンセル
+          </button>
+          <button
+            type="button"
+            onClick={handleSave}
+            className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md hover:bg-indigo-700"
+          >
+            保存
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
 };
 
 // --- JSONファイルアップロードモーダルコンポーネント ---
@@ -525,6 +712,8 @@ export default function Home() {
   const [dragInfo, setDragInfo] = useState<DragInfo | null>(null);
   const [draggedSchedule, setDraggedSchedule] = useState<Partial<Schedule> | null>(null);
   const [isJsonUploadModalOpen, setIsJsonUploadModalOpen] = useState(false);
+  const [isAssignmentModalOpen, setIsAssignmentModalOpen] = useState(false);
+  const [selectedStaffForAssignment, setSelectedStaffForAssignment] = useState<Staff | null>(null);
   
   // スクロール同期用のref
   const topScrollRef = useRef<HTMLDivElement>(null);
@@ -540,11 +729,40 @@ export default function Home() {
     const dateString = date.toISOString().split('T')[0];
     const currentApiUrl = getApiUrl();
     try {
-      const res = await fetch(`${currentApiUrl}/api/schedules?date=${dateString}`);
-      if (!res.ok) throw new Error(`Network response was not ok`);
-      const data: { staff: Staff[], schedules: ScheduleFromDB[] } = await res.json();
-      setStaffList(data.staff as Staff[]);
-      const formattedSchedules = data.schedules.map(s => {
+      // スケジュールと支援状況を並列で取得
+      const [scheduleRes, supportRes] = await Promise.all([
+        fetch(`${currentApiUrl}/api/schedules?date=${dateString}`),
+        fetch(`${currentApiUrl}/api/assignments/status`)
+      ]);
+      
+      if (!scheduleRes.ok) throw new Error(`Schedule API response was not ok`);
+      if (!supportRes.ok) throw new Error(`Support API response was not ok`);
+      
+      const scheduleData: { staff: Staff[], schedules: ScheduleFromDB[] } = await scheduleRes.json();
+      const supportData = await supportRes.json();
+      
+      // 支援状況をスタッフデータにマージ
+      const staffWithSupport = scheduleData.staff.map(staff => {
+        const supportInfo = supportData.find((s: any) => s.id === staff.id);
+        if (supportInfo && supportInfo.isSupporting) {
+          return {
+            ...staff,
+            isSupporting: true,
+            originalDept: supportInfo.originalDept,
+            originalGroup: supportInfo.originalGroup,
+            currentDept: supportInfo.currentDept,
+            currentGroup: supportInfo.currentGroup,
+            supportInfo: supportInfo.supportInfo
+          };
+        }
+        return {
+          ...staff,
+          isSupporting: false
+        };
+      });
+      
+      setStaffList(staffWithSupport);
+      const formattedSchedules = scheduleData.schedules.map(s => {
         const start = new Date(s.start);
         const end = new Date(s.end);
         return { ...s, start: start.getHours() + start.getMinutes() / 60, end: end.getHours() + end.getMinutes() / 60 };
@@ -634,6 +852,45 @@ export default function Home() {
       await fetch(`${currentApiUrl}/api/schedules/${id}`, { method: 'DELETE' });
     } catch (error) { console.error('予定の削除に失敗しました', error); }
     setDeletingScheduleId(null);
+  };
+
+  const handleOpenAssignmentModal = (staff: Staff) => {
+    setSelectedStaffForAssignment(staff);
+    setIsAssignmentModalOpen(true);
+  };
+
+  const handleSaveAssignment = async (data: {
+    staffId: number;
+    startDate: string;
+    endDate: string;
+    department: string;
+    group: string;
+  }) => {
+    const currentApiUrl = getApiUrl();
+    try {
+      const response = await fetch(`${currentApiUrl}/api/assignments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Assignment API Error:', response.status, response.statusText, errorText);
+        throw new Error(`支援設定の保存に失敗しました: ${response.status} ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      console.log('Assignment saved successfully:', result);
+      
+      // データを再取得してUIを更新
+      await fetchData(displayDate);
+      setIsAssignmentModalOpen(false);
+      setSelectedStaffForAssignment(null);
+    } catch (error) {
+      console.error('支援設定の保存に失敗しました:', error);
+      alert('支援設定の保存に失敗しました。再度お試しください。\n詳細: ' + (error instanceof Error ? error.message : String(error)));
+    }
   };
 
   const handleJsonUpload = async (file: File) => {
@@ -780,7 +1037,7 @@ export default function Home() {
   }, [departmentGroupFilteredStaff, selectedStatus]);
   
   const chartData = useMemo(() => {
-    const data = [];
+    const data: any[] = [];
     const staffToChart = staffList.filter(staff => {
         const departmentMatch = selectedDepartment === 'all' || staff.department === selectedDepartment;
         const groupMatch = selectedGroup === 'all' || staff.group === selectedGroup;
@@ -881,6 +1138,16 @@ export default function Home() {
       <ScheduleModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} staffList={staffList as Staff[]} onSave={handleSaveSchedule} scheduleToEdit={editingSchedule} initialData={draggedSchedule || undefined} />
       <ConfirmationModal isOpen={deletingScheduleId !== null} onClose={() => setDeletingScheduleId(null)} onConfirm={() => { if (deletingScheduleId) handleDeleteSchedule(deletingScheduleId); }} message="この予定を削除しますか？" />
       <JsonUploadModal isOpen={isJsonUploadModalOpen} onClose={() => setIsJsonUploadModalOpen(false)} onUpload={handleJsonUpload} />
+      <AssignmentModal 
+        isOpen={isAssignmentModalOpen} 
+        onClose={() => {
+          setIsAssignmentModalOpen(false);
+          setSelectedStaffForAssignment(null);
+        }} 
+        staff={selectedStaffForAssignment} 
+        staffList={staffList} 
+        onSave={handleSaveAssignment} 
+      />
       
       <main className="container mx-auto p-4 font-sans">
         <header className="mb-6 flex justify-between items-center">
@@ -946,8 +1213,16 @@ export default function Home() {
                       <div key={group}>
                         <h4 className="px-2 pl-6 min-h-[33px] text-xs font-semibold bg-gray-100 whitespace-nowrap flex items-center">{group}</h4>
                         {staffInGroup.map(staff => (
-                          <div key={staff.id} className="px-2 pl-12 text-sm font-medium whitespace-nowrap h-[45px] hover:bg-gray-50 flex items-center">
-                            {staff.name}
+                          <div key={staff.id} className={`px-2 pl-12 text-sm font-medium whitespace-nowrap h-[45px] hover:bg-gray-50 flex items-center cursor-pointer ${
+                            staff.isSupporting ? 'bg-amber-50 border border-amber-400' : ''
+                          }`}
+                               onClick={() => handleOpenAssignmentModal(staff)}>
+                            <span className={staff.isSupporting ? 'text-amber-800' : ''}>
+                              {staff.name}
+                              {staff.isSupporting && (
+                                <span className="ml-1 text-xs text-amber-600 font-semibold">[支援]</span>
+                              )}
+                            </span>
                           </div>
                         ))}
                       </div>
