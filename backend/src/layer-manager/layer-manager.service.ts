@@ -93,7 +93,7 @@ export class LayerManagerService {
       memo: adj.memo,
       layer: 'adjustment' as const,
       source: 'UI操作',
-      canMove: adj.status !== 'online' // onlineは移動不可
+      canMove: adj.status !== 'online' // onlineは移動不可、remoteは移動可能
     }));
 
     result.push(...adjustments);
@@ -112,7 +112,7 @@ export class LayerManagerService {
         memo: monthly.memo,
         layer: 'monthly' as const,
         source: monthly.source,
-        canMove: monthly.status !== 'online'
+        canMove: monthly.status !== 'online' // onlineは移動不可、remoteは移動可能
       }));
 
     result.push(...monthlySchedules);
@@ -246,6 +246,7 @@ export class LayerManagerService {
   private convertStatusFormat(status: string): string {
     const statusMap = {
       'online': 'Online',
+      'remote': 'Remote',
       'meeting': 'Meeting',
       'training': 'Training',
       'break': 'Break',

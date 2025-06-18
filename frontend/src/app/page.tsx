@@ -57,7 +57,7 @@ type DragInfo = {
 
 // --- 定数定義 ---
 const statusColors: { [key: string]: string } = {
-  'Online': '#22c55e', 'Meeting': '#f59e0b', 'Training': '#3b82f6',
+  'Online': '#22c55e', 'Remote': '#10b981', 'Meeting': '#f59e0b', 'Training': '#3b82f6',
   'Break': '#f97316', 'Off': '#ef4444', 'Night Duty': '#4f46e5',
 };
 // 設定ファイルからAPIのURLを取得する関数
@@ -68,8 +68,8 @@ const getApiUrl = (): string => {
   // フォールバック（サーバーサイドレンダリング時など）
   return 'http://localhost:3002';
 };
-const availableStatuses = ['Online', 'Meeting', 'Training', 'Break', 'Off', 'Night Duty'];
-const AVAILABLE_STATUSES = ['Online', 'Night Duty'];
+const availableStatuses = ['Online', 'Remote', 'Meeting', 'Training', 'Break', 'Off', 'Night Duty'];
+const AVAILABLE_STATUSES = ['Online', 'Remote', 'Night Duty'];
 
 // --- 文字チェック関数 ---
 type CharacterCheckResult = {
