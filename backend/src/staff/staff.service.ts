@@ -186,16 +186,27 @@ export class StaffService {
   }
 
   async syncFromEmployeeData(jsonData: any) {
-    console.log('Processing JSON data for staff sync...');
-    
-    if (!jsonData.employeeData || !Array.isArray(jsonData.employeeData)) {
-      throw new BadRequestException('Invalid JSON format: employeeData array not found');
+    try {
+      console.log('Processing JSON data for staff sync...');
+      
+      if (!jsonData.employeeData || !Array.isArray(jsonData.employeeData)) {
+        throw new BadRequestException('Invalid JSON format: employeeData array not found');
+      }
+
+      const employeeData = jsonData.employeeData;
+      console.log(`Found ${employeeData.length} employees in JSON`);
+
+    // 新フォーマット対応: empNo, contract情報を含むデータをチェック
+    for (const emp of employeeData) {
+      if (!emp.empNo || !emp.name || !emp.dept || !emp.team) {
+        throw new BadRequestException('Invalid employee data: empNo, name, dept, team are required');
+      }
+      if (!emp.contract || !emp.contract.workDays || !emp.contract.workHours) {
+        throw new BadRequestException('Invalid contract data: workDays and workHours are required');
+      }
     }
 
-    const employeeData = jsonData.employeeData;
-    console.log(`Found ${employeeData.length} employees in JSON`);
-
-    // JSONデータを正規化（name=name, department=dept, group=team）
+    // JSONデータを正規化（Staffテーブル用）
     const newStaffData = employeeData.map((emp: any) => ({
       name: emp.name,
       department: emp.dept,
@@ -220,6 +231,18 @@ export class StaffService {
     }
 
     console.log('Character validation passed');
+
+    // レイヤー1（契約）データの同期処理
+    console.log('Syncing contract data (Layer 1)...');
+    let contractSyncResult;
+    try {
+      contractSyncResult = await this.syncContractData(employeeData);
+      console.log('Contract sync completed:', contractSyncResult);
+    } catch (error) {
+      console.error('Contract sync failed:', error);
+      // 契約同期に失敗してもスタッフ同期は続行
+      contractSyncResult = { created: 0, errors: [error.message] };
+    }
 
     // 既存のスタッフデータを取得
     const existingStaff = await this.prisma.staff.findMany();
@@ -275,8 +298,23 @@ export class StaffService {
     const newStaffNames = new Set(newStaffData.map(s => s.name));
     for (const existing of existingStaff) {
       if (!newStaffNames.has(existing.name)) {
-        // 関連するスケジュールを先に削除
+        // 関連するレコードを先に削除（外部キー制約対応）
         await this.prisma.schedule.deleteMany({
+          where: { staffId: existing.id }
+        });
+        await this.prisma.temporaryAssignment.deleteMany({
+          where: { staffId: existing.id }
+        });
+        await this.prisma.dailyAssignment.deleteMany({
+          where: { staffId: existing.id }
+        });
+        await this.prisma.adjustment.deleteMany({
+          where: { staffId: existing.id }
+        });
+        await this.prisma.monthlySchedule.deleteMany({
+          where: { staffId: existing.id }
+        });
+        await this.prisma.contract.deleteMany({
           where: { staffId: existing.id }
         });
         
@@ -291,5 +329,131 @@ export class StaffService {
 
     console.log('Staff sync completed:', result);
     return result;
+    } catch (error) {
+      console.error('Error in syncFromEmployeeData:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 勤務日データを配列に変換
+   */
+  private parseWorkDays(workDays: string | string[]): string[] {
+    if (Array.isArray(workDays)) {
+      return workDays;
+    }
+    
+    // 文字列の場合は、漢字から英語略語に変換
+    const dayMap: { [key: string]: string } = {
+      '月': 'mon',
+      '火': 'tue',
+      '水': 'wed',
+      '木': 'thu',
+      '金': 'fri',
+      '土': 'sat',
+      '日': 'sun'
+    };
+    
+    const result: string[] = [];
+    for (const char of workDays) {
+      if (dayMap[char]) {
+        result.push(dayMap[char]);
+      }
+    }
+    
+    return result;
+  }
+
+  /**
+   * 契約データ（レイヤー1）の同期処理
+   */
+  private async syncContractData(employeeData: any[]) {
+    try {
+      console.log('Starting contract data synchronization...');
+      
+      // 既存の契約データを全削除（年次更新時の洗い替え）
+      await this.prisma.contract.deleteMany({});
+      console.log('Existing contract data cleared');
+
+    const contractResults = {
+      created: 0,
+      errors: [] as string[]
+    };
+
+    for (const emp of employeeData) {
+      try {
+        // Staffテーブルから該当するスタッフを検索（name, department, groupで）
+        const staff = await this.prisma.staff.findFirst({
+          where: {
+            name: emp.name,
+            department: emp.dept,
+            group: emp.team
+          }
+        });
+
+        if (!staff) {
+          // スタッフが存在しない場合はまず作成
+          const newStaff = await this.prisma.staff.create({
+            data: {
+              name: emp.name,
+              department: emp.dept,
+              group: emp.team
+            }
+          });
+          
+          // 契約データを作成
+          await this.prisma.contract.create({
+            data: {
+              empNo: emp.empNo,
+              name: emp.name,
+              dept: emp.dept,
+              team: emp.team,
+              email: emp.mail || '',
+              mondayHours: emp.contract.mondayHours,
+              tuesdayHours: emp.contract.tuesdayHours,
+              wednesdayHours: emp.contract.wednesdayHours,
+              thursdayHours: emp.contract.thursdayHours,
+              fridayHours: emp.contract.fridayHours,
+              saturdayHours: emp.contract.saturdayHours,
+              sundayHours: emp.contract.sundayHours,
+              staffId: newStaff.id
+            }
+          });
+        } else {
+          // 既存スタッフの契約データを作成
+          await this.prisma.contract.create({
+            data: {
+              empNo: emp.empNo,
+              name: emp.name,
+              dept: emp.dept,
+              team: emp.team,
+              email: emp.mail || '',
+              mondayHours: emp.contract.mondayHours,
+              tuesdayHours: emp.contract.tuesdayHours,
+              wednesdayHours: emp.contract.wednesdayHours,
+              thursdayHours: emp.contract.thursdayHours,
+              fridayHours: emp.contract.fridayHours,
+              saturdayHours: emp.contract.saturdayHours,
+              sundayHours: emp.contract.sundayHours,
+              staffId: staff.id
+            }
+          });
+        }
+        
+        contractResults.created++;
+        console.log(`Contract created for: ${emp.name} (${emp.empNo})`);
+        
+      } catch (error) {
+        const errorMsg = `Failed to create contract for ${emp.name} (${emp.empNo}): ${error.message}`;
+        contractResults.errors.push(errorMsg);
+        console.error(errorMsg);
+      }
+    }
+
+    return contractResults;
+    } catch (error) {
+      console.error('Error in syncContractData:', error);
+      throw error;
+    }
   }
 }

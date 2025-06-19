@@ -39,6 +39,21 @@ export class StaffController {
     return this.staffService.remove(+id);
   }
 
+  @Post('sync-from-json-body')
+  async syncFromJsonBody(@Body() jsonData: any) {
+    console.log('=== syncFromJsonBody endpoint called ===');
+    try {
+      console.log('Received JSON data:', JSON.stringify(jsonData, null, 2));
+      const result = await this.staffService.syncFromEmployeeData(jsonData);
+      console.log('Staff sync completed:', result);
+      return result;
+    } catch (error) {
+      console.error('Error in syncFromJsonBody controller:', error);
+      console.error('Error stack:', error.stack);
+      throw error;
+    }
+  }
+
   @Post('sync-from-json')
   @UseInterceptors(FileInterceptor('file'))
   async syncFromJson(@UploadedFile() file: Express.Multer.File) {

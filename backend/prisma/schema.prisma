@@ -8,99 +8,104 @@ datasource db {
 }
 
 model Staff {
-  id          Int        @id @default(autoincrement())
-  name        String
-  department  String
-  group       String
-  schedules   Schedule[]
-  
-  // 3層構造用のリレーション
-  contracts        Contract[]
-  monthlySchedules MonthlySchedule[]
-  adjustments      Adjustment[]
-  
-  // 支援メンバー機能
+  id                   Int                   @id @default(autoincrement())
+  empNo                String?               @unique
+  name                 String
+  department           String
+  group                String
+  adjustments          Adjustment[]
+  contracts            Contract[]
+  dailyAssignments     DailyAssignment[]
+  monthlySchedules     MonthlySchedule[]
+  schedules            Schedule[]
   temporaryAssignments TemporaryAssignment[]
 }
 
 model Schedule {
+  id      Int      @id @default(autoincrement())
+  status  String
+  start   DateTime
+  end     DateTime
+  memo    String?
+  staffId Int
+  staff   Staff    @relation(fields: [staffId], references: [id])
+}
+
+model Contract {
+  id             Int      @default(autoincrement())
+  empNo          String   @id
+  name           String
+  dept           String
+  team           String
+  email          String
+  mondayHours    String?
+  tuesdayHours   String?
+  wednesdayHours String?
+  thursdayHours  String?
+  fridayHours    String?
+  saturdayHours  String?
+  sundayHours    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  staffId        Int
+  staff          Staff    @relation(fields: [staffId], references: [id])
+}
+
+model MonthlySchedule {
   id        Int      @id @default(autoincrement())
+  date      DateTime
   status    String
   start     DateTime
   end       DateTime
   memo      String?
-  staff     Staff    @relation(fields: [staffId], references: [id])
-  staffId   Int
-}
-
-// レイヤー1: 契約による基本勤務時間（年次更新、移動不可）
-model Contract {
-  id          Int      @id @default(autoincrement())
-  empNo       String   // 社員番号
-  name        String
-  department  String
-  team        String
-  email       String?
-  workDays    String[] // ["mon","tue","wed","thu","fri"]
-  workHours   String   // "8:30-18:00"
-  breakHours  String?  // "12:00-13:00"
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
-  staff       Staff    @relation(fields: [staffId], references: [id])
-  staffId     Int
-  
-  @@unique([empNo])
-}
-
-// レイヤー2: 月次基本スケジュール（CSV投入、契約より優先、移動可能）
-model MonthlySchedule {
-  id        Int      @id @default(autoincrement())
-  date      DateTime // 日付（時刻情報なし）
-  status    String   // 'online', 'meeting', 'training', 'break', 'off', 'night_duty'
-  start     DateTime
-  end       DateTime
-  memo      String?
-  source    String   @default("csv") // 'csv', 'manual'
+  source    String   @default("csv")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  
-  staff     Staff    @relation(fields: [staffId], references: [id])
   staffId   Int
-  
+  staff     Staff    @relation(fields: [staffId], references: [id])
+
   @@unique([staffId, date, start, end])
 }
 
-// レイヤー3: 個別調整・例外予定（最優先、移動可能、UI操作）
 model Adjustment {
   id        Int      @id @default(autoincrement())
-  date      DateTime // 日付（時刻情報なし）
-  status    String   // 'online', 'meeting', 'training', 'break', 'off', 'night_duty'
+  date      DateTime
+  status    String
   start     DateTime
   end       DateTime
   memo      String?
-  reason    String?  // 調整理由
+  reason    String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  
-  staff     Staff    @relation(fields: [staffId], references: [id])
   staffId   Int
+  staff     Staff    @relation(fields: [staffId], references: [id])
 }
 
-// 支援メンバー管理（一時的な部署・グループ配属）
 model TemporaryAssignment {
-  id           Int      @id @default(autoincrement())
-  staffId      Int
-  startDate    DateTime // 支援開始日
-  endDate      DateTime // 支援終了日
-  tempDept     String   // 支援先部署
-  tempGroup    String   // 支援先グループ
-  reason       String   @default("支援") // 配属理由
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  
-  staff        Staff    @relation(fields: [staffId], references: [id])
-  
+  id        Int      @id @default(autoincrement())
+  staffId   Int
+  startDate DateTime
+  endDate   DateTime
+  tempDept  String
+  tempGroup String
+  reason    String   @default("支援")
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  staff     Staff    @relation(fields: [staffId], references: [id])
+
   @@unique([staffId, startDate, endDate])
+}
+
+model DailyAssignment {
+  id             Int      @id @default(autoincrement())
+  staffId        Int
+  date           DateTime @db.Date
+  assignmentType String   @db.VarChar(10)
+  customLabel    String?  @db.VarChar(50)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  staff          Staff    @relation(fields: [staffId], references: [id])
+
+  @@unique([staffId, date])
 }

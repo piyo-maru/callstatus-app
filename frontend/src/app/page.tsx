@@ -47,6 +47,7 @@ type ScheduleFromDB = {
   start: string;
   end: string;
   memo?: string;
+  layer?: 'contract' | 'adjustment';
 };
 
 type Schedule = {
@@ -731,7 +732,7 @@ export default function Home() {
     try {
       // スケジュールと支援状況を並列で取得
       const [scheduleRes, supportRes] = await Promise.all([
-        fetch(`${currentApiUrl}/api/schedules?date=${dateString}`),
+        fetch(`${currentApiUrl}/api/schedules/layered?date=${dateString}`),
         fetch(`${currentApiUrl}/api/assignments/status`)
       ]);
       
@@ -782,14 +783,14 @@ export default function Home() {
     const handleNewSchedule = (newSchedule: ScheduleFromDB) => {
         const scheduleDate = new Date(newSchedule.start);
         if(scheduleDate.toISOString().split('T')[0] === displayDate.toISOString().split('T')[0]) {
-            const formatted = { ...newSchedule, start: scheduleDate.getHours() + scheduleDate.getMinutes()/60, end: new Date(newSchedule.end).getHours() + new Date(newSchedule.end).getMinutes()/60 };
+            const formatted = { ...newSchedule, start: scheduleDate.getHours() + scheduleDate.getMinutes()/60, end: new Date(newSchedule.end).getHours() + new Date(newSchedule.end).getMinutes()/60, layer: newSchedule.layer || 'adjustment' };
             setSchedules((prev) => [...prev, formatted]);
         }
     };
     const handleUpdatedSchedule = (updatedSchedule: ScheduleFromDB) => {
         const scheduleDate = new Date(updatedSchedule.start);
         if(scheduleDate.toISOString().split('T')[0] === displayDate.toISOString().split('T')[0]){
-            const formatted = { ...updatedSchedule, start: scheduleDate.getHours() + scheduleDate.getMinutes()/60, end: new Date(updatedSchedule.end).getHours() + new Date(updatedSchedule.end).getMinutes()/60 };
+            const formatted = { ...updatedSchedule, start: scheduleDate.getHours() + scheduleDate.getMinutes()/60, end: new Date(updatedSchedule.end).getHours() + new Date(updatedSchedule.end).getMinutes()/60, layer: updatedSchedule.layer || 'adjustment' };
             setSchedules(prev => prev.map(s => s.id === formatted.id ? formatted : s));
         }
     }

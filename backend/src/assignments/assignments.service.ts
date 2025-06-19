@@ -39,49 +39,30 @@ export class AssignmentsService {
   }
 
   /**
-   * 支援設定を作成
+   * 支援設定を作成または更新
    */
   async create(createDto: CreateAssignmentDto) {
     const startDate = new Date(createDto.startDate);
     const endDate = new Date(createDto.endDate);
 
     // バリデーション
-    if (startDate >= endDate) {
-      throw new Error('開始日は終了日より前である必要があります');
+    if (startDate > endDate) {
+      throw new Error('開始日は終了日以降にはできません');
     }
 
-    // 期間重複チェック
-    const overlapping = await this.prisma.temporaryAssignment.findFirst({
+    // 受付系部署・グループへの支援を禁止
+    if (createDto.tempDept.includes('受付') || createDto.tempGroup.includes('受付')) {
+      throw new Error('受付系部署・グループへの支援設定はできません');
+    }
+
+    // 既存の支援設定をすべて削除（履歴も含む）
+    await this.prisma.temporaryAssignment.deleteMany({
       where: {
-        staffId: createDto.staffId,
-        isActive: true,
-        OR: [
-          {
-            AND: [
-              { startDate: { lte: startDate } },
-              { endDate: { gte: startDate } }
-            ]
-          },
-          {
-            AND: [
-              { startDate: { lte: endDate } },
-              { endDate: { gte: endDate } }
-            ]
-          },
-          {
-            AND: [
-              { startDate: { gte: startDate } },
-              { endDate: { lte: endDate } }
-            ]
-          }
-        ]
+        staffId: createDto.staffId
       }
     });
 
-    if (overlapping) {
-      throw new Error('指定期間に重複する支援設定が存在します');
-    }
-
+    // 新しい支援設定を作成
     return this.prisma.temporaryAssignment.create({
       data: {
         staffId: createDto.staffId,
@@ -112,6 +93,11 @@ export class AssignmentsService {
     if (updateDto.reason) data.reason = updateDto.reason;
     if (typeof updateDto.isActive === 'boolean') data.isActive = updateDto.isActive;
 
+    // 受付系部署・グループへの支援を禁止
+    if (updateDto.tempDept?.includes('受付') || updateDto.tempGroup?.includes('受付')) {
+      throw new Error('受付系部署・グループへの支援設定はできません');
+    }
+
     return this.prisma.temporaryAssignment.update({
       where: { id },
       data,
@@ -130,6 +116,18 @@ export class AssignmentsService {
     return this.prisma.temporaryAssignment.update({
       where: { id },
       data: { isActive: false }
+    });
+  }
+
+  /**
+   * スタッフの現在のアクティブな支援設定を削除
+   */
+  async removeCurrentAssignment(staffId: number) {
+    return this.prisma.temporaryAssignment.deleteMany({
+      where: {
+        staffId,
+        isActive: true
+      }
     });
   }
 

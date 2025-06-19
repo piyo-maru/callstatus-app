@@ -30,6 +30,15 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   const config = loadConfig();
 
+  // グローバルエラーハンドラー
+  process.on('uncaughtException', (error) => {
+    console.error('Uncaught Exception:', error);
+  });
+
+  process.on('unhandledRejection', (reason, promise) => {
+    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  });
+
   // ★★★ 下の行をコメントアウトして、グローバルプレフィックスを無効化します ★★★
   // app.setGlobalPrefix('api');
 

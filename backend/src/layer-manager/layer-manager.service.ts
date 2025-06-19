@@ -10,7 +10,7 @@ interface LayeredSchedule {
   start: Date;
   end: Date;
   memo?: string;
-  layer: 'contract' | 'monthly' | 'adjustment';
+  layer: 'contract' | 'adjustment';
   source: string;
   canMove: boolean; // ドラッグ&ドロップ移動可能かどうか
 }
@@ -20,8 +20,8 @@ export class LayerManagerService {
   constructor(private prisma: PrismaService) {}
 
   /**
-   * 3層データを統合して指定日のスケジュールを取得
-   * 優先順位: レイヤー3（個別調整）> レイヤー2（月次）> レイヤー1（契約）
+   * 2層データを統合して指定日のスケジュールを取得
+   * 優先順位: レイヤー2（個別調整）> レイヤー1（契約）
    */
   async getLayeredSchedules(date: string): Promise<LayeredSchedule[]> {
     const targetDate = new Date(date);
@@ -47,7 +47,7 @@ export class LayerManagerService {
   }
 
   /**
-   * 特定スタッフの3層データを統合
+   * 特定スタッフの2層データを統合
    */
   private async getStaffLayeredSchedules(
     staffId: number,
@@ -58,14 +58,6 @@ export class LayerManagerService {
       where: { id: staffId },
       include: {
         contracts: true,
-        monthlySchedules: {
-          where: {
-            date: {
-              gte: new Date(date.getFullYear(), date.getMonth(), date.getDate()),
-              lt: new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1)
-            }
-          }
-        },
         adjustments: {
           where: {
             date: {
@@ -81,7 +73,7 @@ export class LayerManagerService {
 
     const result: LayeredSchedule[] = [];
 
-    // レイヤー3（個別調整）- 最優先
+    // レイヤー2（個別調整）- 最優先（月次投入＋手動調整）
     const adjustments = staff.adjustments.map(adj => ({
       id: `adj_${adj.id}`,
       staffId: staff.id,
@@ -92,44 +84,19 @@ export class LayerManagerService {
       end: adj.end,
       memo: adj.memo,
       layer: 'adjustment' as const,
-      source: 'UI操作',
-      canMove: adj.status !== 'online' // onlineは移動不可、remoteは移動可能
+      source: adj.reason || 'マニュアル',
+      canMove: true // 個別調整は移動可能
     }));
 
     result.push(...adjustments);
 
-    // レイヤー2（月次スケジュール）- 調整で覆われていない時間帯
-    const monthlySchedules = staff.monthlySchedules
-      .filter(monthly => !this.isTimeRangeCovered(monthly.start, monthly.end, adjustments))
-      .map(monthly => ({
-        id: `monthly_${monthly.id}`,
-        staffId: staff.id,
-        staffName: staff.name,
-        date: date.toISOString().split('T')[0],
-        status: monthly.status,
-        start: monthly.start,
-        end: monthly.end,
-        memo: monthly.memo,
-        layer: 'monthly' as const,
-        source: monthly.source,
-        canMove: monthly.status !== 'online' // onlineは移動不可、remoteは移動可能
-      }));
-
-    result.push(...monthlySchedules);
-
-    // レイヤー1（契約）- 上位レイヤーで覆われていない時間帯
+    // レイヤー1（契約）- 常に表示（透明度50%で表示）
     const contract = staff.contracts[0]; // 最新の契約を取得
-    if (contract && contract.workDays.includes(dayOfWeek)) {
+    if (contract) {
       const contractSchedules = this.generateContractSchedules(
         staff,
         contract,
         date
-      ).filter(contractSched => 
-        !this.isTimeRangeCovered(
-          contractSched.start,
-          contractSched.end,
-          [...adjustments, ...monthlySchedules]
-        )
       );
 
       result.push(...contractSchedules);
@@ -139,7 +106,7 @@ export class LayerManagerService {
   }
 
   /**
-   * 契約データから基本スケジュールを生成
+   * 契約データから基本スケジュールを生成（曜日別対応）
    */
   private generateContractSchedules(
     staff: any,
@@ -147,39 +114,42 @@ export class LayerManagerService {
     date: Date
   ): LayeredSchedule[] {
     const result: LayeredSchedule[] = [];
-    const [startTime, endTime] = contract.workHours.split('-');
     
-    const start = this.parseTimeToDate(date, startTime);
-    const end = this.parseTimeToDate(date, endTime);
+    // 曜日を取得（英語3文字）
+    const dayOfWeek = this.getDayOfWeek(date);
+    
+    // 曜日別の勤務時間を取得
+    const dayHoursMap = {
+      'sun': contract.sundayHours,
+      'mon': contract.mondayHours,
+      'tue': contract.tuesdayHours,
+      'wed': contract.wednesdayHours,
+      'thu': contract.thursdayHours,
+      'fri': contract.fridayHours,
+      'sat': contract.saturdayHours
+    };
+    
+    const dayHours = dayHoursMap[dayOfWeek];
+    
+    // 該当曜日の勤務時間が設定されている場合のみスケジュールを生成
+    if (dayHours) {
+      const [startTime, endTime] = dayHours.split('-');
+      
+      const start = this.parseTimeToUtc(date, startTime);
+      const end = this.parseTimeToUtc(date, endTime);
 
-    // 基本勤務時間（online）
-    result.push({
-      id: `contract_${contract.id}_work`,
-      staffId: staff.id,
-      staffName: staff.name,
-      date: date.toISOString().split('T')[0],
-      status: 'online',
-      start,
-      end,
-      layer: 'contract' as const,
-      source: '契約',
-      canMove: false // 契約による勤務時間は移動不可
-    });
-
-    // 休憩時間（break）
-    if (contract.breakHours) {
-      const [breakStart, breakEnd] = contract.breakHours.split('-');
+      // 基本勤務時間（online）
       result.push({
-        id: `contract_${contract.id}_break`,
+        id: `contract_${contract.id}_${dayOfWeek}`,
         staffId: staff.id,
         staffName: staff.name,
         date: date.toISOString().split('T')[0],
-        status: 'break',
-        start: this.parseTimeToDate(date, breakStart),
-        end: this.parseTimeToDate(date, breakEnd),
+        status: 'online',
+        start,
+        end,
         layer: 'contract' as const,
         source: '契約',
-        canMove: true // 休憩時間は移動可能
+        canMove: false // 契約による勤務時間は移動不可
       });
     }
 
@@ -208,13 +178,24 @@ export class LayerManagerService {
   }
 
   /**
-   * 時刻文字列（HH:MM）を指定日のDateオブジェクトに変換
+   * 時刻文字列（HH:MM）をUTC Dateオブジェクトに変換（厳格ルール準拠）
    */
-  private parseTimeToDate(date: Date, timeStr: string): Date {
+  private parseTimeToUtc(date: Date, timeStr: string): Date {
     const [hours, minutes] = timeStr.split(':').map(Number);
-    const result = new Date(date);
-    result.setHours(hours, minutes, 0, 0);
-    return result;
+    
+    // JST時刻をUTCに変換（-9時間）
+    const jstDate = new Date(
+      date.getFullYear(),
+      date.getMonth(), 
+      date.getDate(),
+      hours,
+      minutes,
+      0,
+      0
+    );
+    
+    const utcDate = new Date(jstDate.getTime() - 9 * 60 * 60 * 1000);
+    return utcDate;
   }
 
   /**
@@ -234,7 +215,8 @@ export class LayerManagerService {
       start: schedule.start.toISOString(),
       end: schedule.end.toISOString(),
       memo: schedule.memo || null,
-      staffId: schedule.staffId
+      staffId: schedule.staffId,
+      layer: schedule.layer
     }));
 
     return { staff, schedules };

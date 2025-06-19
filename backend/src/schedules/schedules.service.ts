@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, Inject, forwardRef } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { SchedulesGateway } from './schedules.gateway';
+import { LayerManagerService } from '../layer-manager/layer-manager.service';
 
 @Injectable()
 export class SchedulesService {
@@ -8,63 +9,59 @@ export class SchedulesService {
     private prisma: PrismaService,
     @Inject(forwardRef(() => SchedulesGateway))
     private readonly gateway: SchedulesGateway,
+    private layerManager: LayerManagerService,
   ) {}
 
-  // toDateヘルパーが、基準日を受け取れるように修正（JST基準）
-  private toDate(decimalHour: number, baseDateString: string): Date {
+  // JST入力値を内部UTC時刻に変換（厳格ルール準拠）
+  private jstToUtc(decimalHour: number, baseDateString: string): Date {
     const baseDate = new Date(baseDateString);
     const hours = Math.floor(decimalHour);
     const minutes = Math.round((decimalHour % 1) * 60);
-    // JST時刻として作成し、UTCに変換してJST時刻として保存
-    // 例: JST 14:00 → UTC 05:00として保存、フロントエンドでJST 14:00として表示
-    const jstOffset = 9; // JST = UTC+9
-    const utcHours = hours - jstOffset;
-    const date = new Date(Date.UTC(baseDate.getUTCFullYear(), baseDate.getUTCMonth(), baseDate.getUTCDate(), utcHours, minutes, 0, 0));
-    return date;
+    
+    // JST時刻をUTCに変換（-9時間）
+    // 入力: JST 14:00 → 出力: UTC 05:00
+    const jstDate = new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate(), hours, minutes, 0, 0);
+    const utcDate = new Date(jstDate.getTime() - 9 * 60 * 60 * 1000);
+    return utcDate;
   };
 
   async findAll(dateString: string) {
-    // 日付の始点と終点を計算（JST基準）
-    const date = new Date(dateString);
-    const startOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0);
-    const endOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1, 0, 0, 0, 0);
-
-    const staffCount = await this.prisma.staff.count();
-    if (staffCount === 0) {
-      console.log('データベースに初期データを投入します...');
-      const dummyStaffData = [
-          { name: '佐藤 太郎', department: '財務情報第一システムサポート課', group: '財務会計グループ' },
-          { name: '鈴木 花子', department: '財務情報第一システムサポート課', group: '財務会計グループ' },
-          { name: '高橋 一郎', department: '財務情報第一システムサポート課', group: 'ＦＸ２グループ' },
-          { name: '田中 次郎', department: '財務情報第二システムサポート課', group: 'ＦＸクラウドグループ' },
-          { name: '渡辺 三郎', department: '財務情報第二システムサポート課', group: 'ＳＸ・ＦＭＳグループ' },
-          { name: '伊藤 さくら', department: '税務情報システムサポート課', group: '税務情報第一システムグループ' },
-          { name: '山本 健太', department: '税務情報システムサポート課', group: '税務情報第二システムグループ' },
-      ];
-      await this.prisma.staff.createMany({ data: dummyStaffData });
-    }
-
+    console.log(`Finding schedules for date: ${dateString}`);
+    
+    // スタッフ情報を取得
     const staff = await this.prisma.staff.findMany();
-    // ★★★ where句を追加して、指定された日付のスケジュールのみ取得 ★★★
-    const schedules = await this.prisma.schedule.findMany({
-      where: {
-        start: {
-          gte: startOfDay,
-          lt: endOfDay,
-        }
-      }
-    });
+    console.log(`Found ${staff.length} staff members`);
+
+    // 3層構造のスケジュールを取得
+    const layeredSchedules = await this.layerManager.getLayeredSchedules(dateString);
+    console.log(`Found ${layeredSchedules.length} layered schedules`);
+
+    // LayeredScheduleを従来のSchedule形式に変換
+    const schedules = layeredSchedules.map((ls, index) => ({
+      id: this.generateLayerBasedId(ls.layer, ls.id, index),
+      staffId: ls.staffId,
+      status: this.convertStatusFormat(ls.status),
+      start: this.utcToJstIsoString(ls.start),
+      end: this.utcToJstIsoString(ls.end),
+      memo: ls.memo || null,
+      editable: ls.layer === 'adjustment', // 調整レイヤーのみ編集可能
+      layer: ls.layer // レイヤー情報を追加
+    }));
+
+    console.log(`Converted to ${schedules.length} schedule records`);
     return { staff, schedules };
   }
 
   async create(createScheduleDto: { staffId: number; status: string; start: number; end: number; date: string; memo?: string; }) {
-    const newSchedule = await this.prisma.schedule.create({
+    const newSchedule = await this.prisma.adjustment.create({
       data: {
         staffId: createScheduleDto.staffId,
         status: createScheduleDto.status,
-        start: this.toDate(createScheduleDto.start, createScheduleDto.date),
-        end: this.toDate(createScheduleDto.end, createScheduleDto.date),
+        start: this.jstToUtc(createScheduleDto.start, createScheduleDto.date),
+        end: this.jstToUtc(createScheduleDto.end, createScheduleDto.date),
+        date: new Date(createScheduleDto.date),
         memo: createScheduleDto.memo || null,
+        reason: 'マニュアル'
       },
     });
     this.gateway.sendNewSchedule(newSchedule);
@@ -72,13 +69,25 @@ export class SchedulesService {
   }
 
   async update(id: number, updateScheduleDto: { status?: string; start?: number; end?: number; date: string; memo?: string; }) {
-    const data: { status?: string; start?: Date; end?: Date; memo?: string | null } = {};
+    // Contractレイヤー（ID範囲: 1000000-1999999）は編集不可
+    if (id >= 1000000 && id < 2000000) {
+      throw new NotFoundException(`契約レイヤーのスケジュールは編集不可能です (ID: ${id})`);
+    }
+
+    // 調整レイヤー（Adjustment）の更新のみ対応
+    return this.updateAdjustmentSchedule(id, updateScheduleDto);
+  }
+
+
+  private async updateAdjustmentSchedule(id: number, updateScheduleDto: { status?: string; start?: number; end?: number; date: string; memo?: string; }) {
+    const data: { status?: string; start?: Date; end?: Date; date?: Date; memo?: string | null } = {};
     if (updateScheduleDto.status) data.status = updateScheduleDto.status;
-    if (updateScheduleDto.start) data.start = this.toDate(updateScheduleDto.start, updateScheduleDto.date);
-    if (updateScheduleDto.end) data.end = this.toDate(updateScheduleDto.end, updateScheduleDto.date);
+    if (updateScheduleDto.start) data.start = this.jstToUtc(updateScheduleDto.start, updateScheduleDto.date);
+    if (updateScheduleDto.end) data.end = this.jstToUtc(updateScheduleDto.end, updateScheduleDto.date);
+    if (updateScheduleDto.date) data.date = new Date(updateScheduleDto.date);
     if (updateScheduleDto.memo !== undefined) data.memo = updateScheduleDto.memo || null;
 
-    const updatedSchedule = await this.prisma.schedule.update({
+    const updatedSchedule = await this.prisma.adjustment.update({
       where: { id },
       data,
     });
@@ -87,10 +96,112 @@ export class SchedulesService {
   }
 
   async remove(id: number) {
-    const deletedSchedule = await this.prisma.schedule.delete({
+    // Contractレイヤー（ID範囲: 1000000-1999999）は削除不可
+    if (id >= 1000000 && id < 2000000) {
+      throw new NotFoundException(`契約レイヤーのスケジュールは削除不可能です (ID: ${id})`);
+    }
+
+    // 調整レイヤー（Adjustment）の削除のみ対応
+    return this.removeAdjustmentSchedule(id);
+  }
+
+
+  private async removeAdjustmentSchedule(id: number) {
+    const deletedSchedule = await this.prisma.adjustment.delete({
       where: { id },
     });
     this.gateway.sendScheduleDeleted(id);
     return deletedSchedule;
+  }
+
+  /**
+   * ステータス形式をフロントエンド向けに変換
+   */
+  private convertStatusFormat(status: string): string {
+    const statusMap = {
+      'online': 'Online',
+      'remote': 'Remote', 
+      'meeting': 'Meeting',
+      'training': 'Training',
+      'break': 'Break',
+      'off': 'Off',
+      'night_duty': 'Night Duty'
+    };
+    return statusMap[status] || status;
+  }
+
+  /**
+   * レイヤーに基づいてIDを生成
+   */
+  private generateLayerBasedId(layer: string, layeredId: string, index: number): number {
+    if (layer === 'adjustment') {
+      return this.extractScheduleId(layeredId);
+    }
+    
+    const hashInput = `${layeredId}_${index}`;
+    let hash = 0;
+    
+    for (let i = 0; i < hashInput.length; i++) {
+      const char = hashInput.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // 32bit整数に変換
+    }
+    
+    const positiveHash = Math.abs(hash);
+    
+    if (layer === 'contract') {
+      // 契約レイヤー: 1000000-1999999（編集不可）
+      return 1000000 + (positiveHash % 1000000);
+    } else if (layer === 'monthly') {
+      // 月次レイヤー: 100000-999999（編集可能）
+      return 100000 + (positiveHash % 900000);
+    }
+    
+    // その他の場合（安全策）
+    return positiveHash % 100000;
+  }
+
+  /**
+   * LayeredScheduleのIDからユニークなIDを生成（後方互換性のため残す）
+   */
+  private generateUniqueId(layeredId: string, index: number): number {
+    const hashInput = `${layeredId}_${index}`;
+    let hash = 0;
+    
+    for (let i = 0; i < hashInput.length; i++) {
+      const char = hashInput.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // 32bit整数に変換
+    }
+    
+    // 正の数にしてから適切な範囲にマッピング
+    const positiveHash = Math.abs(hash);
+    return 100000 + (positiveHash % 900000); // 100000-999999の範囲
+  }
+
+  /**
+   * 調整レイヤーのIDから実際のScheduleIDを抽出
+   */
+  private extractScheduleId(layeredId: string): number {
+    // "adj_123" 形式から数値IDを抽出
+    const parts = layeredId.split('_');
+    return parseInt(parts[1]) || 0;
+  }
+
+  /**
+   * UTC Dateオブジェクトを出力用JST ISO文字列に変換（厳格ルール準拠）
+   */
+  private utcToJstIsoString(utcDate: Date): string {
+    // UTC時刻をJSTに変換（+9時間）
+    const jstDate = new Date(utcDate.getTime() + 9 * 60 * 60 * 1000);
+    
+    const year = jstDate.getFullYear();
+    const month = String(jstDate.getMonth() + 1).padStart(2, '0');
+    const day = String(jstDate.getDate()).padStart(2, '0');
+    const hours = String(jstDate.getHours()).padStart(2, '0');
+    const minutes = String(jstDate.getMinutes()).padStart(2, '0');
+    const seconds = String(jstDate.getSeconds()).padStart(2, '0');
+    
+    return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}.000+09:00`;
   }
 }

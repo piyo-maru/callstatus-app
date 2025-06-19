@@ -1,10 +1,32 @@
 // backend/src/prisma.service.ts
-import { Injectable, OnModuleInit } from '@nestjs/common';
+import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit {
+  private readonly logger = new Logger(PrismaService.name);
+
   async onModuleInit() {
-    await this.$connect();
+    const maxRetries = 5;
+    const retryDelay = 2000; // 2秒
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        this.logger.log(`データベース接続試行 ${attempt}/${maxRetries}...`);
+        await this.$connect();
+        this.logger.log('データベース接続成功');
+        return;
+      } catch (error) {
+        this.logger.error(`データベース接続失敗 (試行 ${attempt}/${maxRetries}):`, error.message);
+        
+        if (attempt === maxRetries) {
+          this.logger.error('データベース接続の最大試行回数に達しました');
+          throw error;
+        }
+        
+        this.logger.log(`${retryDelay}ms後に再試行します...`);
+        await new Promise(resolve => setTimeout(resolve, retryDelay));
+      }
+    }
   }
 }

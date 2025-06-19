@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, BadRequestException } from '@nestjs/common';
 import { AssignmentsService, CreateAssignmentDto, UpdateAssignmentDto } from './assignments.service';
 
 @Controller('api/assignments')
@@ -21,7 +21,7 @@ export class AssignmentsController {
     try {
       return await this.assignmentsService.create(createDto);
     } catch (error) {
-      throw new Error(error.message);
+      throw new BadRequestException(error.message);
     }
   }
 
@@ -33,7 +33,7 @@ export class AssignmentsController {
     try {
       return await this.assignmentsService.update(parseInt(id), updateDto);
     } catch (error) {
-      throw new Error(error.message);
+      throw new BadRequestException(error.message);
     }
   }
 
@@ -43,6 +43,14 @@ export class AssignmentsController {
   @Delete(':id')
   async remove(@Param('id') id: string) {
     return this.assignmentsService.remove(parseInt(id));
+  }
+
+  /**
+   * スタッフの現在のアクティブな支援設定を削除
+   */
+  @Delete('staff/:staffId/current')
+  async removeCurrentAssignment(@Param('staffId') staffId: string) {
+    return this.assignmentsService.removeCurrentAssignment(parseInt(staffId));
   }
 
   /**
