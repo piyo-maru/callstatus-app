@@ -2,8 +2,11 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "CallStatus App",
-  description: "コールセンター在席状況",
+  title: "出社状況管理ボード",
+  description: "スタッフの出社・勤務状況管理システム",
+  icons: {
+    icon: '/favicon.png',
+  },
 };
 
 export default function RootLayout({
