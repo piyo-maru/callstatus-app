@@ -87,7 +87,57 @@ type DragInfo = {
 // --- 定数定義 ---
 const statusColors: { [key: string]: string } = {
   'Online': '#22c55e', 'Remote': '#10b981', 'Meeting': '#f59e0b', 'Training': '#3b82f6',
-  'Break': '#f97316', 'Off': '#ef4444', 'Night Duty': '#4f46e5',
+  'Break': '#f97316', 'Off': '#ef4444', 'Unplanned': '#dc2626', 'Night Duty': '#4f46e5',
+};
+
+// 部署の色設定（より薄く調整）
+const departmentColors: { [key: string]: string } = {
+  "カスタマー・サポートセンター": "#ffebeb",
+  "カスタマーサポート部": "#f8f8f8",
+  "財務情報第一システムサポート課": "#ffebeb",
+  "財務情報第二システムサポート課": "#fcf2f8",
+  "税務情報システムサポート課": "#fff6e0",
+  "給与計算システムサポート課": "#f0f2f5",
+  "ＯＭＳ・テクニカルサポート課": "#f4fff2",
+  "一次受付サポート課": "#e3f2fd",
+  "ＴＡＳＫカスタマーサポート部": "#f1f7ed",
+  "コールセンター業務管理部": "#ebf5fc",
+  "総務部": "#e1f5fe",
+  "unknown": "#fdfdfd"
+};
+
+// グループの色設定（スタッフの背景色として使用、より薄く調整）
+const teamColors: { [key: string]: string } = {
+  "カスタマー・サポートセンター": "#f5f5f5",
+  "カスタマーサポート部": "#fafafa",
+  "財務情報第一システムサポート課": "#fdf6f0",
+  "財務会計グループ": "#fffaf6",
+  "ＦＸ２グループ": "#fff8f0",
+  "ＦＸ２・ＦＸ４クラウドグループ": "#fff4e6",
+  "業種別システムグループ": "#fffbf5",
+  "財務情報第二システムサポート課": "#fdf4f7",
+  "ＦＸクラウドグループ": "#fef7f9",
+  "ＳＸ・ＦＭＳグループ": "#fef9fc",
+  "税務情報システムサポート課": "#fcf9ed",
+  "税務情報第一システムグループ": "#fffded",
+  "税務情報第二システムグループ": "#fffef2",
+  "給与計算システムサポート課": "#f7f9fc",
+  "ＰＸ第一グループ": "#f6f2fc",
+  "ＰＸ第二グループ": "#f1ebf7",
+  "ＰＸ第三グループ": "#fbf9fe",
+  "ＯＭＳ・テクニカルサポート課": "#f6fcf5",
+  "ＯＭＳグループ": "#f4ffeb",
+  "ハードウェアグループ": "#f2f8ed",
+  "一次受付サポート課": "#f5fbff",
+  "一次受付グループ": "#f6f9fd",
+  "ＴＡＳＫカスタマーサポート部": "#f2f9f2",
+  "住民情報・福祉情報システム第一グループ": "#f0f7f0",
+  "住民情報・福祉情報システム第二グループ": "#f9fcf9",
+  "税務情報システムグループ": "#f5fbf9",
+  "住民サービス・内部情報システムサービス": "#f2fbfe",
+  "コールセンター業務管理部": "#f8fcfe",
+  "総務部": "#ecf9fe",
+  "unknown_team": "#fefefe"
 };
 // 設定ファイルからAPIのURLを取得する関数
 const getApiUrl = (): string => {
@@ -97,7 +147,7 @@ const getApiUrl = (): string => {
   // フォールバック（サーバーサイドレンダリング時など）
   return 'http://localhost:3002';
 };
-const availableStatuses = ['Online', 'Remote', 'Meeting', 'Training', 'Break', 'Off', 'Night Duty'];
+const availableStatuses = ['Online', 'Remote', 'Meeting', 'Training', 'Break', 'Off', 'Unplanned', 'Night Duty'];
 const AVAILABLE_STATUSES = ['Online', 'Remote', 'Night Duty'];
 
 // --- 文字チェック関数 ---
@@ -342,8 +392,8 @@ const AssignmentModal = ({ isOpen, onClose, staff, staffList, onSave, onDelete }
   }) => void;
   onDelete?: (staffId: number) => void;
 }) => {
-  const [startDate, setStartDate] = useState<Date | null>(null);
-  const [endDate, setEndDate] = useState<Date | null>(null);
+  const [startDate, setStartDate] = useState<Date | null>(new Date());
+  const [endDate, setEndDate] = useState<Date | null>(new Date());
   const [department, setDepartment] = useState('');
   const [group, setGroup] = useState('');
   const [isClient, setIsClient] = useState(false);
@@ -361,11 +411,10 @@ const AssignmentModal = ({ isOpen, onClose, staff, staffList, onSave, onDelete }
         setDepartment(staff.currentDept || '');
         setGroup(staff.currentGroup || '');
       } else {
-        // 新規の場合は明日から開始
-        const tomorrow = new Date();
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        setStartDate(tomorrow);
-        setEndDate(tomorrow);
+        // 新規の場合は今日から開始
+        const today = new Date();
+        setStartDate(today);
+        setEndDate(today);
         setDepartment('');
         setGroup('');
       }
@@ -1054,11 +1103,38 @@ const StatusChart = ({ data, staffList, selectedDepartment, selectedGroup }: {
   return (
     <div className="mb-1 bg-white shadow rounded-lg">
       <div className="flex">
-        {/* 左列 - ガントチャートと同じ幅を確保 */}
-        <div className="min-w-fit max-w-[400px] border-r border-gray-200">
-          <div className="px-2 py-2 bg-gray-100 font-bold text-gray-600 text-sm text-center border-b whitespace-nowrap">ステータス推移</div>
-          <div className="h-[17px] bg-gray-50 border-b"></div>
-          <div className="px-2 py-2 bg-gray-100 font-bold text-gray-600 text-sm text-center border-b whitespace-nowrap">グラフ</div>
+        {/* 左列 - 凡例エリア（2列構成） */}
+        <div className="w-48 border-r border-gray-200 bg-gray-50">
+          <div className="px-2 py-1 flex gap-x-4">
+            {/* 1列目 */}
+            <div className="flex flex-col gap-y-1">
+              {['Online', 'Remote', 'Night Duty'].map(status => (
+                <div key={status} className="flex items-center text-xs">
+                  <div 
+                    className="w-2 h-2 rounded mr-1 flex-shrink-0" 
+                    style={{ backgroundColor: statusColors[status] || '#8884d8' }}
+                  ></div>
+                  <span className="truncate" style={{ opacity: status === 'Online' ? 1 : 0.7 }}>
+                    {status}
+                  </span>
+                </div>
+              ))}
+            </div>
+            {/* 2列目 */}
+            <div className="flex flex-col gap-y-1">
+              {['Off', 'Unplanned', 'Break', 'Meeting', 'Training'].map(status => (
+                <div key={status} className="flex items-center text-xs">
+                  <div 
+                    className="w-2 h-2 rounded mr-1 flex-shrink-0" 
+                    style={{ backgroundColor: statusColors[status] || '#8884d8' }}
+                  ></div>
+                  <span className="truncate" style={{ opacity: status === 'Online' ? 1 : 0.7 }}>
+                    {status}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
         {/* 右列 - チャート表示エリア */}
         <div className="flex-1 p-1" style={{ height: '120px' }}>
@@ -1075,8 +1151,9 @@ const StatusChart = ({ data, staffList, selectedDepartment, selectedGroup }: {
               />
               <YAxis allowDecimals={false} tick={{ fontSize: 10 }} width={25} />
               <Tooltip wrapperStyle={{ zIndex: 100 }} />
-              <Legend wrapperStyle={{ fontSize: '12px' }} />
-              {availableStatuses.map(status => (
+              {/* Legendを非表示にする */}
+              {/* 凡例と同じ順序で描画 */}
+              {['Online', 'Remote', 'Night Duty', 'Off', 'Unplanned', 'Break', 'Meeting', 'Training'].map(status => (
                 <Line 
                   key={status} 
                   type="monotone" 
@@ -1109,6 +1186,7 @@ export default function Home() {
   const [selectedDepartment, setSelectedDepartment] = useState('all');
   const [selectedGroup, setSelectedGroup] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState('all');
+  const [selectedSettingFilter, setSelectedSettingFilter] = useState('all');
   const [currentTime, setCurrentTime] = useState(new Date());
   const [displayDate, setDisplayDate] = useState(new Date());
   const [dragInfo, setDragInfo] = useState<DragInfo | null>(null);
@@ -1174,9 +1252,17 @@ export default function Home() {
         }
         
         // 担当設定をマージ
-        if (responsibilityInfo) {
+        if (responsibilityInfo && responsibilityInfo.responsibilities) {
           result.responsibilities = responsibilityInfo.responsibilities;
-          result.hasResponsibilities = true;
+          // 担当設定が実際に設定されているかチェック
+          const responsibilities = responsibilityInfo.responsibilities;
+          const hasAnyResponsibility = 
+            (responsibilities.fax) ||
+            (responsibilities.subjectCheck) ||
+            (responsibilities.lunch) ||
+            (responsibilities.cs) ||
+            (responsibilities.custom && responsibilities.custom.trim() !== '');
+          result.hasResponsibilities = hasAnyResponsibility;
         } else {
           result.hasResponsibilities = false;
         }
@@ -1239,7 +1325,18 @@ export default function Home() {
   
   const handleSaveSchedule = async (scheduleData: Schedule & { id?: number }) => {
     const date = displayDate.toISOString().split('T')[0];
-    const payload = { ...scheduleData, date };
+    
+    // 案1 + 案4のハイブリッド: 当日作成のOffを自動でUnplannedに変換
+    let processedScheduleData = { ...scheduleData };
+    const today = new Date().toISOString().split('T')[0];
+    
+    // 新規作成 かつ 当日 かつ Offステータスの場合、自動でUnplannedに変換
+    if (!scheduleData.id && date === today && scheduleData.status === 'Off') {
+      processedScheduleData.status = 'Unplanned';
+      console.log('当日作成のOffをUnplannedに自動変換しました');
+    }
+    
+    const payload = { ...processedScheduleData, date };
     const currentApiUrl = getApiUrl();
     try {
       console.log('Saving schedule with payload:', payload);
@@ -1699,13 +1796,20 @@ export default function Home() {
 
 
   const filteredStaffForDisplay = useMemo(() => {
-      return departmentGroupFilteredStaff.filter(staff => {
+      const statusFiltered = departmentGroupFilteredStaff.filter(staff => {
         if (selectedStatus === 'all') return true;
         if (selectedStatus === 'available') return AVAILABLE_STATUSES.includes(staff.currentStatus);
         if (selectedStatus === 'unavailable') return !AVAILABLE_STATUSES.includes(staff.currentStatus);
         return true;
       });
-  }, [departmentGroupFilteredStaff, selectedStatus]);
+      
+      return statusFiltered.filter(staff => {
+        if (selectedSettingFilter === 'all') return true;
+        if (selectedSettingFilter === 'responsibility') return staff.hasResponsibilities;
+        if (selectedSettingFilter === 'support') return staff.isSupporting;
+        return true;
+      });
+  }, [departmentGroupFilteredStaff, selectedStatus, selectedSettingFilter]);
   
   const chartData = useMemo(() => {
     const data: any[] = [];
@@ -1884,11 +1988,16 @@ export default function Home() {
                   const currentDept = s.isSupporting ? (s.currentDept || s.department) : s.department;
                   return selectedDepartment === 'all' || currentDept === selectedDepartment;
                 }).map(s => s.isSupporting ? (s.currentGroup || s.group) : s.group))).map(grp => <option key={grp} value={grp}>{grp}</option>)}</select>
+                <div className="inline-flex rounded-md shadow-sm" role="group">
+                    <button type="button" onClick={() => setSelectedSettingFilter('all')} className={`px-4 py-2 text-sm font-medium transition-colors duration-150 rounded-l-lg border ${selectedSettingFilter === 'all' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-900 hover:bg-gray-100'}`}>すべて</button>
+                    <button type="button" onClick={() => setSelectedSettingFilter('responsibility')} className={`px-4 py-2 text-sm font-medium transition-colors duration-150 border-t border-b ${selectedSettingFilter === 'responsibility' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-900 hover:bg-gray-100'}`}>担当設定</button>
+                    <button type="button" onClick={() => setSelectedSettingFilter('support')} className={`px-4 py-2 text-sm font-medium transition-colors duration-150 rounded-r-lg border ${selectedSettingFilter === 'support' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-900 hover:bg-gray-100'}`}>支援設定</button>
+                </div>
                 {isToday && (
                   <div className="inline-flex rounded-md shadow-sm" role="group">
-                      <button type="button" onClick={() => setSelectedStatus('all')} className={`px-4 py-2 text-sm font-medium transition-colors duration-150 rounded-l-lg border ${selectedStatus === 'all' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-900 hover:bg-gray-100'}`}>すべて</button>
-                      <button type="button" onClick={() => setSelectedStatus('available')} className={`px-4 py-2 text-sm font-medium transition-colors duration-150 border-t border-b ${selectedStatus === 'available' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-900 hover:bg-gray-100'}`}>対応可能</button>
-                      <button type="button" onClick={() => setSelectedStatus('unavailable')} className={`px-4 py-2 text-sm font-medium transition-colors duration-150 rounded-r-lg border ${selectedStatus === 'unavailable' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-900 hover:bg-gray-100'}`}>対応不可</button>
+                      <button type="button" onClick={() => setSelectedStatus('all')} className={`px-4 py-2 text-sm font-medium transition-colors duration-150 rounded-l-lg border ${selectedStatus === 'all' ? 'bg-green-600 text-white' : 'bg-white text-gray-900 hover:bg-gray-100'}`}>すべて</button>
+                      <button type="button" onClick={() => setSelectedStatus('available')} className={`px-4 py-2 text-sm font-medium transition-colors duration-150 border-t border-b ${selectedStatus === 'available' ? 'bg-green-600 text-white' : 'bg-white text-gray-900 hover:bg-gray-100'}`}>対応可能</button>
+                      <button type="button" onClick={() => setSelectedStatus('unavailable')} className={`px-4 py-2 text-sm font-medium transition-colors duration-150 rounded-r-lg border ${selectedStatus === 'unavailable' ? 'bg-green-600 text-white' : 'bg-white text-gray-900 hover:bg-gray-100'}`}>対応不可</button>
                   </div>
                 )}
             </div>
@@ -1912,10 +2021,10 @@ export default function Home() {
               {Object.keys(groupedStaffForGantt).length > 0 ? (
                 Object.entries(groupedStaffForGantt).map(([department, groups]) => (
                   <div key={department} className="department-group">
-                    <h3 className="px-2 min-h-[33px] text-sm font-bold bg-gray-200 whitespace-nowrap flex items-center">{department}</h3>
+                    <h3 className="px-2 min-h-[33px] text-sm font-bold whitespace-nowrap flex items-center" style={{backgroundColor: departmentColors[department] || '#f5f5f5'}}>{department}</h3>
                     {Object.entries(groups).map(([group, staffInGroup]) => (
                       <div key={group}>
-                        <h4 className="px-2 pl-6 min-h-[33px] text-xs font-semibold bg-gray-100 whitespace-nowrap flex items-center">{group}</h4>
+                        <h4 className="px-2 pl-6 min-h-[33px] text-xs font-semibold whitespace-nowrap flex items-center" style={{backgroundColor: teamColors[group] || '#f5f5f5'}}>{group}</h4>
                         {staffInGroup.map(staff => (
                           <div key={staff.id} className={`px-2 pl-12 text-sm font-medium whitespace-nowrap h-[45px] hover:bg-gray-50 flex items-center cursor-pointer ${
                             staff.isSupporting ? 'bg-amber-50 border border-amber-400' : ''
@@ -2020,12 +2129,14 @@ export default function Home() {
                   {Object.keys(groupedStaffForGantt).length > 0 ? (
                     Object.entries(groupedStaffForGantt).map(([department, groups]) => (
                       <div key={department} className="department-group">
-                        <div className="min-h-[33px] bg-gray-200"></div>
+                        <div className="min-h-[33px]" style={{backgroundColor: departmentColors[department] || '#f5f5f5'}}></div>
                         {Object.entries(groups).map(([group, staffInGroup]) => (
                           <div key={group}>
-                            <div className="min-h-[33px] bg-gray-100"></div>
+                            <div className="min-h-[33px]" style={{backgroundColor: teamColors[group] || '#f5f5f5'}}></div>
                             {staffInGroup.map(staff => (
-                              <div key={staff.id} className="h-[45px] relative hover:bg-gray-50"
+                              <div key={staff.id} className={`h-[45px] relative hover:bg-gray-50 ${
+                                     staff.isSupporting ? 'bg-amber-50' : ''
+                                   }`}
                                    onMouseDown={(e) => handleTimelineMouseDown(e, staff)}
                                    onMouseLeave={() => {
                                      // マウスがスタッフ行から離れたら選択解除

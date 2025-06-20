@@ -125,6 +125,7 @@ export class SchedulesService {
       'training': 'Training',
       'break': 'Break',
       'off': 'Off',
+      'unplanned': 'Unplanned',
       'night_duty': 'Night Duty'
     };
     return statusMap[status] || status;

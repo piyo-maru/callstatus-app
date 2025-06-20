@@ -197,7 +197,7 @@ export class CsvImportService {
    * ステータスの検証
    */
   private isValidStatus(status: string): boolean {
-    const validStatuses = ['online', 'remote', 'meeting', 'training', 'break', 'off', 'night_duty'];
+    const validStatuses = ['online', 'remote', 'meeting', 'training', 'break', 'off', 'unplanned', 'night_duty'];
     return validStatuses.includes(status);
   }
 
