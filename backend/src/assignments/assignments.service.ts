@@ -44,6 +44,8 @@ export class AssignmentsService {
   async create(createDto: CreateAssignmentDto) {
     const startDate = new Date(createDto.startDate);
     const endDate = new Date(createDto.endDate);
+    // 終了日を23:59:59に設定
+    endDate.setHours(23, 59, 59, 999);
 
     // バリデーション
     if (startDate > endDate) {
@@ -163,6 +165,10 @@ export class AssignmentsService {
 
     return allStaff.map(staff => {
       const activeAssignment = staff.temporaryAssignments[0];
+      // 支援中は元の部署・グループと異なる場合のみとする
+      const isSupporting = activeAssignment && 
+        (activeAssignment.tempDept !== staff.department || activeAssignment.tempGroup !== staff.group);
+      
       return {
         id: staff.id,
         name: staff.name,
@@ -170,7 +176,7 @@ export class AssignmentsService {
         originalGroup: staff.group,
         currentDept: activeAssignment?.tempDept || staff.department,
         currentGroup: activeAssignment?.tempGroup || staff.group,
-        isSupporting: !!activeAssignment,
+        isSupporting: !!isSupporting,
         supportInfo: activeAssignment ? {
           startDate: activeAssignment.startDate,
           endDate: activeAssignment.endDate,

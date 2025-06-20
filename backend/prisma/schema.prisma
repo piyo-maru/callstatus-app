@@ -19,6 +19,7 @@ model Staff {
   monthlySchedules     MonthlySchedule[]
   schedules            Schedule[]
   temporaryAssignments TemporaryAssignment[]
+  responsibilities     StaffResponsibility[]
 }
 
 model Schedule {
@@ -106,6 +107,18 @@ model DailyAssignment {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   staff          Staff    @relation(fields: [staffId], references: [id])
+
+  @@unique([staffId, date])
+}
+
+model StaffResponsibility {
+  id              Int      @id @default(autoincrement())
+  staffId         Int
+  date            DateTime @db.Date
+  responsibilities Json
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  staff           Staff    @relation(fields: [staffId], references: [id])
 
   @@unique([staffId, date])
 }

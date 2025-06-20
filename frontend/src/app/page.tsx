@@ -38,7 +38,25 @@ type Staff = {
     endDate: string;
     reason: string;
   } | null;
+  responsibilities?: ResponsibilityData | null;
+  hasResponsibilities?: boolean;
+  isReception?: boolean;
 };
+
+type GeneralResponsibilityData = {
+  fax: boolean;
+  subjectCheck: boolean;
+  custom: string;
+};
+
+type ReceptionResponsibilityData = {
+  lunch: boolean;
+  fax: boolean;
+  cs: boolean;
+  custom: string;
+};
+
+type ResponsibilityData = GeneralResponsibilityData | ReceptionResponsibilityData;
 
 type ScheduleFromDB = {
   id: number;
@@ -310,7 +328,7 @@ const ConfirmationModal = ({ isOpen, onClose, onConfirm, message }: { isOpen: bo
 };
 
 // --- 支援設定モーダルコンポーネント ---
-const AssignmentModal = ({ isOpen, onClose, staff, staffList, onSave }: {
+const AssignmentModal = ({ isOpen, onClose, staff, staffList, onSave, onDelete }: {
   isOpen: boolean;
   onClose: () => void;
   staff: Staff | null;
@@ -322,6 +340,7 @@ const AssignmentModal = ({ isOpen, onClose, staff, staffList, onSave }: {
     department: string;
     group: string;
   }) => void;
+  onDelete?: (staffId: number) => void;
 }) => {
   const [startDate, setStartDate] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState<Date | null>(null);
@@ -358,14 +377,16 @@ const AssignmentModal = ({ isOpen, onClose, staff, staffList, onSave }: {
     }
   }, [isOpen, staff]);
 
-  // 利用可能な部署とグループを取得
+  // 利用可能な部署とグループを取得（「受付」を含むものは除外）
   const availableDepartments = useMemo(() => {
-    return Array.from(new Set(staffList.map(s => s.department)));
+    return Array.from(new Set(staffList.map(s => s.department)))
+      .filter(dept => !dept.includes('受付'));
   }, [staffList]);
 
   const availableGroups = useMemo(() => {
     if (!department) return [];
-    return Array.from(new Set(staffList.filter(s => s.department === department).map(s => s.group)));
+    return Array.from(new Set(staffList.filter(s => s.department === department).map(s => s.group)))
+      .filter(group => !group.includes('受付'));
   }, [staffList, department]);
 
   // 部署が変更されたらグループをリセット
@@ -398,11 +419,20 @@ const AssignmentModal = ({ isOpen, onClose, staff, staffList, onSave }: {
     onClose();
   };
 
+  const handleDelete = () => {
+    if (!staff || !onDelete) return;
+    
+    if (confirm(`${staff.name}の支援設定を削除しますか？`)) {
+      onDelete(staff.id);
+      onClose();
+    }
+  };
+
   return createPortal(
     <div className="fixed inset-0 bg-black bg-opacity-50 z-[9998] flex justify-center items-center">
       <div className="bg-white rounded-lg p-6 shadow-xl w-full max-w-md">
         <h3 className="text-lg font-medium leading-6 text-gray-900">
-          {staff.supportInfo ? '支援設定を編集' : '支援設定を追加'} - {staff.name}
+          {staff.supportInfo ? '支援設定を編集' : '支援を設定'} - {staff.name}
         </h3>
         <div className="mt-4 space-y-4">
           <div className="grid grid-cols-2 gap-4">
@@ -415,6 +445,8 @@ const AssignmentModal = ({ isOpen, onClose, staff, staffList, onSave }: {
                 dateFormat="yyyy年M月d日(E)"
                 className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                 placeholderText="開始日を選択"
+                popperClassName="!z-[10000]"
+                popperPlacement="bottom-start"
               />
             </div>
             <div>
@@ -426,6 +458,8 @@ const AssignmentModal = ({ isOpen, onClose, staff, staffList, onSave }: {
                 dateFormat="yyyy年M月d日(E)"
                 className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                 placeholderText="終了日を選択"
+                popperClassName="!z-[10000]"
+                popperPlacement="bottom-start"
               />
             </div>
           </div>
@@ -464,21 +498,255 @@ const AssignmentModal = ({ isOpen, onClose, staff, staffList, onSave }: {
             </div>
           )}
         </div>
-        <div className="mt-6 flex justify-end space-x-2">
+        <div className="mt-6 flex justify-between items-center">
+          {/* 削除ボタン（左側、既存の支援設定がある場合のみ表示） */}
+          <div>
+            {staff.isSupporting && onDelete && (
+              <button
+                type="button"
+                onClick={handleDelete}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700"
+              >
+                支援設定を削除
+              </button>
+            )}
+          </div>
+          
+          {/* キャンセル・保存ボタン（右側） */}
+          <div className="flex space-x-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+            >
+              キャンセル
+            </button>
+            <button
+              type="button"
+              onClick={handleSave}
+              className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md hover:bg-indigo-700"
+            >
+              保存
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+};
+
+// --- 担当設定モーダルコンポーネント ---
+const ResponsibilityModal = ({ isOpen, onClose, staff, onSave }: {
+  isOpen: boolean;
+  onClose: () => void;
+  staff: Staff | null;
+  onSave: (data: { staffId: number; responsibilities: ResponsibilityData }) => void;
+}) => {
+  const [isClient, setIsClient] = useState(false);
+  
+  // 一般部署用のstate
+  const [fax, setFax] = useState(false);
+  const [subjectCheck, setSubjectCheck] = useState(false);
+  const [custom, setCustom] = useState('');
+  
+  // 受付部署用のstate
+  const [lunch, setLunch] = useState(false);
+  const [cs, setCs] = useState(false);
+
+  useEffect(() => { setIsClient(true); }, []);
+
+  useEffect(() => {
+    if (isOpen && staff) {
+      // 既存の担当設定があれば読み込み
+      if (staff.responsibilities) {
+        if (staff.isReception) {
+          const r = staff.responsibilities as ReceptionResponsibilityData;
+          setLunch(r.lunch || false);
+          setFax(r.fax || false);
+          setCs(r.cs || false);
+          setCustom(r.custom || '');
+        } else {
+          const r = staff.responsibilities as GeneralResponsibilityData;
+          setFax(r.fax || false);
+          setSubjectCheck(r.subjectCheck || false);
+          setCustom(r.custom || '');
+        }
+      } else {
+        // 新規設定の場合は全て初期化
+        setLunch(false);
+        setFax(false);
+        setCs(false);
+        setSubjectCheck(false);
+        setCustom('');
+      }
+    } else if (!isOpen) {
+      // モーダルが閉じられた時は全て初期化
+      setLunch(false);
+      setFax(false);
+      setCs(false);
+      setSubjectCheck(false);
+      setCustom('');
+    }
+  }, [isOpen, staff]);
+
+  if (!isOpen || !staff || !isClient) return null;
+
+  const handleSave = () => {
+    const responsibilities: ResponsibilityData = staff.isReception 
+      ? { lunch, fax, cs, custom }
+      : { fax, subjectCheck, custom };
+
+    onSave({
+      staffId: staff.id,
+      responsibilities
+    });
+    onClose();
+  };
+
+  const handleClear = () => {
+    if (confirm(`${staff.name}の担当設定をクリアしますか？`)) {
+      const responsibilities: ResponsibilityData = staff.isReception 
+        ? { lunch: false, fax: false, cs: false, custom: '' }
+        : { fax: false, subjectCheck: false, custom: '' };
+
+      onSave({
+        staffId: staff.id,
+        responsibilities
+      });
+      onClose();
+    }
+  };
+
+  return createPortal(
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-[9999] flex justify-center items-center">
+      <div className="bg-white rounded-lg shadow-xl w-96 max-w-md mx-4">
+        <div className="px-6 py-4 border-b border-gray-200">
+          <h2 className="text-lg font-semibold text-gray-900">
+            担当設定 - {staff.name}
+          </h2>
+          <p className="text-sm text-gray-600 mt-1">
+            {staff.department} / {staff.group}
+          </p>
+        </div>
+        
+        <div className="px-6 py-4 space-y-4">
+          {staff.isReception ? (
+            // 受付部署用
+            <>
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="lunch"
+                  checked={lunch}
+                  onChange={(e) => setLunch(e.target.checked)}
+                  className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                />
+                <label htmlFor="lunch" className="ml-2 text-sm font-medium text-gray-700">
+                  昼当番
+                </label>
+              </div>
+              
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="fax"
+                  checked={fax}
+                  onChange={(e) => setFax(e.target.checked)}
+                  className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                />
+                <label htmlFor="fax" className="ml-2 text-sm font-medium text-gray-700">
+                  FAX当番
+                </label>
+              </div>
+              
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="cs"
+                  checked={cs}
+                  onChange={(e) => setCs(e.target.checked)}
+                  className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                />
+                <label htmlFor="cs" className="ml-2 text-sm font-medium text-gray-700">
+                  CS担当
+                </label>
+              </div>
+            </>
+          ) : (
+            // 一般部署用
+            <>
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="fax"
+                  checked={fax}
+                  onChange={(e) => setFax(e.target.checked)}
+                  className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                />
+                <label htmlFor="fax" className="ml-2 text-sm font-medium text-gray-700">
+                  FAX当番
+                </label>
+              </div>
+              
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="subjectCheck"
+                  checked={subjectCheck}
+                  onChange={(e) => setSubjectCheck(e.target.checked)}
+                  className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                />
+                <label htmlFor="subjectCheck" className="ml-2 text-sm font-medium text-gray-700">
+                  件名チェック担当
+                </label>
+              </div>
+            </>
+          )}
+          
+          {/* カスタム担当 */}
+          <div>
+            <label htmlFor="custom" className="block text-sm font-medium text-gray-700">
+              カスタム担当
+            </label>
+            <input
+              type="text"
+              id="custom"
+              value={custom}
+              onChange={(e) => setCustom(e.target.value)}
+              placeholder="カスタム担当を入力"
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+            />
+          </div>
+        </div>
+        
+        <div className="px-6 py-4 bg-gray-50 flex justify-between">
+          {/* クリアボタン（左側） */}
           <button
             type="button"
-            onClick={onClose}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+            onClick={handleClear}
+            className="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700"
           >
-            キャンセル
+            クリア
           </button>
-          <button
-            type="button"
-            onClick={handleSave}
-            className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md hover:bg-indigo-700"
-          >
-            保存
-          </button>
+          
+          {/* キャンセル・保存ボタン（右側） */}
+          <div className="flex space-x-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+            >
+              キャンセル
+            </button>
+            <button
+              type="button"
+              onClick={handleSave}
+              className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md hover:bg-indigo-700"
+            >
+              保存
+            </button>
+          </div>
         </div>
       </div>
     </div>,
@@ -551,7 +819,7 @@ const JsonUploadModal = ({ isOpen, onClose, onUpload }: {
         
         <div className="mb-4">
           <p className="text-sm text-gray-600 mb-2">
-            employeeDataを含むJSONファイルをアップロードしてスタッフデータを同期します。
+            指定フォーマットのJSONファイルをアップロードして社員情報を一括投入します。
           </p>
           <p className="text-xs text-gray-500 mb-3">
             フォーマット：{"{"} "employeeData": [{"{"} "name": "名前", "dept": "部署", "team": "グループ" {"}"}] {"}"}
@@ -618,6 +886,139 @@ const JsonUploadModal = ({ isOpen, onClose, onUpload }: {
             }`}
           >
             同期実行
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+};
+
+// --- CSVファイルアップロードモーダルコンポーネント ---
+const CsvUploadModal = ({ isOpen, onClose, onUpload }: {
+  isOpen: boolean;
+  onClose: () => void;
+  onUpload: (file: File) => void;
+}) => {
+  const [isClient, setIsClient] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isDragOver, setIsDragOver] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  if (!isClient || !isOpen) return null;
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    const files = Array.from(e.dataTransfer.files);
+    const csvFile = files.find(file => file.name.endsWith('.csv') || file.type === 'text/csv');
+    if (csvFile) {
+      setSelectedFile(csvFile);
+    }
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSelectedFile(file);
+    }
+  };
+
+  const handleUpload = () => {
+    if (!selectedFile) {
+      alert('ファイルを選択してください。');
+      return;
+    }
+
+    onUpload(selectedFile);
+  };
+
+  return createPortal(
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-[9998] flex justify-center items-center">
+      <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <h2 className="text-lg font-bold mb-4">スケジュールインポート（CSV）</h2>
+        
+        <div className="mb-4">
+          <p className="text-sm text-gray-600 mb-2">
+            指定フォーマットのCSVファイルをアップロードしてスケジュールデータを一括投入します。
+          </p>
+          <p className="text-xs text-gray-500 mb-3">
+            フォーマット: 日付,社員名,ステータス,開始時刻,終了時刻,メモ
+          </p>
+        </div>
+
+        <div 
+          className={`mb-4 border-2 border-dashed rounded-lg p-8 text-center ${
+            isDragOver ? 'border-indigo-500 bg-indigo-50' : 'border-gray-300'
+          }`}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+        >
+          {selectedFile ? (
+            <div>
+              <p className="text-sm font-medium text-gray-900">{selectedFile.name}</p>
+              <p className="text-xs text-gray-500">サイズ: {(selectedFile.size / 1024).toFixed(2)} KB</p>
+            </div>
+          ) : (
+            <div>
+              <p className="text-sm text-gray-600 mb-2">
+                CSVファイルをドラッグ&ドロップするか、クリックして選択
+              </p>
+              <input
+                type="file"
+                accept=".csv,text/csv"
+                onChange={handleFileSelect}
+                className="hidden"
+                id="csvFile"
+              />
+              <label
+                htmlFor="csvFile"
+                className="inline-block px-4 py-2 text-sm font-medium text-indigo-600 border border-indigo-600 rounded-md hover:bg-indigo-50 cursor-pointer"
+              >
+                ファイルを選択
+              </label>
+            </div>
+          )}
+        </div>
+
+        {selectedFile && (
+          <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+            <p className="text-sm text-yellow-800">
+              <strong>注意:</strong> アップロードにより、既存のスケジュールデータが更新される場合があります。
+            </p>
+          </div>
+        )}
+
+        <div className="flex justify-end space-x-3">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 border border-gray-300 rounded-md hover:bg-gray-300"
+          >
+            キャンセル
+          </button>
+          <button
+            onClick={handleUpload}
+            disabled={!selectedFile}
+            className={`px-4 py-2 text-sm font-medium text-white rounded-md ${
+              selectedFile 
+                ? 'bg-blue-600 hover:bg-blue-700' 
+                : 'bg-gray-400 cursor-not-allowed'
+            }`}
+          >
+            インポート実行
           </button>
         </div>
       </div>
@@ -713,8 +1114,11 @@ export default function Home() {
   const [dragInfo, setDragInfo] = useState<DragInfo | null>(null);
   const [draggedSchedule, setDraggedSchedule] = useState<Partial<Schedule> | null>(null);
   const [isJsonUploadModalOpen, setIsJsonUploadModalOpen] = useState(false);
+  const [isCsvUploadModalOpen, setIsCsvUploadModalOpen] = useState(false);
   const [isAssignmentModalOpen, setIsAssignmentModalOpen] = useState(false);
   const [selectedStaffForAssignment, setSelectedStaffForAssignment] = useState<Staff | null>(null);
+  const [isResponsibilityModalOpen, setIsResponsibilityModalOpen] = useState(false);
+  const [selectedStaffForResponsibility, setSelectedStaffForResponsibility] = useState<Staff | null>(null);
   
   // スクロール同期用のref
   const topScrollRef = useRef<HTMLDivElement>(null);
@@ -730,24 +1134,33 @@ export default function Home() {
     const dateString = date.toISOString().split('T')[0];
     const currentApiUrl = getApiUrl();
     try {
-      // スケジュールと支援状況を並列で取得
-      const [scheduleRes, supportRes] = await Promise.all([
+      // スケジュール、支援状況、担当設定を並列で取得
+      const [scheduleRes, supportRes, responsibilityRes] = await Promise.all([
         fetch(`${currentApiUrl}/api/schedules/layered?date=${dateString}`),
-        fetch(`${currentApiUrl}/api/assignments/status`)
+        fetch(`${currentApiUrl}/api/assignments/status`),
+        fetch(`${currentApiUrl}/api/responsibilities/status?date=${dateString}`)
       ]);
       
       if (!scheduleRes.ok) throw new Error(`Schedule API response was not ok`);
       if (!supportRes.ok) throw new Error(`Support API response was not ok`);
+      if (!responsibilityRes.ok) throw new Error(`Responsibility API response was not ok`);
       
       const scheduleData: { staff: Staff[], schedules: ScheduleFromDB[] } = await scheduleRes.json();
       const supportData = await supportRes.json();
+      const responsibilityData = await responsibilityRes.json();
       
-      // 支援状況をスタッフデータにマージ
-      const staffWithSupport = scheduleData.staff.map(staff => {
+      
+      // 支援状況と担当設定をスタッフデータにマージ
+      const staffWithSupportAndResponsibility = scheduleData.staff.map(staff => {
         const supportInfo = supportData.find((s: any) => s.id === staff.id);
+        const responsibilityInfo = responsibilityData.find((r: any) => r.id === staff.id);
+        
+        let result = { ...staff };
+        
+        // 支援状況をマージ
         if (supportInfo && supportInfo.isSupporting) {
-          return {
-            ...staff,
+          result = {
+            ...result,
             isSupporting: true,
             originalDept: supportInfo.originalDept,
             originalGroup: supportInfo.originalGroup,
@@ -755,14 +1168,25 @@ export default function Home() {
             currentGroup: supportInfo.currentGroup,
             supportInfo: supportInfo.supportInfo
           };
+        } else {
+          result.isSupporting = false;
         }
-        return {
-          ...staff,
-          isSupporting: false
-        };
+        
+        // 担当設定をマージ
+        if (responsibilityInfo) {
+          result.responsibilities = responsibilityInfo.responsibilities;
+          result.hasResponsibilities = true;
+        } else {
+          result.hasResponsibilities = false;
+        }
+        
+        // 受付部署の判定
+        result.isReception = staff.department.includes('受付') || staff.group.includes('受付');
+        
+        return result;
       });
       
-      setStaffList(staffWithSupport);
+      setStaffList(staffWithSupportAndResponsibility);
       const formattedSchedules = scheduleData.schedules.map(s => {
         const start = new Date(s.start);
         const end = new Date(s.end);
@@ -783,18 +1207,18 @@ export default function Home() {
     const handleNewSchedule = (newSchedule: ScheduleFromDB) => {
         const scheduleDate = new Date(newSchedule.start);
         if(scheduleDate.toISOString().split('T')[0] === displayDate.toISOString().split('T')[0]) {
-            const formatted = { ...newSchedule, start: scheduleDate.getHours() + scheduleDate.getMinutes()/60, end: new Date(newSchedule.end).getHours() + new Date(newSchedule.end).getMinutes()/60, layer: newSchedule.layer || 'adjustment' };
-            setSchedules((prev) => [...prev, formatted]);
+            fetchData(displayDate);
         }
     };
     const handleUpdatedSchedule = (updatedSchedule: ScheduleFromDB) => {
         const scheduleDate = new Date(updatedSchedule.start);
         if(scheduleDate.toISOString().split('T')[0] === displayDate.toISOString().split('T')[0]){
-            const formatted = { ...updatedSchedule, start: scheduleDate.getHours() + scheduleDate.getMinutes()/60, end: new Date(updatedSchedule.end).getHours() + new Date(updatedSchedule.end).getMinutes()/60, layer: updatedSchedule.layer || 'adjustment' };
-            setSchedules(prev => prev.map(s => s.id === formatted.id ? formatted : s));
+            fetchData(displayDate);
         }
     }
-    const handleDeletedSchedule = (id: number) => setSchedules((prev) => prev.filter(s => s.id !== id));
+    const handleDeletedSchedule = (id: number) => {
+        fetchData(displayDate);
+    };
     socket.on('schedule:new', handleNewSchedule);
     socket.on('schedule:updated', handleUpdatedSchedule);
     socket.on('schedule:deleted', handleDeletedSchedule);
@@ -869,28 +1293,200 @@ export default function Home() {
   }) => {
     const currentApiUrl = getApiUrl();
     try {
+      // 送信前のデータをログ出力
+      console.log('=== 支援設定データ送信 ===');
+      console.log('原データ:', data);
+      
+      // バックエンドが期待するフィールド名に変換
+      const backendData = {
+        staffId: data.staffId,
+        startDate: data.startDate,
+        endDate: data.endDate,
+        tempDept: data.department,   // department → tempDept
+        tempGroup: data.group        // group → tempGroup
+      };
+      
+      console.log('送信データ:', backendData);
+      console.log('API URL:', `${currentApiUrl}/api/assignments`);
+      
       const response = await fetch(`${currentApiUrl}/api/assignments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
+        body: JSON.stringify(backendData)
       });
+
+      console.log('レスポンス status:', response.status);
+      console.log('レスポンス ok:', response.ok);
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('Assignment API Error:', response.status, response.statusText, errorText);
-        throw new Error(`支援設定の保存に失敗しました: ${response.status} ${response.statusText}`);
+        console.error('=== 支援設定エラー詳細 ===');
+        console.error('Status:', response.status);
+        console.error('StatusText:', response.statusText);
+        console.error('ErrorText:', errorText);
+        console.error('送信したデータ:', backendData);
+        
+        // より詳細なエラーメッセージを表示
+        let errorMessage = `支援設定の保存に失敗しました (${response.status})`;
+        if (errorText) {
+          try {
+            const errorJson = JSON.parse(errorText);
+            errorMessage += `\nエラー: ${errorJson.message || errorText}`;
+          } catch {
+            errorMessage += `\nエラー: ${errorText}`;
+          }
+        }
+        throw new Error(errorMessage);
       }
 
       const result = await response.json();
-      console.log('Assignment saved successfully:', result);
+      console.log('=== 支援設定成功 ===');
+      console.log('結果:', result);
       
       // データを再取得してUIを更新
       await fetchData(displayDate);
       setIsAssignmentModalOpen(false);
       setSelectedStaffForAssignment(null);
     } catch (error) {
-      console.error('支援設定の保存に失敗しました:', error);
+      console.error('=== 支援設定の保存に失敗 ===');
+      console.error('エラー詳細:', error);
       alert('支援設定の保存に失敗しました。再度お試しください。\n詳細: ' + (error instanceof Error ? error.message : String(error)));
+    }
+  };
+
+  const handleDeleteAssignment = async (staffId: number) => {
+    const currentApiUrl = getApiUrl();
+    try {
+      console.log('=== 支援設定削除処理開始 ===');
+      console.log('削除対象スタッフID:', staffId);
+      console.log('API URL:', `${currentApiUrl}/api/assignments/staff/${staffId}/current`);
+      
+      const response = await fetch(`${currentApiUrl}/api/assignments/staff/${staffId}/current`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      console.log('削除レスポンス status:', response.status);
+      console.log('削除レスポンス ok:', response.ok);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('=== 支援設定削除エラー詳細 ===');
+        console.error('Status:', response.status);
+        console.error('StatusText:', response.statusText);
+        console.error('ErrorText:', errorText);
+        
+        let errorMessage = `支援設定の削除に失敗しました (${response.status})`;
+        if (errorText) {
+          try {
+            const errorJson = JSON.parse(errorText);
+            errorMessage += `\nエラー: ${errorJson.message || errorText}`;
+          } catch {
+            errorMessage += `\nエラー: ${errorText}`;
+          }
+        }
+        throw new Error(errorMessage);
+      }
+
+      const result = await response.json();
+      console.log('=== 支援設定削除成功 ===');
+      console.log('結果:', result);
+      
+      // データを再取得してUIを更新
+      await fetchData(displayDate);
+      setIsAssignmentModalOpen(false);
+      setSelectedStaffForAssignment(null);
+    } catch (error) {
+      console.error('=== 支援設定の削除に失敗 ===');
+      console.error('エラー詳細:', error);
+      alert('支援設定の削除に失敗しました。再度お試しください。\n詳細: ' + (error instanceof Error ? error.message : String(error)));
+    }
+  };
+
+  const handleOpenResponsibilityModal = (staff: Staff) => {
+    setSelectedStaffForResponsibility(staff);
+    setIsResponsibilityModalOpen(true);
+  };
+
+  // 担当設定バッジを生成する関数
+  const generateResponsibilityBadges = (responsibilities: ResponsibilityData | null, isReception: boolean) => {
+    if (!responsibilities) return null;
+    
+    const badges: JSX.Element[] = [];
+    
+    if (isReception) {
+      // 受付部署用のバッジ
+      const receptionResp = responsibilities as ReceptionResponsibilityData;
+      if (receptionResp.lunch) badges.push(<span key="lunch" className="ml-1 text-xs text-blue-600 font-semibold">[昼当番]</span>);
+      if (receptionResp.fax) badges.push(<span key="fax" className="ml-1 text-xs text-green-600 font-semibold">[FAX]</span>);
+      if (receptionResp.cs) badges.push(<span key="cs" className="ml-1 text-xs text-purple-600 font-semibold">[CS]</span>);
+      if (receptionResp.custom) badges.push(<span key="custom" className="ml-1 text-xs text-red-600 font-semibold">[{receptionResp.custom}]</span>);
+    } else {
+      // 一般部署用のバッジ
+      const generalResp = responsibilities as GeneralResponsibilityData;
+      if (generalResp.fax) badges.push(<span key="fax" className="ml-1 text-xs text-green-600 font-semibold">[FAX]</span>);
+      if (generalResp.subjectCheck) badges.push(<span key="subject" className="ml-1 text-xs text-orange-600 font-semibold">[件名]</span>);
+      if (generalResp.custom) badges.push(<span key="custom" className="ml-1 text-xs text-red-600 font-semibold">[{generalResp.custom}]</span>);
+    }
+    
+    return badges.length > 0 ? badges : null;
+  };
+
+  const handleSaveResponsibility = async (data: {
+    staffId: number;
+    responsibilities: ResponsibilityData;
+  }) => {
+    const currentApiUrl = getApiUrl();
+    const today = displayDate.toISOString().split('T')[0];
+    
+    try {
+      console.log('=== 担当設定保存開始 ===');
+      console.log('送信データ:', data);
+      console.log('対象日:', today);
+      
+      const response = await fetch(`${currentApiUrl}/api/responsibilities`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          staffId: data.staffId,
+          date: today,
+          responsibilities: data.responsibilities
+        })
+      });
+
+      console.log('レスポンス status:', response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('=== 担当設定エラー詳細 ===');
+        console.error('Status:', response.status);
+        console.error('StatusText:', response.statusText);
+        console.error('ErrorText:', errorText);
+        
+        let errorMessage = `担当設定の保存に失敗しました (${response.status})`;
+        if (errorText) {
+          try {
+            const errorJson = JSON.parse(errorText);
+            errorMessage += `\nエラー: ${errorJson.message || errorText}`;
+          } catch {
+            errorMessage += `\nエラー: ${errorText}`;
+          }
+        }
+        throw new Error(errorMessage);
+      }
+
+      const result = await response.json();
+      console.log('=== 担当設定保存成功 ===');
+      console.log('結果:', result);
+      
+      // データを再取得してUIを更新
+      await fetchData(displayDate);
+      setIsResponsibilityModalOpen(false);
+      setSelectedStaffForResponsibility(null);
+    } catch (error) {
+      console.error('=== 担当設定の保存に失敗 ===');
+      console.error('エラー詳細:', error);
+      alert('担当設定の保存に失敗しました。再度お試しください。\n詳細: ' + (error instanceof Error ? error.message : String(error)));
     }
   };
 
@@ -954,9 +1550,79 @@ export default function Home() {
       alert('JSONファイルの同期に失敗しました: ' + (error instanceof Error ? error.message : String(error)));
     }
   };
+
+  const handleCsvUpload = async (file: File) => {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const currentApiUrl = getApiUrl();
+
+      const response = await fetch(`${currentApiUrl}/api/csv-import/schedules`, {
+        method: 'POST',
+        body: formData
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'CSVファイルのインポートに失敗しました');
+      }
+      
+      const result = await response.json();
+      console.log('CSVインポート結果:', result);
+      
+      const message = `インポート完了:\n投入: ${result.imported}件\n競合: ${result.conflicts?.length || 0}件`;
+      alert(message);
+      
+      // データを再取得してUIを更新
+      await fetchData(displayDate);
+      setIsCsvUploadModalOpen(false);
+    } catch (error) {
+      console.error('CSVファイルのインポートに失敗しました:', error);
+      alert('CSVファイルのインポートに失敗しました: ' + (error instanceof Error ? error.message : String(error)));
+    }
+  };
+
+  const handleMoveSchedule = async (scheduleId: number, newStaffId: number, newStart: number, newEnd: number) => {
+    const currentApiUrl = getApiUrl();
+    const date = displayDate.toISOString().split('T')[0];
+    
+    try {
+      const response = await fetch(`${currentApiUrl}/api/schedules/${scheduleId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          staffId: newStaffId,
+          start: newStart,
+          end: newEnd,
+          date
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error('スケジュールの移動に失敗しました');
+      }
+      
+      // データを再取得してUIを更新
+      await fetchData(displayDate);
+    } catch (error) {
+      console.error('スケジュール移動エラー:', error);
+      alert('スケジュールの移動に失敗しました: ' + (error instanceof Error ? error.message : String(error)));
+    }
+  };
   
   const handleTimelineMouseDown = (e: React.MouseEvent<HTMLDivElement>, staff: Staff) => {
-    if ((e.target as HTMLElement).closest('.absolute')) { return; }
+    const clickedElement = e.target as HTMLElement;
+    const scheduleElement = clickedElement.closest('.absolute');
+    
+    // スケジュール要素をクリックした場合は、レイヤー2（調整層）の予定かチェック
+    if (scheduleElement) {
+      const title = scheduleElement.getAttribute('title') || '';
+      if (title.includes('レイヤー2:調整')) {
+        return; // レイヤー2の予定要素はドラッグ不可（既存の予定）
+      }
+      // レイヤー1（契約層）の上はドラッグ可能（背景扱い）
+    }
+    
     const rect = e.currentTarget.getBoundingClientRect();
     const startX = e.clientX - rect.left;
     setDragInfo({ staff, startX, currentX: startX, rowRef: e.currentTarget });
@@ -1004,8 +1670,11 @@ export default function Home() {
   
   const departmentGroupFilteredStaff = useMemo(() => {
     return staffWithCurrentStatus.filter(staff => {
-        const departmentMatch = selectedDepartment === 'all' || staff.department === selectedDepartment;
-        const groupMatch = selectedGroup === 'all' || staff.group === selectedGroup;
+        // 支援中の場合は現在の部署/グループでフィルタリング、そうでなければ元の部署/グループでフィルタリング
+        const currentDepartment = staff.isSupporting ? (staff.currentDept || staff.department) : staff.department;
+        const currentGroup = staff.isSupporting ? (staff.currentGroup || staff.group) : staff.group;
+        const departmentMatch = selectedDepartment === 'all' || currentDepartment === selectedDepartment;
+        const groupMatch = selectedGroup === 'all' || currentGroup === selectedGroup;
         return departmentMatch && groupMatch;
     });
   }, [staffWithCurrentStatus, selectedDepartment, selectedGroup]);
@@ -1040,8 +1709,11 @@ export default function Home() {
   const chartData = useMemo(() => {
     const data: any[] = [];
     const staffToChart = staffList.filter(staff => {
-        const departmentMatch = selectedDepartment === 'all' || staff.department === selectedDepartment;
-        const groupMatch = selectedGroup === 'all' || staff.group === selectedGroup;
+        // 支援中の場合は現在の部署/グループでフィルタリング、そうでなければ元の部署/グループでフィルタリング
+        const currentDepartment = staff.isSupporting ? (staff.currentDept || staff.department) : staff.department;
+        const currentGroup = staff.isSupporting ? (staff.currentGroup || staff.group) : staff.group;
+        const departmentMatch = selectedDepartment === 'all' || currentDepartment === selectedDepartment;
+        const groupMatch = selectedGroup === 'all' || currentGroup === selectedGroup;
         return departmentMatch && groupMatch;
     });
     let statusesToDisplay: string[];
@@ -1098,9 +1770,11 @@ export default function Home() {
     return timeToPositionPercent(currentDecimalHour);
   }, [currentTime, displayDate]);
 
-  const groupedStaff = useMemo(() => {
+  const groupedStaffForGantt = useMemo(() => {
     return filteredStaffForDisplay.reduce((acc, staff) => {
-      const { department, group } = staff;
+      // 支援中の場合は現在の部署/グループを使用、そうでなければ元の部署/グループを使用
+      const department = staff.isSupporting ? (staff.currentDept || staff.department) : staff.department;
+      const group = staff.isSupporting ? (staff.currentGroup || staff.group) : staff.group;
       if (!acc[department]) { acc[department] = {}; }
       if (!acc[department][group]) { acc[department][group] = []; }
       acc[department][group].push(staff);
@@ -1139,6 +1813,7 @@ export default function Home() {
       <ScheduleModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} staffList={staffList as Staff[]} onSave={handleSaveSchedule} scheduleToEdit={editingSchedule} initialData={draggedSchedule || undefined} />
       <ConfirmationModal isOpen={deletingScheduleId !== null} onClose={() => setDeletingScheduleId(null)} onConfirm={() => { if (deletingScheduleId) handleDeleteSchedule(deletingScheduleId); }} message="この予定を削除しますか？" />
       <JsonUploadModal isOpen={isJsonUploadModalOpen} onClose={() => setIsJsonUploadModalOpen(false)} onUpload={handleJsonUpload} />
+      <CsvUploadModal isOpen={isCsvUploadModalOpen} onClose={() => setIsCsvUploadModalOpen(false)} onUpload={handleCsvUpload} />
       <AssignmentModal 
         isOpen={isAssignmentModalOpen} 
         onClose={() => {
@@ -1147,7 +1822,17 @@ export default function Home() {
         }} 
         staff={selectedStaffForAssignment} 
         staffList={staffList} 
-        onSave={handleSaveAssignment} 
+        onSave={handleSaveAssignment}
+        onDelete={handleDeleteAssignment}
+      />
+      <ResponsibilityModal 
+        isOpen={isResponsibilityModalOpen}
+        onClose={() => {
+          setIsResponsibilityModalOpen(false);
+          setSelectedStaffForResponsibility(null);
+        }}
+        staff={selectedStaffForResponsibility}
+        onSave={handleSaveResponsibility}
       />
       
       <main className="container mx-auto p-4 font-sans">
@@ -1164,23 +1849,31 @@ export default function Home() {
                   customInput={<CustomDatePickerInput />}
                   locale="ja"
                   dateFormat="yyyy年M月d日(E)"
+                  popperClassName="!z-[10000]"
+                  popperPlacement="bottom-start"
                 />
             </div>
 
             <div className="flex items-center space-x-2">
-                <button onClick={() => setIsJsonUploadModalOpen(true)} className="px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md hover:bg-green-700">
-                    スタッフデータ同期
-                </button>
                 <button onClick={() => handleOpenModal()} className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md hover:bg-indigo-700">
                     予定を追加
+                </button>
+                <button onClick={() => setIsCsvUploadModalOpen(true)} className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700">
+                    スケジュールインポート
+                </button>
+                <button onClick={() => setIsJsonUploadModalOpen(true)} className="px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md hover:bg-green-700">
+                    社員情報インポート
                 </button>
             </div>
         </header>
 
         <div className="mb-2 p-3 bg-gray-50 rounded-lg flex items-center justify-between">
             <div className="flex items-center space-x-4">
-                <select onChange={(e) => setSelectedDepartment(e.target.value)} value={selectedDepartment} className="rounded-md border-gray-300 shadow-sm"><option value="all">すべての部署</option>{Array.from(new Set(staffList.map(s => s.department))).map(dep => <option key={dep} value={dep}>{dep}</option>)}</select>
-                <select onChange={(e) => setSelectedGroup(e.target.value)} value={selectedGroup} className="rounded-md border-gray-300 shadow-sm"><option value="all">すべてのグループ</option>{Array.from(new Set(staffList.filter(s => selectedDepartment === 'all' || s.department === selectedDepartment).map(s => s.group))).map(grp => <option key={grp} value={grp}>{grp}</option>)}</select>
+                <select onChange={(e) => setSelectedDepartment(e.target.value)} value={selectedDepartment} className="rounded-md border-gray-300 shadow-sm"><option value="all">すべての部署</option>{Array.from(new Set(staffList.map(s => s.isSupporting ? (s.currentDept || s.department) : s.department))).map(dep => <option key={dep} value={dep}>{dep}</option>)}</select>
+                <select onChange={(e) => setSelectedGroup(e.target.value)} value={selectedGroup} className="rounded-md border-gray-300 shadow-sm"><option value="all">すべてのグループ</option>{Array.from(new Set(staffList.filter(s => {
+                  const currentDept = s.isSupporting ? (s.currentDept || s.department) : s.department;
+                  return selectedDepartment === 'all' || currentDept === selectedDepartment;
+                }).map(s => s.isSupporting ? (s.currentGroup || s.group) : s.group))).map(grp => <option key={grp} value={grp}>{grp}</option>)}</select>
                 {isToday && (
                   <div className="inline-flex rounded-md shadow-sm" role="group">
                       <button type="button" onClick={() => setSelectedStatus('all')} className={`px-4 py-2 text-sm font-medium transition-colors duration-150 rounded-l-lg border ${selectedStatus === 'all' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-900 hover:bg-gray-100'}`}>すべて</button>
@@ -1206,8 +1899,8 @@ export default function Home() {
               <div className="h-[17px] bg-gray-50 border-b"></div>
               {/* ヘッダー行 - 時刻行と同じ高さに調整 */}
               <div className="px-2 py-2 bg-gray-100 font-bold text-gray-600 text-sm text-center border-b whitespace-nowrap">部署 / グループ / スタッフ名</div>
-              {Object.keys(groupedStaff).length > 0 ? (
-                Object.entries(groupedStaff).map(([department, groups]) => (
+              {Object.keys(groupedStaffForGantt).length > 0 ? (
+                Object.entries(groupedStaffForGantt).map(([department, groups]) => (
                   <div key={department} className="department-group">
                     <h3 className="px-2 min-h-[33px] text-sm font-bold bg-gray-200 whitespace-nowrap flex items-center">{department}</h3>
                     {Object.entries(groups).map(([group, staffInGroup]) => (
@@ -1217,12 +1910,19 @@ export default function Home() {
                           <div key={staff.id} className={`px-2 pl-12 text-sm font-medium whitespace-nowrap h-[45px] hover:bg-gray-50 flex items-center cursor-pointer ${
                             staff.isSupporting ? 'bg-amber-50 border border-amber-400' : ''
                           }`}
-                               onClick={() => handleOpenAssignmentModal(staff)}>
+                               onClick={() => handleOpenResponsibilityModal(staff)}
+                               onContextMenu={(e) => {
+                                 e.preventDefault(); // デフォルトのコンテキストメニューを無効化
+                                 if (!staff.department.includes('受付') && !staff.group.includes('受付')) {
+                                   handleOpenAssignmentModal(staff);
+                                 }
+                               }}>
                             <span className={staff.isSupporting ? 'text-amber-800' : ''}>
                               {staff.name}
                               {staff.isSupporting && (
                                 <span className="ml-1 text-xs text-amber-600 font-semibold">[支援]</span>
                               )}
+                              {generateResponsibilityBadges(staff.responsibilities, staff.isReception || false)}
                             </span>
                           </div>
                         ))}
@@ -1307,8 +2007,8 @@ export default function Home() {
                          title={`現在時刻: ${currentTime.getHours()}:${String(currentTime.getMinutes()).padStart(2, '0')}`}>
                     </div>
                   )}
-                  {Object.keys(groupedStaff).length > 0 ? (
-                    Object.entries(groupedStaff).map(([department, groups]) => (
+                  {Object.keys(groupedStaffForGantt).length > 0 ? (
+                    Object.entries(groupedStaffForGantt).map(([department, groups]) => (
                       <div key={department} className="department-group">
                         <div className="min-h-[33px] bg-gray-200"></div>
                         {Object.entries(groups).map(([group, staffInGroup]) => (
@@ -1316,32 +2016,85 @@ export default function Home() {
                             <div className="min-h-[33px] bg-gray-100"></div>
                             {staffInGroup.map(staff => (
                               <div key={staff.id} className="h-[45px] relative hover:bg-gray-50"
-                                   onMouseDown={(e) => handleTimelineMouseDown(e, staff)}>
-                                {schedules.filter(s => s.staffId === staff.id).sort((a, b) => a.id - b.id).map((schedule) => {
+                                   onMouseDown={(e) => handleTimelineMouseDown(e, staff)}
+                                   onDragOver={(e) => {
+                                     e.preventDefault();
+                                     e.dataTransfer.dropEffect = 'move';
+                                   }}
+                                   onDrop={(e) => {
+                                     e.preventDefault();
+                                     const scheduleData = e.dataTransfer.getData('application/json');
+                                     if (scheduleData && draggedSchedule && draggedSchedule.start !== undefined && draggedSchedule.end !== undefined && draggedSchedule.id !== undefined) {
+                                       const rect = e.currentTarget.getBoundingClientRect();
+                                       const dropX = e.clientX - rect.left;
+                                       const dropPercent = (dropX / rect.width) * 100;
+                                       const newStartTime = positionPercentToTime(dropPercent);
+                                       const duration = draggedSchedule.end - draggedSchedule.start;
+                                       const snappedStart = Math.round(newStartTime * 4) / 4;
+                                       const snappedEnd = snappedStart + duration;
+                                       
+                                       if (snappedStart >= 8 && snappedEnd <= 21) {
+                                         // スケジュール移動のAPI呼び出し
+                                         handleMoveSchedule(draggedSchedule.id, staff.id, snappedStart, snappedEnd);
+                                       }
+                                     }
+                                   }}>
+                                {schedules.filter(s => s.staffId === staff.id).sort((a, b) => {
+                                  // レイヤー順: contract(1) < adjustment(2)
+                                  const layerOrder: { [key: string]: number } = { contract: 1, adjustment: 2 };
+                                  const aLayer = (a as any).layer || 'adjustment';
+                                  const bLayer = (b as any).layer || 'adjustment';
+                                  return layerOrder[aLayer] - layerOrder[bLayer];
+                                }).map((schedule) => {
                                   const startPosition = timeToPositionPercent(schedule.start);
                                   const endPosition = timeToPositionPercent(schedule.end);
                                   const barWidth = endPosition - startPosition;
+                                  const scheduleLayer = (schedule as any).layer || 'adjustment';
+                                  const isContract = scheduleLayer === 'contract';
+                                  
                                   return (
-                                    <div key={schedule.id} 
-                                         className="absolute h-6 rounded text-white text-xs flex items-center justify-between px-2 cursor-pointer hover:opacity-80"
+                                    <div key={`${schedule.id}-${scheduleLayer}-${schedule.staffId}`} 
+                                         draggable={!isContract}
+                                         className={`absolute h-6 rounded text-white text-xs flex items-center justify-between px-2 ${
+                                           isContract ? 'cursor-default' : 'cursor-ew-resize hover:opacity-80'
+                                         }`}
                                          style={{ 
                                            left: `${startPosition}%`, 
                                            width: `${barWidth}%`, 
                                            top: '50%', 
                                            transform: 'translateY(-50%)', 
-                                           backgroundColor: statusColors[schedule.status] || '#9ca3af', 
-                                           zIndex: 20 
+                                           backgroundColor: statusColors[schedule.status] || '#9ca3af',
+                                           opacity: isContract ? 0.5 : 1,
+                                           backgroundImage: isContract ? 'repeating-linear-gradient(45deg, transparent, transparent 2px, rgba(255,255,255,0.3) 2px, rgba(255,255,255,0.3) 4px)' : 'none',
+                                           zIndex: isContract ? 10 : 30
                                          }} 
-                                         onClick={(e) => { e.stopPropagation(); handleOpenModal(schedule); }}
-                                         title={schedule.memo ? `${schedule.status}: ${schedule.memo}` : schedule.status}>
+                                         onClick={(e) => { 
+                                           e.stopPropagation(); 
+                                           if (!isContract) handleOpenModal(schedule); 
+                                         }}
+                                         onDragStart={(e) => {
+                                           if (isContract) {
+                                             e.preventDefault();
+                                             return;
+                                           }
+                                           setDraggedSchedule(schedule);
+                                           e.dataTransfer.setData('application/json', JSON.stringify(schedule));
+                                           e.dataTransfer.effectAllowed = 'move';
+                                         }}
+                                         onDragEnd={() => {
+                                           setDraggedSchedule(null);
+                                         }}
+                                         title={`${schedule.status}${schedule.memo ? ': ' + schedule.memo : ''} (${isContract ? 'レイヤー1:契約' : 'レイヤー2:調整'})`}>
                                       <span className="truncate">
                                         {schedule.status}
                                         {schedule.memo && (
                                           <span className="ml-1 text-yellow-200">📝</span>
                                         )}
                                       </span>
-                                      <button onClick={(e) => { e.stopPropagation(); setDeletingScheduleId(schedule.id); }} 
-                                              className="text-white hover:text-red-200 ml-2">×</button>
+                                      {!isContract && (
+                                        <button onClick={(e) => { e.stopPropagation(); setDeletingScheduleId(schedule.id); }} 
+                                                className="text-white hover:text-red-200 ml-2">×</button>
+                                      )}
                                     </div>
                                   );
                                 })}
