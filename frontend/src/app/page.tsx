@@ -1119,6 +1119,7 @@ export default function Home() {
   const [selectedStaffForAssignment, setSelectedStaffForAssignment] = useState<Staff | null>(null);
   const [isResponsibilityModalOpen, setIsResponsibilityModalOpen] = useState(false);
   const [selectedStaffForResponsibility, setSelectedStaffForResponsibility] = useState<Staff | null>(null);
+  const [selectedSchedule, setSelectedSchedule] = useState<{ schedule: Schedule; layer: string } | null>(null);
   
   // スクロール同期用のref
   const topScrollRef = useRef<HTMLDivElement>(null);
@@ -1855,13 +1856,22 @@ export default function Home() {
             </div>
 
             <div className="flex items-center space-x-2">
-                <button onClick={() => handleOpenModal()} className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md hover:bg-indigo-700">
+                <button onClick={() => {
+                  setSelectedSchedule(null);
+                  handleOpenModal();
+                }} className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md hover:bg-indigo-700">
                     予定を追加
                 </button>
-                <button onClick={() => setIsCsvUploadModalOpen(true)} className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700">
+                <button onClick={() => {
+                  setSelectedSchedule(null);
+                  setIsCsvUploadModalOpen(true);
+                }} className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700">
                     スケジュールインポート
                 </button>
-                <button onClick={() => setIsJsonUploadModalOpen(true)} className="px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md hover:bg-green-700">
+                <button onClick={() => {
+                  setSelectedSchedule(null);
+                  setIsJsonUploadModalOpen(true);
+                }} className="px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md hover:bg-green-700">
                     社員情報インポート
                 </button>
             </div>
@@ -2017,6 +2027,10 @@ export default function Home() {
                             {staffInGroup.map(staff => (
                               <div key={staff.id} className="h-[45px] relative hover:bg-gray-50"
                                    onMouseDown={(e) => handleTimelineMouseDown(e, staff)}
+                                   onMouseLeave={() => {
+                                     // マウスがスタッフ行から離れたら選択解除
+                                     setSelectedSchedule(null);
+                                   }}
                                    onDragOver={(e) => {
                                      e.preventDefault();
                                      e.dataTransfer.dropEffect = 'move';
@@ -2057,6 +2071,10 @@ export default function Home() {
                                          draggable={!isContract}
                                          className={`absolute h-6 rounded text-white text-xs flex items-center justify-between px-2 ${
                                            isContract ? 'cursor-default' : 'cursor-ew-resize hover:opacity-80'
+                                         } ${
+                                           selectedSchedule && selectedSchedule.schedule.id === schedule.id && selectedSchedule.layer === scheduleLayer
+                                             ? 'ring-2 ring-yellow-400 ring-offset-1'
+                                             : ''
                                          }`}
                                          style={{ 
                                            left: `${startPosition}%`, 
@@ -2070,13 +2088,27 @@ export default function Home() {
                                          }} 
                                          onClick={(e) => { 
                                            e.stopPropagation(); 
-                                           if (!isContract) handleOpenModal(schedule); 
+                                           if (!isContract) {
+                                             const currentSelection = selectedSchedule;
+                                             if (currentSelection && 
+                                                 currentSelection.schedule.id === schedule.id && 
+                                                 currentSelection.layer === scheduleLayer) {
+                                               // 同じ予定を再クリック → 編集モーダルを開く
+                                               handleOpenModal(schedule);
+                                               setSelectedSchedule(null);
+                                             } else {
+                                               // 異なる予定をクリック → 選択状態にする
+                                               setSelectedSchedule({ schedule, layer: scheduleLayer });
+                                             }
+                                           }
                                          }}
                                          onDragStart={(e) => {
                                            if (isContract) {
                                              e.preventDefault();
                                              return;
                                            }
+                                           // ドラッグ開始時に選択状態をクリア
+                                           setSelectedSchedule(null);
                                            setDraggedSchedule(schedule);
                                            e.dataTransfer.setData('application/json', JSON.stringify(schedule));
                                            e.dataTransfer.effectAllowed = 'move';
