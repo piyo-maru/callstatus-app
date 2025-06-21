@@ -22,6 +22,11 @@ declare global {
   }
 }
 
+type Holiday = {
+  date: string;
+  name: string;
+};
+
 type Staff = {
   id: number;
   name: string;
@@ -160,6 +165,87 @@ const getApiUrl = (): string => {
 };
 const availableStatuses = ['Online', 'Remote', 'Meeting', 'Training', 'Break', 'Off', 'Unplanned', 'Night Duty'];
 const AVAILABLE_STATUSES = ['Online', 'Remote', 'Night Duty'];
+
+// --- 祝日関連の関数 ---
+const fetchHolidays = async (): Promise<Holiday[]> => {
+  try {
+    // CORS制限があるため、プロキシ経由またはローカル祝日データを使用する場合
+    const response = await fetch('https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv');
+    const csvText = await response.text();
+    const lines = csvText.split('\n').slice(1); // ヘッダー行をスキップ
+    
+    return lines
+      .filter(line => line.trim())
+      .map(line => {
+        const [dateStr, name] = line.split(',');
+        return {
+          date: dateStr.trim().replace(/\"/g, ''), // クォートを除去
+          name: name?.trim().replace(/\"/g, '') || ''
+        };
+      });
+  } catch (error) {
+    console.error('祝日データの取得に失敗しました。ローカル祝日データを使用します:', error);
+    
+    // フォールバック: 2025年の主要祝日
+    return [
+      { date: '2025-01-01', name: '元日' },
+      { date: '2025-01-13', name: '成人の日' },
+      { date: '2025-02-11', name: '建国記念の日' },
+      { date: '2025-02-23', name: '天皇誕生日' },
+      { date: '2025-03-20', name: '春分の日' },
+      { date: '2025-04-29', name: '昭和の日' },
+      { date: '2025-05-03', name: '憲法記念日' },
+      { date: '2025-05-04', name: 'みどりの日' },
+      { date: '2025-05-05', name: 'こどもの日' },
+      { date: '2025-07-21', name: '海の日' },
+      { date: '2025-08-11', name: '山の日' },
+      { date: '2025-09-15', name: '敬老の日' },
+      { date: '2025-09-23', name: '秋分の日' },
+      { date: '2025-10-13', name: '体育の日' },
+      { date: '2025-11-03', name: '文化の日' },
+      { date: '2025-11-23', name: '勤労感謝の日' },
+    ];
+  }
+};
+
+const isWeekend = (date: Date): 'saturday' | 'sunday' | null => {
+  const day = date.getDay();
+  if (day === 6) return 'saturday';
+  if (day === 0) return 'sunday';
+  return null;
+};
+
+const getHoliday = (date: Date, holidays: Holiday[]): Holiday | null => {
+  const dateStr = date.toISOString().split('T')[0];
+  return holidays.find(holiday => holiday.date === dateStr) || null;
+};
+
+const getDateColor = (date: Date, holidays: Holiday[]): string => {
+  const holiday = getHoliday(date, holidays);
+  if (holiday) return 'text-red-600'; // 祝日は赤色
+  
+  const weekend = isWeekend(date);
+  if (weekend === 'sunday') return 'text-red-600'; // 日曜日は赤色
+  if (weekend === 'saturday') return 'text-blue-600'; // 土曜日は青色
+  
+  return 'text-gray-700'; // 平日は通常色
+};
+
+const formatDateWithHoliday = (date: Date, holidays: Holiday[]): string => {
+  const holiday = getHoliday(date, holidays);
+  const baseFormat = date.toLocaleDateString('ja-JP', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    weekday: 'short'
+  });
+  
+  if (holiday) {
+    return `${baseFormat} (${holiday.name})`;
+  }
+  
+  return baseFormat;
+};
 
 // --- 文字チェック関数 ---
 type CharacterCheckResult = {
@@ -1629,6 +1715,7 @@ export default function Home() {
   const [selectedSchedule, setSelectedSchedule] = useState<{ schedule: Schedule; layer: string } | null>(null);
   const [isImportHistoryModalOpen, setIsImportHistoryModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [holidays, setHolidays] = useState<Holiday[]>([]);
   
   // スクロール同期用のref
   const topScrollRef = useRef<HTMLDivElement>(null);
@@ -1637,6 +1724,11 @@ export default function Home() {
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 60000);
     return () => clearInterval(timer);
+  }, []);
+
+  // 祝日データを初期化
+  useEffect(() => {
+    fetchHolidays().then(setHolidays);
   }, []);
   
   const fetchData = useCallback(async (date: Date) => {
@@ -2439,11 +2531,16 @@ export default function Home() {
     }
   };
 
-  const CustomDatePickerInput = forwardRef<HTMLButtonElement, { value?: string, onClick?: () => void }>(({ value, onClick }, ref) => (
-    <button className="text-xl font-semibold text-gray-700" onClick={onClick} ref={ref}>
-      {value}
-    </button>
-  ));
+  const CustomDatePickerInput = forwardRef<HTMLButtonElement, { value?: string, onClick?: () => void }>(({ value, onClick }, ref) => {
+    const colorClass = getDateColor(displayDate, holidays);
+    const displayText = formatDateWithHoliday(displayDate, holidays);
+    
+    return (
+      <button className={`text-xl font-semibold ${colorClass}`} onClick={onClick} ref={ref}>
+        {displayText}
+      </button>
+    );
+  });
   CustomDatePickerInput.displayName = 'CustomDatePickerInput';
 
   if (isLoading) return <div className="p-8 text-center">読み込み中...</div>;
