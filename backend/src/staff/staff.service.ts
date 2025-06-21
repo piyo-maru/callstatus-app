@@ -20,8 +20,8 @@ export class StaffService {
 
   // 文字チェック関数
   private checkSupportedCharacters(data: Array<{name: string; department: string; group: string}>): CharacterCheckResult {
-    // JIS第1-2水準漢字 + ひらがな + カタカナ + 英数字 + 基本記号の範囲
-    const supportedCharsRegex = /^[\u4e00-\u9faf\u3040-\u309f\u30a0-\u30ff\u0020-\u007e\uff01-\uff5e\u3000\u301c\u2010-\u2015\u2018-\u201f\u2026\u2030\u203b\u2212\u2500-\u257f]*$/;
+    // JIS第1-2水準漢字 + ひらがな + カタカナ + 英数字 + 基本記号 + 反復記号「々」+ 全角英数字の範囲
+    const supportedCharsRegex = /^[\u4e00-\u9faf\u3040-\u309f\u30a0-\u30ff\u0020-\u007e\uff01-\uff9f\u3000\u301c\u2010-\u2015\u2018-\u201f\u2026\u2030\u203b\u2212\u2500-\u257f\u3005]*$/;
     
     const errors: CharacterCheckError[] = [];
     
@@ -68,6 +68,7 @@ export class StaffService {
 
   async findAll() {
     return this.prisma.staff.findMany({
+      where: { isActive: true },
       orderBy: { id: 'asc' }
     });
   }
@@ -173,287 +174,140 @@ export class StaffService {
 
   async remove(id: number) {
     const staff = await this.prisma.staff.findUnique({
-      where: { id }
+      where: { id, isActive: true }
     });
 
     if (!staff) {
       throw new NotFoundException(`Staff with ID ${id} not found`);
     }
 
-    return this.prisma.staff.delete({
-      where: { id }
+    // 論理削除を実行
+    return this.prisma.staff.update({
+      where: { id },
+      data: { 
+        isActive: false,
+        deletedAt: new Date()
+      }
     });
   }
 
   async syncFromEmployeeData(jsonData: any) {
     try {
-      console.log('Processing JSON data for staff sync...');
+      console.log('=== レイヤー2保持型社員情報同期開始 ===');
+      console.log('受信データ:', JSON.stringify(jsonData, null, 2));
       
       if (!jsonData.employeeData || !Array.isArray(jsonData.employeeData)) {
+        console.error('JSONフォーマットエラー:', jsonData);
         throw new BadRequestException('Invalid JSON format: employeeData array not found');
       }
 
       const employeeData = jsonData.employeeData;
-      console.log(`Found ${employeeData.length} employees in JSON`);
+      console.log(`対象データ: ${employeeData.length}件`);
 
-    // 新フォーマット対応: empNo, contract情報を含むデータをチェック
-    for (const emp of employeeData) {
-      if (!emp.empNo || !emp.name || !emp.dept || !emp.team) {
-        throw new BadRequestException('Invalid employee data: empNo, name, dept, team are required');
-      }
-      if (!emp.contract || !emp.contract.workDays || !emp.contract.workHours) {
-        throw new BadRequestException('Invalid contract data: workDays and workHours are required');
-      }
-    }
+      const result = {
+        added: 0,
+        updated: 0,
+        deleted: 0,
+        details: { added: [], updated: [], deleted: [] }
+      };
 
-    // JSONデータを正規化（Staffテーブル用）
-    const newStaffData = employeeData.map((emp: any) => ({
-      name: emp.name,
-      department: emp.dept,
-      group: emp.team
-    }));
-
-    // 文字チェックを実行
-    console.log('Performing character validation...');
-    const characterCheck = this.checkSupportedCharacters(newStaffData);
-    
-    if (!characterCheck.isValid) {
-      const errorMessages = characterCheck.errors.map(error => {
-        const fieldName = error.field === 'name' ? '名前' : error.field === 'department' ? '部署' : 'グループ';
-        return `${error.position}行目の${fieldName}「${error.value}」に使用できない文字が含まれています: ${error.invalidChars.join(', ')}`;
-      });
-      
-      throw new BadRequestException({
-        message: '文字チェックエラー',
-        details: errorMessages,
-        supportedChars: 'ひらがな、カタカナ、漢字（JIS第1-2水準）、英数字、基本記号のみ使用可能です'
-      });
-    }
-
-    console.log('Character validation passed');
-
-    // レイヤー1（契約）データの同期処理
-    console.log('Syncing contract data (Layer 1)...');
-    let contractSyncResult;
-    try {
-      contractSyncResult = await this.syncContractData(employeeData);
-      console.log('Contract sync completed:', contractSyncResult);
-    } catch (error) {
-      console.error('Contract sync failed:', error);
-      // 契約同期に失敗してもスタッフ同期は続行
-      contractSyncResult = { created: 0, errors: [error.message] };
-    }
-
-    // 既存のスタッフデータを取得
-    const existingStaff = await this.prisma.staff.findMany();
-    console.log(`Found ${existingStaff.length} existing staff members`);
-
-    // 同期処理
-    const result = {
-      added: 0,
-      updated: 0,
-      deleted: 0,
-      details: {
-        added: [] as string[],
-        updated: [] as string[],
-        deleted: [] as string[]
-      }
-    };
-
-    // 追加・更新処理
-    for (const newStaff of newStaffData) {
-      if (!newStaff.name || !newStaff.department || !newStaff.group) {
-        console.warn('Skipping invalid staff data:', newStaff);
-        continue;
-      }
-
-      const existing = existingStaff.find(s => s.name === newStaff.name);
-      
-      if (existing) {
-        // 更新が必要かチェック
-        if (existing.department !== newStaff.department || existing.group !== newStaff.group) {
-          await this.prisma.staff.update({
-            where: { id: existing.id },
-            data: {
-              department: newStaff.department,
-              group: newStaff.group
-            }
-          });
-          result.updated++;
-          result.details.updated.push(newStaff.name);
-          console.log(`Updated staff: ${newStaff.name}`);
-        }
-      } else {
-        // 新規追加
-        await this.prisma.staff.create({
-          data: newStaff
-        });
-        result.added++;
-        result.details.added.push(newStaff.name);
-        console.log(`Added staff: ${newStaff.name}`);
-      }
-    }
-
-    // 削除処理（JSONにないスタッフを削除）
-    const newStaffNames = new Set(newStaffData.map(s => s.name));
-    for (const existing of existingStaff) {
-      if (!newStaffNames.has(existing.name)) {
-        // 関連するレコードを先に削除（外部キー制約対応）
-        await this.prisma.schedule.deleteMany({
-          where: { staffId: existing.id }
-        });
-        await this.prisma.temporaryAssignment.deleteMany({
-          where: { staffId: existing.id }
-        });
-        await this.prisma.dailyAssignment.deleteMany({
-          where: { staffId: existing.id }
-        });
-        await this.prisma.adjustment.deleteMany({
-          where: { staffId: existing.id }
-        });
-        await this.prisma.monthlySchedule.deleteMany({
-          where: { staffId: existing.id }
-        });
-        await this.prisma.contract.deleteMany({
-          where: { staffId: existing.id }
-        });
+      // empNo基準でupsert処理（Prisma upsertを使用）
+      for (const emp of employeeData) {
+        console.log(`処理中: ${emp.name} (${emp.empNo})`);
         
-        await this.prisma.staff.delete({
-          where: { id: existing.id }
-        });
-        result.deleted++;
-        result.details.deleted.push(existing.name);
-        console.log(`Deleted staff: ${existing.name}`);
-      }
-    }
-
-    console.log('Staff sync completed:', result);
-    return result;
-    } catch (error) {
-      console.error('Error in syncFromEmployeeData:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * 勤務日データを配列に変換
-   */
-  private parseWorkDays(workDays: string | string[]): string[] {
-    if (Array.isArray(workDays)) {
-      return workDays;
-    }
-    
-    // 文字列の場合は、漢字から英語略語に変換
-    const dayMap: { [key: string]: string } = {
-      '月': 'mon',
-      '火': 'tue',
-      '水': 'wed',
-      '木': 'thu',
-      '金': 'fri',
-      '土': 'sat',
-      '日': 'sun'
-    };
-    
-    const result: string[] = [];
-    for (const char of workDays) {
-      if (dayMap[char]) {
-        result.push(dayMap[char]);
-      }
-    }
-    
-    return result;
-  }
-
-  /**
-   * 契約データ（レイヤー1）の同期処理
-   */
-  private async syncContractData(employeeData: any[]) {
-    try {
-      console.log('Starting contract data synchronization...');
-      
-      // 既存の契約データを全削除（年次更新時の洗い替え）
-      await this.prisma.contract.deleteMany({});
-      console.log('Existing contract data cleared');
-
-    const contractResults = {
-      created: 0,
-      errors: [] as string[]
-    };
-
-    for (const emp of employeeData) {
-      try {
-        // Staffテーブルから該当するスタッフを検索（name, department, groupで）
-        const staff = await this.prisma.staff.findFirst({
-          where: {
-            name: emp.name,
-            department: emp.dept,
-            group: emp.team
-          }
-        });
-
-        if (!staff) {
-          // スタッフが存在しない場合はまず作成
-          const newStaff = await this.prisma.staff.create({
-            data: {
+        try {
+          // スタッフをupsert（empNoが一致する場合は更新、しない場合は作成）
+          const staff = await this.prisma.staff.upsert({
+            where: { empNo: emp.empNo },
+            update: {
               name: emp.name,
               department: emp.dept,
-              group: emp.team
-            }
+              group: emp.team,
+              isActive: true,
+              deletedAt: null // 論理削除解除
+            },
+            create: {
+              empNo: emp.empNo,
+              name: emp.name,
+              department: emp.dept,
+              group: emp.team,
+              isActive: true
+            },
+            include: { contracts: true, adjustments: true }
           });
-          
-          // 契約データを作成
-          await this.prisma.contract.create({
-            data: {
+
+          const isUpdate = staff.contracts.length > 0;
+          console.log(`スタッフ${isUpdate ? '更新' : '新規作成'}完了: ${staff.name} (ID: ${staff.id})`);
+          if (isUpdate) {
+            console.log(`既存調整データ件数: ${staff.adjustments.length}件`);
+          }
+
+          // 契約をupsert
+          const contract = await this.prisma.contract.upsert({
+            where: { empNo: emp.empNo },
+            update: {
+              name: emp.name,
+              dept: emp.dept,
+              team: emp.team,
+              email: emp.email || '',
+              mondayHours: emp.mondayHours || null,
+              tuesdayHours: emp.tuesdayHours || null,
+              wednesdayHours: emp.wednesdayHours || null,
+              thursdayHours: emp.thursdayHours || null,
+              fridayHours: emp.fridayHours || null,
+              saturdayHours: emp.saturdayHours || null,
+              sundayHours: emp.sundayHours || null,
+              staffId: staff.id
+            },
+            create: {
               empNo: emp.empNo,
               name: emp.name,
               dept: emp.dept,
               team: emp.team,
-              email: emp.mail || '',
-              mondayHours: emp.contract.mondayHours,
-              tuesdayHours: emp.contract.tuesdayHours,
-              wednesdayHours: emp.contract.wednesdayHours,
-              thursdayHours: emp.contract.thursdayHours,
-              fridayHours: emp.contract.fridayHours,
-              saturdayHours: emp.contract.saturdayHours,
-              sundayHours: emp.contract.sundayHours,
-              staffId: newStaff.id
-            }
-          });
-        } else {
-          // 既存スタッフの契約データを作成
-          await this.prisma.contract.create({
-            data: {
-              empNo: emp.empNo,
-              name: emp.name,
-              dept: emp.dept,
-              team: emp.team,
-              email: emp.mail || '',
-              mondayHours: emp.contract.mondayHours,
-              tuesdayHours: emp.contract.tuesdayHours,
-              wednesdayHours: emp.contract.wednesdayHours,
-              thursdayHours: emp.contract.thursdayHours,
-              fridayHours: emp.contract.fridayHours,
-              saturdayHours: emp.contract.saturdayHours,
-              sundayHours: emp.contract.sundayHours,
+              email: emp.email || '',
+              mondayHours: emp.mondayHours || null,
+              tuesdayHours: emp.tuesdayHours || null,
+              wednesdayHours: emp.wednesdayHours || null,
+              thursdayHours: emp.thursdayHours || null,
+              fridayHours: emp.fridayHours || null,
+              saturdayHours: emp.saturdayHours || null,
+              sundayHours: emp.sundayHours || null,
               staffId: staff.id
             }
           });
-        }
-        
-        contractResults.created++;
-        console.log(`Contract created for: ${emp.name} (${emp.empNo})`);
-        
-      } catch (error) {
-        const errorMsg = `Failed to create contract for ${emp.name} (${emp.empNo}): ${error.message}`;
-        contractResults.errors.push(errorMsg);
-        console.error(errorMsg);
-      }
-    }
+          console.log(`契約${isUpdate ? '更新' : '新規作成'}完了: ${contract.name}`);
 
-    return contractResults;
+          if (isUpdate) {
+            result.updated++;
+            result.details.updated.push(emp.name);
+          } else {
+            result.added++;
+            result.details.added.push(emp.name);
+          }
+        } catch (empError) {
+          console.error(`社員 ${emp.name} の処理でエラー:`, empError);
+          throw empError;
+        }
+      }
+
+      console.log('=== 同期完了 ===');
+      console.log(`追加: ${result.added}件, 更新: ${result.updated}件`);
+      console.log('重要: レイヤー2データ（Adjustment）は保持されました');
+      return result;
+
     } catch (error) {
-      console.error('Error in syncContractData:', error);
-      throw error;
+      console.error('同期エラー詳細:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
+      
+      // より詳細なエラー情報を含む新しいエラーを投げる
+      if (error instanceof BadRequestException) {
+        throw error;
+      } else {
+        throw new BadRequestException(`同期処理でエラーが発生しました: ${error.message}`);
+      }
     }
   }
 }

@@ -13,6 +13,8 @@ model Staff {
   name                 String
   department           String
   group                String
+  isActive             Boolean               @default(true)
+  deletedAt            DateTime?
   adjustments          Adjustment[]
   contracts            Contract[]
   dailyAssignments     DailyAssignment[]
@@ -76,6 +78,7 @@ model Adjustment {
   end       DateTime
   memo      String?
   reason    String?
+  batchId   String?  // CSVインポートバッチID
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   staffId   Int

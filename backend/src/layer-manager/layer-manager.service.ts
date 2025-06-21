@@ -23,14 +23,71 @@ export class LayerManagerService {
    * 2層データを統合して指定日のスケジュールを取得
    * 優先順位: レイヤー2（個別調整）> レイヤー1（契約）
    */
-  async getLayeredSchedules(date: string): Promise<LayeredSchedule[]> {
-    const targetDate = new Date(date);
-    const dayOfWeek = this.getDayOfWeek(targetDate);
-
-    // 全スタッフを取得
-    const allStaff = await this.prisma.staff.findMany({
-      select: { id: true, name: true }
+  // 互換性レイヤー: レイヤー統合スケジュール取得
+  async getCompatibleSchedules(date: string) {
+    console.log(`LayerManager: Getting layered schedules for ${date}`);
+    
+    // 2層統合スケジュールを取得
+    const layeredSchedules = await this.getLayeredSchedules(date);
+    
+    // 契約があるアクティブなスタッフのみを取得
+    const staff = await this.prisma.staff.findMany({
+      where: { isActive: true },
+      include: {
+        contracts: true
+      }
     });
+    
+    // 契約があるスタッフのみにフィルタリング
+    const staffWithContracts = staff.filter(s => s.contracts.length > 0).map(s => ({
+      id: s.id,
+      name: s.name,
+      department: s.department,
+      group: s.group,
+      currentStatus: 'Unknown'
+    }));
+    
+
+    // 既存のAPI形式に変換
+    const schedules = layeredSchedules.map(schedule => ({
+      id: parseInt(schedule.id.split('_')[1]) || Math.floor(Math.random() * 1000000),
+      staffId: schedule.staffId,
+      status: this.convertStatusFormat(schedule.status),
+      start: schedule.start.toISOString(),
+      end: schedule.end.toISOString(),
+      memo: schedule.memo || null,
+      layer: schedule.layer,
+      canMove: schedule.canMove
+    }));
+
+    console.log(`LayerManager: Generated ${schedules.length} schedules (${schedules.filter(s => s.layer === 'contract').length} contract, ${schedules.filter(s => s.layer === 'adjustment').length} adjustment)`);
+
+    return {
+      staff: staffWithContracts,
+      schedules
+    };
+  }
+
+  async getLayeredSchedules(date: string): Promise<LayeredSchedule[]> {
+    // 入力層: JST日付文字列を受け取り、JST基準で曜日判定
+    const [year, month, day] = date.split('-').map(Number);
+    const targetDate = new Date(year, month - 1, day); // JST基準の日付
+    const dayOfWeek = this.getDayOfWeek(targetDate);
+    
+    console.log(`LayerManager: Processing ${date}, dayOfWeek: ${dayOfWeek}, targetDate: ${targetDate.toISOString()}`);
+
+    // 契約があるスタッフのみを取得
+    const allStaffData = await this.prisma.staff.findMany({
+      include: {
+        contracts: true
+      }
+    });
+    
+    const allStaff = allStaffData
+      .filter(s => s.contracts.length > 0)
+      .map(s => ({ id: s.id, name: s.name }));
+
+    console.log(`LayerManager: Contract staff count: ${allStaff.length}`);
 
     const result: LayeredSchedule[] = [];
 
@@ -38,7 +95,8 @@ export class LayerManagerService {
       const layeredSchedules = await this.getStaffLayeredSchedules(
         staff.id,
         targetDate,
-        dayOfWeek
+        dayOfWeek,
+        date
       );
       result.push(...layeredSchedules);
     }
@@ -52,7 +110,8 @@ export class LayerManagerService {
   private async getStaffLayeredSchedules(
     staffId: number,
     date: Date,
-    dayOfWeek: string
+    dayOfWeek: string,
+    dateString: string
   ): Promise<LayeredSchedule[]> {
     const staff = await this.prisma.staff.findUnique({
       where: { id: staffId },
@@ -96,7 +155,8 @@ export class LayerManagerService {
       const contractSchedules = this.generateContractSchedules(
         staff,
         contract,
-        date
+        date,
+        dateString
       );
 
       result.push(...contractSchedules);
@@ -111,7 +171,8 @@ export class LayerManagerService {
   private generateContractSchedules(
     staff: any,
     contract: any,
-    date: Date
+    date: Date,
+    dateString: string
   ): LayeredSchedule[] {
     const result: LayeredSchedule[] = [];
     
@@ -133,17 +194,18 @@ export class LayerManagerService {
     
     // 該当曜日の勤務時間が設定されている場合のみスケジュールを生成
     if (dayHours) {
+      console.log(`  ${staff.name}: ${dayOfWeek} = ${dayHours}`);
       const [startTime, endTime] = dayHours.split('-');
       
-      const start = this.parseTimeToUtc(date, startTime);
-      const end = this.parseTimeToUtc(date, endTime);
+      const start = this.parseTimeToUtc(dateString, startTime);
+      const end = this.parseTimeToUtc(dateString, endTime);
 
       // 基本勤務時間（online）
       result.push({
         id: `contract_${contract.id}_${dayOfWeek}`,
         staffId: staff.id,
         staffName: staff.name,
-        date: date.toISOString().split('T')[0],
+        date: dateString,
         status: 'online',
         start,
         end,
@@ -178,49 +240,18 @@ export class LayerManagerService {
   }
 
   /**
-   * 時刻文字列（HH:MM）をUTC Dateオブジェクトに変換（厳格ルール準拠）
+   * 時刻文字列（HH:MM）をUTC Dateオブジェクトに変換
+   * CLAUDE.md厳格ルール準拠: JST→UTC変換
    */
-  private parseTimeToUtc(date: Date, timeStr: string): Date {
+  private parseTimeToUtc(baseDateString: string, timeStr: string): Date {
     const [hours, minutes] = timeStr.split(':').map(Number);
     
-    // JST時刻をUTCに変換（-9時間）
-    const jstDate = new Date(
-      date.getFullYear(),
-      date.getMonth(), 
-      date.getDate(),
-      hours,
-      minutes,
-      0,
-      0
-    );
+    // JST時刻文字列を作成してUTCに変換
+    const jstIsoString = `${baseDateString}T${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:00.000+09:00`;
     
-    const utcDate = new Date(jstDate.getTime() - 9 * 60 * 60 * 1000);
-    return utcDate;
+    return new Date(jstIsoString);
   }
 
-  /**
-   * 後方互換性のため、既存のScheduleフォーマットに変換
-   */
-  async getCompatibleSchedules(date: string) {
-    const layeredSchedules = await this.getLayeredSchedules(date);
-    
-    // 既存のAPI形式に変換
-    const staff = await this.prisma.staff.findMany({
-      select: { id: true, name: true, department: true, group: true }
-    });
-
-    const schedules = layeredSchedules.map(schedule => ({
-      id: parseInt(schedule.id.split('_')[1]) || 0,
-      status: this.convertStatusFormat(schedule.status),
-      start: schedule.start.toISOString(),
-      end: schedule.end.toISOString(),
-      memo: schedule.memo || null,
-      staffId: schedule.staffId,
-      layer: schedule.layer
-    }));
-
-    return { staff, schedules };
-  }
 
   /**
    * ステータス形式を既存形式に変換

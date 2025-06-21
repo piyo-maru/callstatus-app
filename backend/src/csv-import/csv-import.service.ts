@@ -87,11 +87,11 @@ export class CsvImportService {
 
       const columns = line.split(',').map(col => col.trim());
       
-      if (columns.length !== 5 && columns.length !== 6) {
-        throw new Error(`${i + 1}行目: 列数が正しくありません (期待: 5列または6列, 実際: ${columns.length}列)`);
+      if (columns.length < 5 || columns.length > 8) {
+        throw new Error(`${i + 1}行目: 列数が正しくありません (期待: 5-8列, 実際: ${columns.length}列)`);
       }
 
-      const [date, empNo, name, status, timeRange, responsibilities] = columns;
+      const [date, empNo, name, status, timeRange, , , responsibilities] = columns;
 
       // バリデーション
       if (!this.isValidDate(date)) {

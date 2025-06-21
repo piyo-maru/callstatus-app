@@ -10,7 +10,7 @@ export class SchedulesController {
   ) {}
 
   @Post()
-  async create(@Body() createScheduleDto: { staffId: number; status: string; start: number; end: number; date: string; }) {
+  async create(@Body() createScheduleDto: { staffId: number; status: string; start: string; end: string; memo?: string; }) {
     try {
       console.log('Creating schedule with data:', createScheduleDto);
       const result = await this.schedulesService.create(createScheduleDto);

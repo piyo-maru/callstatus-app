@@ -49,19 +49,27 @@ export class SchedulesService {
     }));
 
     console.log(`Converted to ${schedules.length} schedule records`);
-    return { staff, schedules };
+    return { 
+      schedules,
+      staff: staff.map(s => ({
+        id: s.id,
+        empNo: s.empNo,
+        name: s.name,
+        department: s.department,
+        group: s.group,
+        isActive: s.isActive
+      }))
+    };
   }
 
-  async create(createScheduleDto: { staffId: number; status: string; start: number; end: number; date: string; memo?: string; }) {
-    const newSchedule = await this.prisma.adjustment.create({
+  async create(createScheduleDto: { staffId: number; status: string; start: string; end: string; memo?: string; }) {
+    const newSchedule = await this.prisma.schedule.create({
       data: {
         staffId: createScheduleDto.staffId,
         status: createScheduleDto.status,
-        start: this.jstToUtc(createScheduleDto.start, createScheduleDto.date),
-        end: this.jstToUtc(createScheduleDto.end, createScheduleDto.date),
-        date: new Date(createScheduleDto.date),
-        memo: createScheduleDto.memo || null,
-        reason: 'マニュアル'
+        start: new Date(createScheduleDto.start),
+        end: new Date(createScheduleDto.end),
+        memo: createScheduleDto.memo || null
       },
     });
     this.gateway.sendNewSchedule(newSchedule);
