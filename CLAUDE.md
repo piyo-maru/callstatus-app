@@ -97,9 +97,10 @@
 **コールステータスアプリ** - スタッフのスケジュール管理と在席状況をリアルタイムで追跡するシステムです。タイムライン形式のインターフェースでスケジュールの作成・編集・監視が可能で、全接続クライアントに即座に更新が反映されます。
 
 **技術スタック:**
-- フロントエンド: Next.js 14 + TypeScript + Tailwind CSS + Socket.IO
+- フロントエンド: Next.js 14 + TypeScript + Tailwind CSS + Socket.IO + Chart.js
 - バックエンド: NestJS + TypeScript + Prisma ORM + PostgreSQL + WebSockets
 - 開発環境: Docker Compose（ライブリロード対応）
+- 機能拡張: 2層データ構造（契約・調整レイヤー）+ CSVインポート・ロールバック機能
 
 ## 開発コマンド
 
@@ -203,35 +204,94 @@ npm run lint          # Next.jsリンティング
 - 多段階フィルタリング（部署、グループ、在席状況）
 - リアルタイム現在時刻インジケーター
 - メモ機能（Meeting・Training用）
+- 状況統計グラフ（円グラフ・棒グラフ）
+- 突発休み（Unplanned）機能 - 当日作成のOffは自動でUnplannedに変換
+- 2層データ構造（契約レイヤー + 調整レイヤー）
+- CSVインポート・ロールバック機能
+- 設定モーダルによる管理機能整理
 
-### データベーススキーマ
+### データベーススキーマ（2層構造）
 ```prisma
 model Staff {
-  id          Int        @id @default(autoincrement())
-  name        String
-  department  String  
-  group       String
-  schedules   Schedule[]
+  id                   Int                   @id @default(autoincrement())
+  empNo                String?               @unique
+  name                 String
+  department           String
+  group                String
+  adjustments          Adjustment[]
+  contracts            Contract[]
+  schedules            Schedule[]            # 旧システム互換用
 }
 
-model Schedule {
+# レイヤー1: 契約データ（基本勤務時間）
+model Contract {
+  id             Int      @default(autoincrement())
+  empNo          String   @id
+  name           String
+  dept           String
+  team           String
+  email          String
+  mondayHours    String?  # 月曜勤務時間
+  tuesdayHours   String?  # 火曜勤務時間
+  wednesdayHours String?  # 水曜勤務時間
+  thursdayHours  String?  # 木曜勤務時間
+  fridayHours    String?  # 金曜勤務時間
+  saturdayHours  String?  # 土曜勤務時間
+  sundayHours    String?  # 日曜勤務時間
+  staffId        Int
+  staff          Staff    @relation(fields: [staffId], references: [id])
+}
+
+# レイヤー2: 個別調整データ（例外予定・CSV投入データ）
+model Adjustment {
   id        Int      @id @default(autoincrement())
-  status    String   # 'Online', 'Meeting', 'Training', 'Break', 'Off', 'Night Duty'
+  date      DateTime @db.Date
+  status    String   # 'Online', 'Remote', 'Meeting', 'Training', 'Break', 'Off', 'Unplanned', 'Night Duty'
   start     DateTime
   end       DateTime
-  memo      String?  # メモ（Meeting・Training用）
-  staff     Staff    @relation(fields: [staffId], references: [id])
+  reason    String?  # 調整理由
+  memo      String?  # メモ
+  batchId   String?  # CSVインポート時のバッチID（ロールバック用）
   staffId   Int
+  staff     Staff    @relation(fields: [staffId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+# 旧システム互換用（段階的廃止予定）
+model Schedule {
+  id      Int      @id @default(autoincrement())
+  status  String
+  start   DateTime
+  end     DateTime
+  memo    String?
+  staffId Int
+  staff   Staff    @relation(fields: [staffId], references: [id])
 }
 ```
 
 ## API構造
 
-### RESTエンドポイント
-- `GET /api/schedules?date=YYYY-MM-DD` - 指定日の予定を取得
-- `POST /api/schedules` - 新しい予定を作成
+### RESTエンドポイント（2層構造対応）
+
+**スケジュール管理**
+- `GET /api/schedules/layered?date=YYYY-MM-DD` - 2層データ統合スケジュール取得
+- `GET /api/schedules?date=YYYY-MM-DD` - 旧形式スケジュール取得（互換用）
+- `POST /api/schedules` - 新しい予定を作成（調整レイヤーに保存）
 - `PATCH /api/schedules/:id` - 既存の予定を更新
 - `DELETE /api/schedules/:id` - 予定を削除
+
+**スタッフ管理**
+- `GET /api/staff` - スタッフ一覧取得
+- `POST /api/staff` - 新しいスタッフ作成
+- `PATCH /api/staff/:id` - スタッフ情報更新
+- `DELETE /api/staff/:id` - スタッフ削除
+
+**データ投入**
+- `POST /api/csv-import/contracts` - 契約データ投入（JSON）
+- `POST /api/csv-import/schedules` - 調整レイヤー投入（CSV）
+- `GET /api/csv-import/history` - インポート履歴取得
+- `DELETE /api/csv-import/rollback` - CSVインポートロールバック
 
 ### WebSocketイベント
 - `schedule:new` - 新しい予定作成を配信
@@ -251,6 +311,31 @@ model Schedule {
 - すべてのCRUD操作をWebSocket経由で配信
 - フロントエンドはWebSocketイベント受信時にUIを自動更新
 - Socket.IOルームは使用せず、全クライアントが全更新を受信
+
+### 2層データレイヤー表示制御
+**契約レイヤー（Contract Layer）:**
+- 透明度50%（`opacity: 0.5`）で表示
+- 斜線パターン背景（`repeating-linear-gradient`）で視覚的区別
+- 編集不可：ドラッグ不可、削除不可、クリック編集不可
+- zIndex: 10で背面配置
+- 契約による基本勤務時間を表示
+
+**調整レイヤー（Adjustment Layer）:**
+- 通常表示（`opacity: 1`）
+- 編集可能：ドラッグ可能、削除可能、クリック編集可能
+- zIndex: 30で前面配置
+- 個別調整・月次投入・手動予定を表示
+
+**レイヤー判定ロジック:**
+```typescript
+const scheduleLayer = schedule.layer || 'adjustment';
+const isContract = scheduleLayer === 'contract';
+```
+
+**重要な実装ポイント:**
+- フロントエンドでスケジュール変換時に`layer`プロパティを必ず保持
+- `Schedule`型定義に`layer?: 'contract' | 'adjustment'`を含める
+- LayerManagerServiceが正しく`layer`プロパティを設定
 
 ### フロントエンド状態管理
 - Reactフック（useState、useEffect、useMemo、useCallback）
@@ -301,6 +386,27 @@ model Schedule {
 - スタッフ管理UIでフロントエンドを拡張
 - スタッフ変更用のWebSocketイベントを更新
 
+### 2層データレイヤーのトラブルシューティング
+
+**契約レイヤーが正常に表示されない場合:**
+1. APIレスポンス確認：`curl "http://localhost:3002/api/schedules/layered?date=YYYY-MM-DD" | jq '.schedules[:3]'`
+2. レイヤー情報確認：各スケジュールに`"layer": "contract"`が含まれているか
+3. フロントエンド変換確認：`Schedule`型に`layer`プロパティが含まれているか
+4. 曜日設定確認：契約データで該当曜日の勤務時間が設定されているか
+
+**契約レイヤーが編集可能になってしまう場合:**
+- フロントエンドのスケジュール変換で`layer: s.layer`が保持されているか確認
+- レイヤー判定ロジック`scheduleLayer === 'contract'`が正しく動作しているか確認
+
+**データ件数の確認方法:**
+```bash
+# データベース直接確認
+docker exec callstatus_app_db psql -U user -d mydb -c "SELECT 'Contract' as table_name, COUNT(*) FROM \"Contract\" UNION ALL SELECT 'Adjustment', COUNT(*) FROM \"Adjustment\";"
+
+# API経由での確認
+curl -s "http://localhost:3002/api/schedules/layered?date=YYYY-MM-DD" | jq '{total: (.schedules | length), by_layer: (.schedules | group_by(.layer) | map({layer: .[0].layer, count: length}))}'
+```
+
 ## 文字サポートと国際化
 
 ### 文字チェック機能
@@ -335,10 +441,13 @@ model Schedule {
   - /api/schedules/layered エンドポイント追加
   - 既存APIとの並行稼働を確保
 
-#### フェーズ2: JSON投入機能 【未着手】
+#### フェーズ2: データ投入機能 【部分完了】
+- [x] CSVスケジュールインポート（調整レイヤー投入）
+- [x] インポート履歴・ロールバック機能
+- [x] 設定モーダル経由のUI整理
 - [ ] スタッフマスタ投入（JSON形式、契約レイヤー生成）
 - [ ] 文字チェック機能（JIS第1-2水準）
-- **目標**: 契約データの一括投入機能
+- **目標**: 契約・調整データの一括投入機能
 - **リスク**: 低
 
 #### フェーズ3: UI機能強化 【未着手】
@@ -348,7 +457,7 @@ model Schedule {
 - **リスク**: 中
 
 #### フェーズ4: データ移行・統合 【未着手】
-- [ ] 既存データ移行（現在のスケジュール → 個別調整レイヤー）
+- [ ] 既存データ移行（現在のスケジュール → 調整レイヤー）
 - [ ] 旧システム廃止（既存APIの段階的廃止）
 - **目標**: 完全な2層システムへの移行
 - **リスク**: 高
