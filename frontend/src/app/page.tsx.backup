@@ -162,8 +162,8 @@ type CharacterCheckResult = {
 };
 
 const checkSupportedCharacters = (data: Array<{name: string; dept: string; team: string}>): CharacterCheckResult => {
-  // JIS第1-2水準漢字 + ひらがな + カタカナ + 英数字 + 基本記号 + 反復記号「々」+ 全角英数字の範囲
-  const supportedCharsRegex = /^[\u4e00-\u9faf\u3040-\u309f\u30a0-\u30ff\u0020-\u007e\uff01-\uff9f\u3000\u301c\u2010-\u2015\u2018-\u201f\u2026\u2030\u203b\u2212\u2500-\u257f\u3005]*$/;
+  // JIS第1-2水準漢字 + ひらがな + カタカナ + 英数字 + 基本記号の範囲
+  const supportedCharsRegex = /^[\u4e00-\u9faf\u3040-\u309f\u30a0-\u30ff\u0020-\u007e\uff01-\uff5e\u3000\u301c\u2010-\u2015\u2018-\u201f\u2026\u2030\u203b\u2212\u2500-\u257f]*$/;
   
   const errors: CharacterCheckResult['errors'] = [];
   
@@ -1210,11 +1210,7 @@ export default function Home() {
   
   const fetchData = useCallback(async (date: Date) => {
     setIsLoading(true);
-    // JST基準の日付文字列を生成（CLAUDE.md厳格ルール準拠）
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    const dateString = `${year}-${month}-${day}`;
+    const dateString = date.toISOString().split('T')[0];
     const currentApiUrl = getApiUrl();
     try {
       // スケジュール、支援状況、担当設定を並列で取得
@@ -1231,7 +1227,6 @@ export default function Home() {
       const scheduleData: { staff: Staff[], schedules: ScheduleFromDB[] } = await scheduleRes.json();
       const supportData = await supportRes.json();
       const responsibilityData = await responsibilityRes.json();
-      
       
       
       // 支援状況と担当設定をスタッフデータにマージ
@@ -1282,12 +1277,8 @@ export default function Home() {
       const formattedSchedules = scheduleData.schedules.map(s => {
         const start = new Date(s.start);
         const end = new Date(s.end);
-        // UTC時刻をJST表示用に変換（CLAUDE.md厳格ルール準拠：UTC+9時間=JST）
-        const startJST = (start.getUTCHours() + start.getUTCMinutes() / 60 + 9) % 24;
-        const endJST = (end.getUTCHours() + end.getUTCMinutes() / 60 + 9) % 24;
-        return { ...s, start: startJST, end: endJST };
+        return { ...s, start: start.getHours() + start.getMinutes() / 60, end: end.getHours() + end.getMinutes() / 60 };
       });
-      
       setSchedules(formattedSchedules);
     } catch (error) { console.error('データの取得に失敗しました', error); } 
     finally { setIsLoading(false); }
@@ -1616,7 +1607,7 @@ export default function Home() {
           return `${error.position}行目の${fieldName}「${error.value}」に使用できない文字が含まれています: ${error.invalidChars.join(', ')}`;
         }).join('\n');
         
-        alert(`文字チェックエラー:\n\n${errorMessage}\n\n使用可能な文字: ひらがな、カタカナ、漢字（JIS第1-2水準）、英数字、基本記号、全角英数字、反復記号「々」`);
+        alert(`文字チェックエラー:\n\n${errorMessage}\n\n使用可能な文字: ひらがな、カタカナ、漢字（JIS第1-2水準）、英数字、基本記号のみ`);
         return;
       }
       

@@ -14,6 +14,7 @@ export interface CsvImportResult {
   success: boolean;
   imported: number;
   responsibilitiesImported: number;
+  batchId?: string; // CSVインポートのバッチID
   conflicts: Array<{
     date: string;
     staff: string;
@@ -41,12 +42,17 @@ export class CsvImportService {
   async importCsvSchedules(csvContent: string): Promise<CsvImportResult> {
     console.log('Starting CSV import process...');
     
+    // バッチIDを生成（タイムスタンプベース）
+    const batchId = `csv_${Date.now()}`;
+    console.log(`BatchID: ${batchId}`);
+    
     const result: CsvImportResult = {
       success: true,
       imported: 0,
       responsibilitiesImported: 0,
       conflicts: [],
-      errors: []
+      errors: [],
+      batchId: batchId // バッチIDを結果に含める
     };
 
     try {
@@ -57,7 +63,7 @@ export class CsvImportService {
       // 各行を処理
       for (const row of rows) {
         try {
-          await this.processScheduleRow(row, result);
+          await this.processScheduleRow(row, result, batchId);
         } catch (error) {
           result.errors.push(`行の処理でエラー: ${row.date}, ${row.name}, ${error.message}`);
           console.error(`Error processing row for ${row.name}:`, error);
@@ -125,7 +131,7 @@ export class CsvImportService {
   /**
    * 個別のスケジュール行を処理
    */
-  private async processScheduleRow(row: CsvScheduleRow, result: CsvImportResult) {
+  private async processScheduleRow(row: CsvScheduleRow, result: CsvImportResult, batchId: string) {
     // 社員番号からスタッフを検索
     const contract = await this.prisma.contract.findUnique({
       where: { empNo: row.empNo },
@@ -161,7 +167,8 @@ export class CsvImportService {
           status: row.status,
           start: startTime,
           end: endTime,
-          reason: 'CSV投入'
+          reason: 'CSV投入',
+          batchId: batchId
         }
       });
 
@@ -268,6 +275,14 @@ export class CsvImportService {
   }
 
   /**
+   * UTC DateオブジェクトをJST時刻のHH:MM形式に変換
+   */
+  private formatTimeJst(utcDate: Date): string {
+    const jstDate = new Date(utcDate.getTime() + 9 * 60 * 60 * 1000);
+    return `${jstDate.getHours().toString().padStart(2, '0')}:${jstDate.getMinutes().toString().padStart(2, '0')}`;
+  }
+
+  /**
    * 担当設定を処理（部署別対応）
    */
   private async processResponsibilities(staff: any, date: Date, responsibilitiesStr: string) {
@@ -309,5 +324,128 @@ export class CsvImportService {
         responsibilities: responsibilityData
       }
     });
+  }
+
+  /**
+   * 指定したバッチIDのCSVインポートデータをロールバック
+   */
+  async rollbackCsvImport(batchId: string) {
+    console.log(`Starting CSV rollback for batchId: ${batchId}`);
+    
+    try {
+      // バッチIDに該当するAdjustmentレコードを検索
+      const targetAdjustments = await this.prisma.adjustment.findMany({
+        where: { batchId: batchId },
+        include: { staff: true }
+      });
+
+      if (targetAdjustments.length === 0) {
+        return {
+          success: false,
+          message: `バッチID ${batchId} に該当するデータが見つかりません`,
+          deletedCount: 0
+        };
+      }
+
+      console.log(`Found ${targetAdjustments.length} adjustments to rollback`);
+      
+      // バッチIDに該当するAdjustmentレコードを削除
+      const deleteResult = await this.prisma.adjustment.deleteMany({
+        where: { batchId: batchId }
+      });
+
+      console.log(`Deleted ${deleteResult.count} adjustment records`);
+
+      // ロールバック対象の詳細情報（JSTに変換）
+      const rollbackDetails = targetAdjustments.map(adj => ({
+        staff: adj.staff.name,
+        date: adj.date.toISOString().split('T')[0],
+        status: adj.status,
+        time: `${this.formatTimeJst(adj.start)}-${this.formatTimeJst(adj.end)}`
+      }));
+
+      return {
+        success: true,
+        message: `バッチID ${batchId} のデータを正常にロールバックしました`,
+        deletedCount: deleteResult.count,
+        details: rollbackDetails
+      };
+
+    } catch (error) {
+      console.error('Rollback failed:', error);
+      throw new BadRequestException(`ロールバックに失敗しました: ${error.message}`);
+    }
+  }
+
+  /**
+   * CSVインポート履歴を取得
+   */
+  async getCsvImportHistory() {
+    try {
+      // batchIdでグループ化してインポート履歴を取得
+      const batches = await this.prisma.adjustment.groupBy({
+        by: ['batchId'],
+        where: {
+          batchId: { not: null }
+        },
+        _count: {
+          id: true
+        },
+        _min: {
+          createdAt: true
+        },
+        orderBy: {
+          _min: {
+            createdAt: 'desc'
+          }
+        }
+      });
+
+      // 各バッチの詳細情報を取得
+      const history = await Promise.all(
+        batches.map(async (batch) => {
+          const adjustments = await this.prisma.adjustment.findMany({
+            where: { batchId: batch.batchId },
+            include: { staff: true },
+            orderBy: { createdAt: 'asc' }
+          });
+
+          const staffList = [...new Set(adjustments.map(adj => adj.staff.name))];
+          const dateRange = this.getDateRange(adjustments);
+
+          return {
+            batchId: batch.batchId,
+            importedAt: batch._min.createdAt,
+            recordCount: batch._count.id,
+            staffCount: staffList.length,
+            staffList: staffList,
+            dateRange: dateRange,
+            canRollback: true
+          };
+        })
+      );
+
+      return history;
+
+    } catch (error) {
+      console.error('Failed to get CSV import history:', error);
+      throw new BadRequestException(`履歴取得に失敗しました: ${error.message}`);
+    }
+  }
+
+  /**
+   * Adjustmentリストから日付範囲を取得
+   */
+  private getDateRange(adjustments: any[]): string {
+    if (adjustments.length === 0) return '';
+    
+    const dates = adjustments.map(adj => adj.date.toISOString().split('T')[0]);
+    const uniqueDates = [...new Set(dates)].sort();
+    
+    if (uniqueDates.length === 1) {
+      return uniqueDates[0];
+    } else {
+      return `${uniqueDates[0]} 〜 ${uniqueDates[uniqueDates.length - 1]}`;
+    }
   }
 }
