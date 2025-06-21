@@ -1367,9 +1367,14 @@ const ImportHistoryModal = ({ isOpen, onClose, onRollback }: {
 };
 
 // --- 設定モーダルコンポーネント ---
-const SettingsModal = ({ isOpen, onClose }: {
+const SettingsModal = ({ isOpen, onClose, viewMode, setViewMode, setIsCsvUploadModalOpen, setIsJsonUploadModalOpen, setIsImportHistoryModalOpen }: {
   isOpen: boolean;
   onClose: () => void;
+  viewMode: 'normal' | 'compact';
+  setViewMode: (mode: 'normal' | 'compact') => void;
+  setIsCsvUploadModalOpen: (open: boolean) => void;
+  setIsJsonUploadModalOpen: (open: boolean) => void;
+  setIsImportHistoryModalOpen: (open: boolean) => void;
 }) => {
   const [activeTab, setActiveTab] = useState('import');
 
@@ -1520,6 +1525,33 @@ const SettingsModal = ({ isOpen, onClose }: {
             <div className="space-y-6">
               <h3 className="text-lg font-medium text-gray-900 mb-4">🎨 表示設定 <span className="text-sm text-red-500">※未実装</span></h3>
               
+              {/* 表示密度設定 */}
+              <div className="border border-gray-200 rounded-lg p-4">
+                <h4 className="font-medium text-gray-900 mb-3">📐 表示密度</h4>
+                <div className="space-y-3">
+                  <label className="flex items-center">
+                    <input 
+                      type="radio" 
+                      name="viewMode" 
+                      className="mr-2" 
+                      checked={viewMode === 'normal'}
+                      onChange={() => setViewMode('normal')}
+                    />
+                    <span>標準（通常サイズ）</span>
+                  </label>
+                  <label className="flex items-center">
+                    <input 
+                      type="radio" 
+                      name="viewMode" 
+                      className="mr-2" 
+                      checked={viewMode === 'compact'}
+                      onChange={() => setViewMode('compact')}
+                    />
+                    <span>コンパクト（密度高）</span>
+                  </label>
+                </div>
+              </div>
+
               {/* 時間軸設定 */}
               <div className="border border-gray-200 rounded-lg p-4">
                 <h4 className="font-medium text-gray-900 mb-3">⏰ 時間軸設定</h4>
@@ -1716,6 +1748,30 @@ export default function Home() {
   const [isImportHistoryModalOpen, setIsImportHistoryModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [holidays, setHolidays] = useState<Holiday[]>([]);
+  // viewMode設定をlocalStorageで永続化
+  const [viewMode, setViewMode] = useState<'normal' | 'compact'>(() => {
+    if (typeof window !== 'undefined') {
+      return (localStorage.getItem('callstatus-viewMode') as 'normal' | 'compact') || 'normal';
+    }
+    return 'normal';
+  });
+
+  // viewMode変更時にlocalStorageに保存
+  const toggleViewMode = () => {
+    const newMode = viewMode === 'normal' ? 'compact' : 'normal';
+    setViewMode(newMode);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('callstatus-viewMode', newMode);
+    }
+  };
+
+  // 設定モーダル用のviewMode変更関数（localStorage保存付き）
+  const updateViewMode = (mode: 'normal' | 'compact') => {
+    setViewMode(mode);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('callstatus-viewMode', mode);
+    }
+  };
   
   // スクロール同期用のref
   const topScrollRef = useRef<HTMLDivElement>(null);
@@ -2093,16 +2149,16 @@ export default function Home() {
     if (isReception) {
       // 受付部署用のバッジ
       const receptionResp = responsibilities as ReceptionResponsibilityData;
-      if (receptionResp.lunch) badges.push(<span key="lunch" className="ml-1 text-xs text-blue-600 font-semibold">[昼当番]</span>);
-      if (receptionResp.fax) badges.push(<span key="fax" className="ml-1 text-xs text-green-600 font-semibold">[FAX]</span>);
-      if (receptionResp.cs) badges.push(<span key="cs" className="ml-1 text-xs text-purple-600 font-semibold">[CS]</span>);
-      if (receptionResp.custom) badges.push(<span key="custom" className="ml-1 text-xs text-red-600 font-semibold">[{receptionResp.custom}]</span>);
+      if (receptionResp.lunch) badges.push(<span key="lunch" className="responsibility-badge ml-1 text-xs text-blue-600 font-semibold">[昼当番]</span>);
+      if (receptionResp.fax) badges.push(<span key="fax" className="responsibility-badge ml-1 text-xs text-green-600 font-semibold">[FAX]</span>);
+      if (receptionResp.cs) badges.push(<span key="cs" className="responsibility-badge ml-1 text-xs text-purple-600 font-semibold">[CS]</span>);
+      if (receptionResp.custom) badges.push(<span key="custom" className="responsibility-badge ml-1 text-xs text-red-600 font-semibold">[{receptionResp.custom}]</span>);
     } else {
       // 一般部署用のバッジ
       const generalResp = responsibilities as GeneralResponsibilityData;
-      if (generalResp.fax) badges.push(<span key="fax" className="ml-1 text-xs text-green-600 font-semibold">[FAX]</span>);
-      if (generalResp.subjectCheck) badges.push(<span key="subject" className="ml-1 text-xs text-orange-600 font-semibold">[件名]</span>);
-      if (generalResp.custom) badges.push(<span key="custom" className="ml-1 text-xs text-red-600 font-semibold">[{generalResp.custom}]</span>);
+      if (generalResp.fax) badges.push(<span key="fax" className="responsibility-badge ml-1 text-xs text-green-600 font-semibold">[FAX]</span>);
+      if (generalResp.subjectCheck) badges.push(<span key="subject" className="responsibility-badge ml-1 text-xs text-orange-600 font-semibold">[件名]</span>);
+      if (generalResp.custom) badges.push(<span key="custom" className="responsibility-badge ml-1 text-xs text-red-600 font-semibold">[{generalResp.custom}]</span>);
     }
     
     return badges.length > 0 ? badges : null;
@@ -2579,9 +2635,14 @@ export default function Home() {
       <SettingsModal 
         isOpen={isSettingsModalOpen}
         onClose={() => setIsSettingsModalOpen(false)}
+        viewMode={viewMode}
+        setViewMode={updateViewMode}
+        setIsCsvUploadModalOpen={setIsCsvUploadModalOpen}
+        setIsJsonUploadModalOpen={setIsJsonUploadModalOpen}
+        setIsImportHistoryModalOpen={setIsImportHistoryModalOpen}
       />
       
-      <main className="container mx-auto p-4 font-sans">
+      <main className={`container mx-auto p-4 font-sans ${viewMode === 'compact' ? 'compact-mode' : ''}`}>
         <header className="mb-6 flex justify-between items-center">
             <div className="flex items-center space-x-4">
                 <div className="inline-flex rounded-md shadow-sm" role="group">
@@ -2612,6 +2673,13 @@ export default function Home() {
                   setIsSettingsModalOpen(true);
                 }} className="px-4 py-2 text-sm font-medium text-white bg-gray-600 border border-transparent rounded-md hover:bg-gray-700">
                     ⚙️ 設定
+                </button>
+                <button 
+                  onClick={toggleViewMode}
+                  title={`表示密度: ${viewMode === 'normal' ? '標準' : 'コンパクト'}`}
+                  className={`toggle-switch ${viewMode === 'compact' ? 'active' : ''}`}
+                >
+                  <div className={`toggle-thumb ${viewMode === 'compact' ? 'active' : ''}`}></div>
                 </button>
             </div>
         </header>
@@ -2661,7 +2729,7 @@ export default function Home() {
                       <div key={group}>
                         <h4 className="px-2 pl-6 min-h-[33px] text-xs font-semibold whitespace-nowrap flex items-center" style={{backgroundColor: teamColors[group] || '#f5f5f5'}}>{group}</h4>
                         {staffInGroup.map(staff => (
-                          <div key={staff.id} className={`px-2 pl-12 text-sm font-medium whitespace-nowrap h-[45px] hover:bg-gray-50 flex items-center cursor-pointer ${
+                          <div key={staff.id} className={`staff-timeline-row px-2 pl-12 text-sm font-medium whitespace-nowrap h-[45px] hover:bg-gray-50 flex items-center cursor-pointer ${
                             staff.isSupporting ? 'bg-amber-50 border border-amber-400' : ''
                           }`}
                                onClick={() => handleOpenResponsibilityModal(staff)}
@@ -2671,10 +2739,10 @@ export default function Home() {
                                    handleOpenAssignmentModal(staff);
                                  }
                                }}>
-                            <span className={staff.isSupporting ? 'text-amber-800' : ''}>
+                            <span className={`staff-name ${staff.isSupporting ? 'text-amber-800' : ''}`}>
                               {staff.name}
                               {staff.isSupporting && (
-                                <span className="ml-1 text-xs text-amber-600 font-semibold">[支援]</span>
+                                <span className="support-info ml-1 text-xs text-amber-600 font-semibold">[支援]</span>
                               )}
                               {generateResponsibilityBadges(staff.responsibilities || null, staff.isReception || false)}
                             </span>
@@ -2769,7 +2837,7 @@ export default function Home() {
                           <div key={group}>
                             <div className="min-h-[33px]" style={{backgroundColor: teamColors[group] || '#f5f5f5'}}></div>
                             {staffInGroup.map(staff => (
-                              <div key={staff.id} className={`h-[45px] relative hover:bg-gray-50 ${
+                              <div key={staff.id} className={`staff-timeline-row h-[45px] relative hover:bg-gray-50 ${
                                      staff.isSupporting ? 'bg-amber-50' : ''
                                    }`}
                                    onMouseDown={(e) => handleTimelineMouseDown(e, staff)}
@@ -2815,7 +2883,7 @@ export default function Home() {
                                   return (
                                     <div key={`${schedule.id}-${scheduleLayer}-${schedule.staffId}`} 
                                          draggable={!isContract}
-                                         className={`absolute h-6 rounded text-white text-xs flex items-center justify-between px-2 ${
+                                         className={`schedule-block absolute h-6 rounded text-white text-xs flex items-center justify-between px-2 ${
                                            isContract ? 'cursor-default' : 'cursor-ew-resize hover:opacity-80'
                                          } ${
                                            selectedSchedule && selectedSchedule.schedule.id === schedule.id && selectedSchedule.layer === scheduleLayer

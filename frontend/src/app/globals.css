@@ -54,3 +54,71 @@
 /* CSVアップロードボタン用スタイル */
 .bg-blue-600 { background-color: rgb(37 99 235); }
 .hover\:bg-blue-700:hover { background-color: rgb(29 78 216); }
+
+/* コンパクトビュー用スタイル */
+.compact-mode .staff-timeline-row {
+  height: 32px !important;
+  min-height: 32px !important;
+}
+
+.compact-mode .staff-name {
+  font-size: 11px !important;
+  line-height: 16px !important;
+}
+
+.compact-mode .schedule-block {
+  height: 24px !important;
+  line-height: 24px !important;
+  font-size: 10px !important;
+  padding: 2px 4px !important;
+}
+
+.compact-mode .support-info {
+  font-size: 9px !important;
+  padding: 1px 2px !important;
+}
+
+.compact-mode .responsibility-badge {
+  font-size: 8px !important;
+  padding: 1px 3px !important;
+}
+
+/* シンプルトグルスイッチ */
+.toggle-switch {
+  width: 44px;
+  height: 24px;
+  background: #cbd5e1;
+  border-radius: 12px;
+  position: relative;
+  border: none;
+  transition: background-color 0.2s ease;
+  cursor: pointer;
+}
+
+.toggle-switch:hover {
+  background: #94a3b8;
+}
+
+.toggle-switch.active {
+  background: #3b82f6;
+}
+
+.toggle-switch.active:hover {
+  background: #2563eb;
+}
+
+.toggle-thumb {
+  width: 18px;
+  height: 18px;
+  background: white;
+  border-radius: 50%;
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  transition: left 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.toggle-thumb.active {
+  left: 23px;
+}
