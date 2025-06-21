@@ -1748,6 +1748,7 @@ export default function Home() {
   const [isImportHistoryModalOpen, setIsImportHistoryModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [holidays, setHolidays] = useState<Holiday[]>([]);
+  const [isImporting, setIsImporting] = useState(false);
   // viewMode設定をlocalStorageで永続化
   const [viewMode, setViewMode] = useState<'normal' | 'compact'>(() => {
     if (typeof window !== 'undefined') {
@@ -2223,6 +2224,7 @@ export default function Home() {
   };
 
   const handleJsonUpload = async (file: File) => {
+    setIsImporting(true);
     try {
       // まずファイル内容を読み取って文字チェックを実行
       const fileContent = await file.text();
@@ -2280,10 +2282,13 @@ export default function Home() {
     } catch (error) {
       console.error('JSONファイルの同期に失敗しました:', error);
       alert('JSONファイルの同期に失敗しました: ' + (error instanceof Error ? error.message : String(error)));
+    } finally {
+      setIsImporting(false);
     }
   };
 
   const handleCsvUpload = async (file: File) => {
+    setIsImporting(true);
     try {
       const formData = new FormData();
       formData.append('file', file);
@@ -2311,6 +2316,8 @@ export default function Home() {
     } catch (error) {
       console.error('CSVファイルのインポートに失敗しました:', error);
       alert('CSVファイルのインポートに失敗しました: ' + (error instanceof Error ? error.message : String(error)));
+    } finally {
+      setIsImporting(false);
     }
   };
 
@@ -2966,6 +2973,16 @@ export default function Home() {
           </div>
         </div>
       </main>
+
+      {/* インポート中ローディング表示 */}
+      {isImporting && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[10001]">
+          <div className="bg-white p-6 rounded-lg flex items-center space-x-3 shadow-xl border-2 border-blue-200">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <span className="text-lg font-medium text-gray-700">インポート中...</span>
+          </div>
+        </div>
+      )}
     </Fragment>
   );
 }
