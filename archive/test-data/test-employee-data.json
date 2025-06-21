@@ -1,0 +1,39 @@
+{
+  "employeeData": [
+    {
+      "empNo": "0001",
+      "name": "田中太郎",
+      "dept": "営業部",
+      "team": "第一営業課",
+      "mail": "tanaka@example.com",
+      "contract": {
+        "workDays": "月火水木金",
+        "workHours": "9:00-18:00",
+        "breakHours": "12:00-13:00"
+      }
+    },
+    {
+      "empNo": "0002", 
+      "name": "佐藤花子",
+      "dept": "開発部",
+      "team": "システム開発課",
+      "mail": "sato@example.com",
+      "contract": {
+        "workDays": "月火水木金",
+        "workHours": "9:00-17:30"
+      }
+    },
+    {
+      "empNo": "0003",
+      "name": "山田次郎",
+      "dept": "管理部", 
+      "team": "総務課",
+      "mail": "yamada@example.com",
+      "contract": {
+        "workDays": "月火水木金土",
+        "workHours": "8:30-17:30",
+        "breakHours": "12:00-13:00"
+      }
+    }
+  ]
+}

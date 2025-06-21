@@ -503,6 +503,80 @@ curl -s "http://localhost:3002/api/schedules/layered?date=YYYY-MM-DD" | jq '{tot
 - **進捗更新**: 本セクションを随時更新
 - **ロールバック**: 各フェーズ間で問題発生時は前フェーズに復帰可能
 
+## プロジェクト構造管理
+
+### 🗂️ Archive フォルダ
+
+開発過程で作成された一時ファイル群を整理・保管するためのアーカイブディレクトリです。
+
+**ディレクトリ構造:**
+```
+archive/
+├── scripts/        # 開発用スクリプト（46個）
+│   ├── backend/    # バックエンド開発用スクリプト
+│   └── (ルート)    # プロジェクト全体で使用されたスクリプト
+├── test-data/      # テスト・デバッグ用サンプルデータ（25個）
+│   ├── *.json      # 契約データ、スタッフデータのサンプル
+│   └── *.csv       # スケジュールインポート用テストデータ
+├── exports/        # データベース抽出結果（3個）
+├── backup/         # 重要ファイルのバックアップ
+├── docs/           # 開発メモやドキュメント
+└── README.md       # アーカイブ説明書
+```
+
+**管理方針:**
+- 開発過程の記録として保管
+- 本番環境では使用しない
+- 必要に応じて個別に復元可能
+- 定期的なクリーンアップで作成日から3ヶ月経過したファイルは削除検討
+
+**アーカイブ対象ファイル例:**
+- デバッグ用スクリプト（`debug-*.js`、`test-*.js`）
+- 一時的なデータ変換スクリプト（`create_*.js`、`generate_*.js`）
+- テスト用サンプルデータ（`test-*.json`、`sample-*.csv`）
+- データベースエクスポート結果（`exported-*.csv`）
+- ログファイル（`*.log`）
+
+**ファイル整理コマンド例:**
+```bash
+# 新しい一時ファイルをアーカイブに移動
+mv debug-*.js test-*.js archive/scripts/
+mv test-*.json sample-*.csv archive/test-data/
+mv exported-*.csv *.log archive/exports/
+```
+
+**⚠️ 重要な注意事項:**
+
+**削除・移動してはいけないディレクトリ:**
+- `frontend/.next/` - Next.jsビルド成果物（CSS、JS、マニフェストファイル）
+- `backend/node_modules/` - バックエンド依存関係
+- `frontend/node_modules/` - フロントエンド依存関係
+- `backend/dist/` - バックエンドビルド成果物
+- `backend/prisma/migrations/` - データベースマイグレーション履歴
+
+**自動生成ファイルを削除した場合の復旧手順:**
+
+1. **Next.jsビルド成果物削除時:**
+   ```bash
+   # フロントエンドを再起動して再ビルド
+   docker restart callstatus-app_frontend_1
+   docker exec -d callstatus-app_frontend_1 bash -c "cd /app && rm -rf .next && npm run dev"
+   ```
+
+2. **バックエンドビルド成果物削除時:**
+   ```bash
+   # バックエンドを再起動して再ビルド
+   docker restart callstatus-app_backend_1
+   docker exec callstatus-app_backend_1 bash -c "cd /app && npm run build"
+   ```
+
+**安全な整理対象:**
+- `*.js`（ルートディレクトリの一時スクリプト）
+- `*.json`（テスト用データファイル）
+- `*.csv`（サンプル・エクスポートファイル）
+- `*.log`（ログファイル）
+- `*.backup`（バックアップファイル）
+
 ---
 
 # 時刻処理厳格ルール（必須遵守）

@@ -75,7 +75,6 @@ type Schedule = {
   start: number;
   end: number;
   memo?: string;
-  layer?: 'contract' | 'adjustment';
 };
 
 type DragInfo = {
@@ -83,16 +82,6 @@ type DragInfo = {
   startX: number;
   currentX: number;
   rowRef: HTMLDivElement;
-};
-
-type ImportHistory = {
-  batchId: string;
-  importedAt: string;
-  recordCount: number;
-  staffCount: number;
-  staffList: string[];
-  dateRange: string;
-  canRollback: boolean;
 };
 
 // --- 定数定義 ---
@@ -173,8 +162,8 @@ type CharacterCheckResult = {
 };
 
 const checkSupportedCharacters = (data: Array<{name: string; dept: string; team: string}>): CharacterCheckResult => {
-  // JIS第1-2水準漢字 + ひらがな + カタカナ + 英数字 + 基本記号 + 反復記号「々」+ 全角英数字の範囲
-  const supportedCharsRegex = /^[\u4e00-\u9faf\u3040-\u309f\u30a0-\u30ff\u0020-\u007e\uff01-\uff9f\u3000\u301c\u2010-\u2015\u2018-\u201f\u2026\u2030\u203b\u2212\u2500-\u257f\u3005]*$/;
+  // JIS第1-2水準漢字 + ひらがな + カタカナ + 英数字 + 基本記号の範囲
+  const supportedCharsRegex = /^[\u4e00-\u9faf\u3040-\u309f\u30a0-\u30ff\u0020-\u007e\uff01-\uff5e\u3000\u301c\u2010-\u2015\u2018-\u201f\u2026\u2030\u203b\u2212\u2500-\u257f]*$/;
   
   const errors: CharacterCheckResult['errors'] = [];
   
@@ -249,37 +238,6 @@ const positionPercentToTime = (percent: number): number => {
     // 15分単位に丸める
     return Math.round(time * 4) / 4;
 }
-
-// --- 時刻変換ヘルパー関数 ---
-const timeStringToHours = (timeString: string): number => {
-    // ISO文字列（例: "2025-06-21T10:30:00.000Z"）を日本時間の数値時刻に変換
-    const date = new Date(timeString);
-    // 日本時間に変換（UTC + 9時間）
-    const jstHours = date.getUTCHours() + 9;
-    const minutes = date.getUTCMinutes();
-    // 24時間を超える場合の調整（日付境界の処理）
-    const adjustedHours = jstHours >= 24 ? jstHours - 24 : jstHours;
-    return adjustedHours + minutes / 60;
-};
-
-const hoursToTimeString = (hours: number): string => {
-    // 数値時刻（例: 10.5）をISO文字列に変換
-    const hour = Math.floor(hours);
-    const minute = Math.round((hours - hour) * 60);
-    
-    // 現在の日付を取得してJST時刻として設定
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth();
-    const day = now.getDate();
-    
-    // JST時刻でDateオブジェクトを作成し、UTCに変換
-    const jstDate = new Date(year, month, day, hour, minute, 0, 0);
-    // JST → UTC変換（-9時間）
-    const utcDate = new Date(jstDate.getTime() - 9 * 60 * 60 * 1000);
-    
-    return utcDate.toISOString();
-};
 
 // --- 時間選択肢を生成するヘルパー関数 ---
 const generateTimeOptions = (startHour: number, endHour: number) => {
@@ -1118,393 +1076,6 @@ const CsvUploadModal = ({ isOpen, onClose, onUpload }: {
   );
 };
 
-// --- インポート履歴モーダルコンポーネント ---
-const ImportHistoryModal = ({ isOpen, onClose, onRollback }: {
-  isOpen: boolean;
-  onClose: () => void;
-  onRollback: (batchId: string) => void;
-}) => {
-  const [importHistory, setImportHistory] = useState<ImportHistory[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const fetchHistory = useCallback(async () => {
-    if (!isOpen) return;
-    
-    setLoading(true);
-    setError(null);
-    try {
-      const currentApiUrl = getApiUrl();
-      const response = await fetch(`${currentApiUrl}/api/csv-import/history`);
-      if (!response.ok) {
-        throw new Error('履歴の取得に失敗しました');
-      }
-      const data = await response.json();
-      setImportHistory(data);
-    } catch (error) {
-      console.error('インポート履歴の取得に失敗しました:', error);
-      setError(error instanceof Error ? error.message : '履歴の取得に失敗しました');
-    } finally {
-      setLoading(false);
-    }
-  }, [isOpen]);
-
-  useEffect(() => {
-    fetchHistory();
-  }, [fetchHistory]);
-
-  const handleRollback = async (batchId: string, recordCount: number) => {
-    const confirmed = window.confirm(
-      `バッチID: ${batchId}\n` +
-      `対象レコード: ${recordCount}件\n\n` +
-      'このインポートをロールバック（取り消し）しますか？\n' +
-      '※ この操作は元に戻せません'
-    );
-    
-    if (!confirmed) return;
-    
-    try {
-      onRollback(batchId);
-      await fetchHistory(); // 履歴を再読み込み
-    } catch (error) {
-      console.error('ロールバック後の履歴更新に失敗:', error);
-    }
-  };
-
-  if (!isOpen) return null;
-
-  return createPortal(
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[80vh] overflow-hidden">
-        <div className="flex justify-between items-center p-6 border-b border-gray-200">
-          <h2 className="text-xl font-bold text-gray-800">CSVインポート履歴</h2>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 text-2xl font-bold"
-          >
-            ×
-          </button>
-        </div>
-        
-        <div className="p-6 overflow-y-auto max-h-[60vh]">
-          {loading && (
-            <div className="text-center py-8">
-              <div className="text-gray-600">履歴を読み込み中...</div>
-            </div>
-          )}
-          
-          {error && (
-            <div className="bg-red-50 border border-red-200 rounded-md p-4 mb-4">
-              <div className="text-red-800 font-medium">エラー</div>
-              <div className="text-red-700 text-sm mt-1">{error}</div>
-            </div>
-          )}
-          
-          {!loading && !error && importHistory.length === 0 && (
-            <div className="text-center py-8 text-gray-500">
-              インポート履歴がありません
-            </div>
-          )}
-          
-          {!loading && !error && importHistory.length > 0 && (
-            <div className="space-y-4">
-              {importHistory.map((history) => (
-                <div key={history.batchId} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
-                  <div className="flex justify-between items-start mb-3">
-                    <div className="flex-1">
-                      <div className="font-medium text-gray-800 mb-1">
-                        バッチID: {history.batchId}
-                      </div>
-                      <div className="text-sm text-gray-600 mb-2">
-                        インポート日時: {new Date(history.importedAt).toLocaleString('ja-JP')}
-                      </div>
-                      <div className="grid grid-cols-2 gap-4 text-sm">
-                        <div>
-                          <span className="font-medium text-gray-700">投入レコード数:</span>
-                          <span className="ml-2 text-blue-600 font-medium">{history.recordCount}件</span>
-                        </div>
-                        <div>
-                          <span className="font-medium text-gray-700">対象スタッフ数:</span>
-                          <span className="ml-2 text-green-600 font-medium">{history.staffCount}名</span>
-                        </div>
-                      </div>
-                      <div className="text-sm mt-2">
-                        <span className="font-medium text-gray-700">対象日付範囲:</span>
-                        <span className="ml-2">{history.dateRange}</span>
-                      </div>
-                      <div className="text-sm mt-2">
-                        <span className="font-medium text-gray-700">対象スタッフ:</span>
-                        <span className="ml-2 text-gray-600">
-                          {history.staffList.slice(0, 5).join(', ')}
-                          {history.staffList.length > 5 && ` 他${history.staffList.length - 5}名`}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="ml-4">
-                      {history.canRollback ? (
-                        <button
-                          onClick={() => handleRollback(history.batchId, history.recordCount)}
-                          className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm font-medium"
-                        >
-                          ロールバック
-                        </button>
-                      ) : (
-                        <div className="px-4 py-2 bg-gray-300 text-gray-500 rounded-md text-sm font-medium cursor-not-allowed">
-                          期限切れ
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-        
-        <div className="border-t border-gray-200 px-6 py-4 bg-gray-50">
-          <div className="flex justify-between items-center">
-            <div className="text-sm text-gray-600">
-              ※ ロールバックは投入から24時間以内のみ可能です
-            </div>
-            <button
-              onClick={onClose}
-              className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 text-sm font-medium"
-            >
-              閉じる
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>,
-    document.body
-  );
-};
-
-// --- 設定モーダルコンポーネント ---
-const SettingsModal = ({ isOpen, onClose }: {
-  isOpen: boolean;
-  onClose: () => void;
-}) => {
-  const [activeTab, setActiveTab] = useState('import');
-
-  if (!isOpen) return null;
-
-  return createPortal(
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[80vh] overflow-hidden">
-        <div className="flex justify-between items-center p-6 border-b border-gray-200">
-          <h2 className="text-xl font-bold text-gray-800">⚙️ 設定</h2>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 text-2xl font-bold"
-          >
-            ×
-          </button>
-        </div>
-        
-        {/* タブナビゲーション */}
-        <div className="border-b border-gray-200">
-          <nav className="flex space-x-8 px-6">
-            <button 
-              onClick={() => setActiveTab('import')} 
-              className={`py-3 px-1 border-b-2 font-medium text-sm ${
-                activeTab === 'import' 
-                  ? 'border-blue-500 text-blue-600' 
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              📥 インポート
-            </button>
-            <button 
-              onClick={() => setActiveTab('display')} 
-              className={`py-3 px-1 border-b-2 font-medium text-sm ${
-                activeTab === 'display' 
-                  ? 'border-blue-500 text-blue-600' 
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              🎨 表示設定
-            </button>
-            <button 
-              onClick={() => setActiveTab('export')} 
-              className={`py-3 px-1 border-b-2 font-medium text-sm ${
-                activeTab === 'export' 
-                  ? 'border-blue-500 text-blue-600' 
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              📤 エクスポート
-            </button>
-          </nav>
-        </div>
-
-        {/* タブコンテンツ */}
-        <div className="p-6 overflow-y-auto max-h-[60vh]">
-          {activeTab === 'import' && (
-            <div className="space-y-6">
-              <div>
-                <h3 className="text-lg font-medium text-gray-900 mb-4">📋 データインポート</h3>
-                
-                {/* CSVスケジュールインポート */}
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h4 className="font-medium text-blue-900">📅 スケジュールインポート</h4>
-                      <p className="text-sm text-blue-700 mt-1">
-                        CSVファイルから月次スケジュールを一括インポート
-                      </p>
-                    </div>
-                    <button 
-                      onClick={() => {
-                        setIsCsvUploadModalOpen(true);
-                        onClose();
-                      }} 
-                      className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-                    >
-                      インポート実行
-                    </button>
-                  </div>
-                </div>
-
-                {/* 社員情報インポート */}
-                <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h4 className="font-medium text-green-900">👥 社員情報インポート</h4>
-                      <p className="text-sm text-green-700 mt-1">
-                        JSONファイルから社員マスタデータを更新
-                      </p>
-                    </div>
-                    <button 
-                      onClick={() => {
-                        setIsJsonUploadModalOpen(true);
-                        onClose();
-                      }} 
-                      className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
-                    >
-                      インポート実行
-                    </button>
-                  </div>
-                </div>
-
-                {/* インポート履歴 */}
-                <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h4 className="font-medium text-purple-900">📜 インポート履歴</h4>
-                      <p className="text-sm text-purple-700 mt-1">
-                        過去のインポート履歴確認・ロールバック実行
-                      </p>
-                    </div>
-                    <button 
-                      onClick={() => {
-                        setIsImportHistoryModalOpen(true);
-                        onClose();
-                      }} 
-                      className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
-                    >
-                      履歴を確認
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* 注意事項 */}
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                <div className="flex">
-                  <div className="flex-shrink-0">
-                    <span className="text-yellow-600">⚠️</span>
-                  </div>
-                  <div className="ml-3">
-                    <h4 className="text-sm font-medium text-yellow-800">インポート時の注意</h4>
-                    <div className="mt-2 text-sm text-yellow-700">
-                      <ul className="list-disc pl-5 space-y-1">
-                        <li>大量データのインポートは時間がかかる場合があります</li>
-                        <li>インポート前に必ずバックアップを取得してください</li>
-                        <li>ロールバックは24時間以内のデータのみ対応</li>
-                      </ul>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'display' && (
-            <div className="space-y-6">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">🎨 表示設定 <span className="text-sm text-red-500">※未実装</span></h3>
-              
-              {/* 時間軸設定 */}
-              <div className="border border-gray-200 rounded-lg p-4">
-                <h4 className="font-medium text-gray-900 mb-3">⏰ 時間軸設定</h4>
-                <div className="space-y-3">
-                  <label className="flex items-center">
-                    <input type="radio" name="timeRange" className="mr-2" defaultChecked />
-                    <span>標準（8:00-21:00）</span>
-                  </label>
-                  <label className="flex items-center">
-                    <input type="radio" name="timeRange" className="mr-2" />
-                    <span>拡張（7:00-22:00）</span>
-                  </label>
-                </div>
-              </div>
-
-              {/* ステータス色設定 */}
-              <div className="border border-gray-200 rounded-lg p-4">
-                <h4 className="font-medium text-gray-900 mb-3">🎨 ステータス色設定</h4>
-                <div className="grid grid-cols-2 gap-4">
-                  {Object.entries(statusColors).map(([status, color]) => (
-                    <div key={status} className="flex items-center space-x-2">
-                      <div className="w-4 h-4 rounded" style={{ backgroundColor: color }}></div>
-                      <span className="text-sm">{status}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'export' && (
-            <div className="space-y-6">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">📤 データエクスポート <span className="text-sm text-red-500">※未実装</span></h3>
-              
-              <div className="border border-gray-200 rounded-lg p-4">
-                <h4 className="font-medium text-gray-900 mb-3">📊 レポート出力</h4>
-                <div className="space-y-3">
-                  <button className="w-full px-4 py-2 text-left border border-gray-300 rounded-md hover:bg-gray-50">
-                    📅 月次勤務実績レポート（CSV）
-                  </button>
-                  <button className="w-full px-4 py-2 text-left border border-gray-300 rounded-md hover:bg-gray-50">
-                    📈 部署別集計レポート（Excel）
-                  </button>
-                  <button className="w-full px-4 py-2 text-left border border-gray-300 rounded-md hover:bg-gray-50">
-                    👥 スタッフ一覧（JSON）
-                  </button>
-                </div>
-              </div>
-
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                <div className="flex">
-                  <div className="flex-shrink-0">
-                    <span className="text-gray-600">ℹ️</span>
-                  </div>
-                  <div className="ml-3">
-                    <h4 className="text-sm font-medium text-gray-800">エクスポート機能について</h4>
-                    <p className="mt-1 text-sm text-gray-600">
-                      レポート出力機能は今後のアップデートで追加予定です。
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>,
-    document.body
-  );
-};
-
 // --- チャートコンポーネント ---
 const StatusChart = ({ data, staffList, selectedDepartment, selectedGroup }: { 
   data: any[], 
@@ -1572,7 +1143,7 @@ const StatusChart = ({ data, staffList, selectedDepartment, selectedGroup }: {
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis 
                 dataKey="time" 
-                tick={{ fontSize: 11 }} 
+                tick={{ fontSize: 8 }} 
                 interval={3}
                 angle={-45}
                 textAnchor="end"
@@ -1627,8 +1198,6 @@ export default function Home() {
   const [isResponsibilityModalOpen, setIsResponsibilityModalOpen] = useState(false);
   const [selectedStaffForResponsibility, setSelectedStaffForResponsibility] = useState<Staff | null>(null);
   const [selectedSchedule, setSelectedSchedule] = useState<{ schedule: Schedule; layer: string } | null>(null);
-  const [isImportHistoryModalOpen, setIsImportHistoryModalOpen] = useState(false);
-  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   
   // スクロール同期用のref
   const topScrollRef = useRef<HTMLDivElement>(null);
@@ -1641,27 +1210,15 @@ export default function Home() {
   
   const fetchData = useCallback(async (date: Date) => {
     setIsLoading(true);
-    // JST基準の日付文字列を生成（CLAUDE.md厳格ルール準拠）
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    const dateString = `${year}-${month}-${day}`;
+    const dateString = date.toISOString().split('T')[0];
     const currentApiUrl = getApiUrl();
     try {
-      console.log('=== fetchData START ===');
-      console.log('Fetching data for date:', dateString);
-      console.log('API URL:', currentApiUrl);
-      
       // スケジュール、支援状況、担当設定を並列で取得
       const [scheduleRes, supportRes, responsibilityRes] = await Promise.all([
         fetch(`${currentApiUrl}/api/schedules/layered?date=${dateString}`),
         fetch(`${currentApiUrl}/api/assignments/status`),
         fetch(`${currentApiUrl}/api/responsibilities/status?date=${dateString}`)
       ]);
-      
-      console.log('Schedule API response status:', scheduleRes.status);
-      console.log('Support API response status:', supportRes.status);
-      console.log('Responsibility API response status:', responsibilityRes.status);
       
       if (!scheduleRes.ok) throw new Error(`Schedule API response was not ok`);
       if (!supportRes.ok) throw new Error(`Support API response was not ok`);
@@ -1670,11 +1227,6 @@ export default function Home() {
       const scheduleData: { staff: Staff[], schedules: ScheduleFromDB[] } = await scheduleRes.json();
       const supportData = await supportRes.json();
       const responsibilityData = await responsibilityRes.json();
-      
-      console.log('Schedule data received:', scheduleData);
-      console.log('Support data received:', supportData);
-      console.log('Responsibility data received:', responsibilityData);
-      
       
       
       // 支援状況と担当設定をスタッフデータにマージ
@@ -1722,25 +1274,13 @@ export default function Home() {
       });
       
       setStaffList(staffWithSupportAndResponsibility);
-      
-      // バックエンドからISO文字列で返されるスケジュールを数値時刻に変換
-      console.log('Raw schedules from backend:', scheduleData.schedules);
-      const convertedSchedules: Schedule[] = scheduleData.schedules.map(s => ({
-        id: s.id,
-        staffId: s.staffId,
-        status: s.status,
-        start: timeStringToHours(s.start),
-        end: timeStringToHours(s.end),
-        memo: s.memo,
-        layer: s.layer  // layer情報を保持
-      }));
-      console.log('Converted schedules:', convertedSchedules);
-      setSchedules(convertedSchedules);
-      console.log('=== fetchData SUCCESS ===');
-    } catch (error) { 
-      console.error('=== fetchData ERROR ===');
-      console.error('データの取得に失敗しました', error); 
-    } 
+      const formattedSchedules = scheduleData.schedules.map(s => {
+        const start = new Date(s.start);
+        const end = new Date(s.end);
+        return { ...s, start: start.getHours() + start.getMinutes() / 60, end: end.getHours() + end.getMinutes() / 60 };
+      });
+      setSchedules(formattedSchedules);
+    } catch (error) { console.error('データの取得に失敗しました', error); } 
     finally { setIsLoading(false); }
   }, []);
   
@@ -1752,16 +1292,9 @@ export default function Home() {
     const currentApiUrl = getApiUrl();
     const socket: Socket = io(currentApiUrl);
     const handleNewSchedule = (newSchedule: ScheduleFromDB) => {
-        console.log('=== WebSocket: New Schedule ===');
-        console.log('New schedule received:', newSchedule);
         const scheduleDate = new Date(newSchedule.start);
-        console.log('Schedule date:', scheduleDate.toISOString().split('T')[0]);
-        console.log('Display date:', displayDate.toISOString().split('T')[0]);
         if(scheduleDate.toISOString().split('T')[0] === displayDate.toISOString().split('T')[0]) {
-            console.log('Fetching updated data due to new schedule...');
             fetchData(displayDate);
-        } else {
-            console.log('Schedule not for current display date, ignoring');
         }
     };
     const handleUpdatedSchedule = (updatedSchedule: ScheduleFromDB) => {
@@ -1806,31 +1339,21 @@ export default function Home() {
     const payload = { ...processedScheduleData, date };
     const currentApiUrl = getApiUrl();
     try {
-      console.log('=== handleSaveSchedule START ===');
-      console.log('Original scheduleData:', scheduleData);
-      console.log('Display date:', date);
-      console.log('Final payload:', payload);
-      console.log('API URL:', currentApiUrl);
-      
+      console.log('Saving schedule with payload:', payload);
       let response;
       if (scheduleData.id) {
-        console.log('PATCH request to:', `${currentApiUrl}/api/schedules/${scheduleData.id}`);
         response = await fetch(`${currentApiUrl}/api/schedules/${scheduleData.id}`, { 
           method: 'PATCH', 
           headers: { 'Content-Type': 'application/json' }, 
           body: JSON.stringify(payload) 
         });
       } else {
-        console.log('POST request to:', `${currentApiUrl}/api/schedules`);
         response = await fetch(`${currentApiUrl}/api/schedules`, { 
           method: 'POST', 
           headers: { 'Content-Type': 'application/json' }, 
           body: JSON.stringify(payload) 
         });
       }
-      
-      console.log('Response status:', response.status);
-      console.log('Response headers:', Object.fromEntries(response.headers.entries()));
       
       if (!response.ok) {
         const errorText = await response.text();
@@ -1840,17 +1363,8 @@ export default function Home() {
       
       const result = await response.json();
       console.log('Schedule saved successfully:', result);
-      console.log('=== handleSaveSchedule SUCCESS ===');
-      
-      // データを再取得してUIを更新
-      console.log('Fetching updated data...');
-      await fetchData(displayDate);
-      setIsModalOpen(false);
-      setEditingSchedule(null);
-      setDraggedSchedule(null);
     } catch (error) {
-      console.error('=== handleSaveSchedule ERROR ===');
-      console.error('Error details:', error);
+      console.error('スケジュールの保存に失敗しました:', error);
       alert('スケジュールの保存に失敗しました。再度お試しください。\n詳細: ' + (error instanceof Error ? error.message : String(error)));
     }
   };
@@ -2093,7 +1607,7 @@ export default function Home() {
           return `${error.position}行目の${fieldName}「${error.value}」に使用できない文字が含まれています: ${error.invalidChars.join(', ')}`;
         }).join('\n');
         
-        alert(`文字チェックエラー:\n\n${errorMessage}\n\n使用可能な文字: ひらがな、カタカナ、漢字（JIS第1-2水準）、英数字、基本記号、全角英数字、反復記号「々」`);
+        alert(`文字チェックエラー:\n\n${errorMessage}\n\n使用可能な文字: ひらがな、カタカナ、漢字（JIS第1-2水準）、英数字、基本記号のみ`);
         return;
       }
       
@@ -2154,7 +1668,7 @@ export default function Home() {
       const result = await response.json();
       console.log('CSVインポート結果:', result);
       
-      const message = `インポート完了:\n投入: ${result.imported}件\n競合: ${result.conflicts?.length || 0}件\n\n${result.batchId ? `バッチID: ${result.batchId}\n※ 問題があればインポート履歴から取り消し可能です` : ''}`;
+      const message = `インポート完了:\n投入: ${result.imported}件\n競合: ${result.conflicts?.length || 0}件`;
       alert(message);
       
       // データを再取得してUIを更新
@@ -2163,55 +1677,6 @@ export default function Home() {
     } catch (error) {
       console.error('CSVファイルのインポートに失敗しました:', error);
       alert('CSVファイルのインポートに失敗しました: ' + (error instanceof Error ? error.message : String(error)));
-    }
-  };
-
-  // インポート履歴取得
-  const fetchImportHistory = async (): Promise<ImportHistory[]> => {
-    try {
-      const currentApiUrl = getApiUrl();
-      const response = await fetch(`${currentApiUrl}/api/csv-import/history`);
-      
-      if (!response.ok) {
-        throw new Error('履歴の取得に失敗しました');
-      }
-      
-      return await response.json();
-    } catch (error) {
-      console.error('インポート履歴の取得に失敗しました:', error);
-      throw error;
-    }
-  };
-
-  // ロールバック実行
-  const handleRollback = async (batchId: string) => {
-    try {
-      const currentApiUrl = getApiUrl();
-      const response = await fetch(`${currentApiUrl}/api/csv-import/rollback`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ batchId })
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'ロールバックに失敗しました');
-      }
-      
-      const result = await response.json();
-      console.log('ロールバック結果:', result);
-      
-      const message = `ロールバック完了:\n削除: ${result.deletedCount}件\n\n削除されたデータ:\n${result.details.map((d: any) => `・${d.staff} ${d.date} ${d.status} ${d.time}`).join('\n')}`;
-      alert(message);
-      
-      // データを再取得してUIを更新
-      await fetchData(displayDate);
-      setIsImportHistoryModalOpen(false);
-    } catch (error) {
-      console.error('ロールバックに失敗しました:', error);
-      alert('ロールバックに失敗しました: ' + (error instanceof Error ? error.message : String(error)));
     }
   };
 
@@ -2474,15 +1939,6 @@ export default function Home() {
         staff={selectedStaffForResponsibility}
         onSave={handleSaveResponsibility}
       />
-      <ImportHistoryModal 
-        isOpen={isImportHistoryModalOpen}
-        onClose={() => setIsImportHistoryModalOpen(false)}
-        onRollback={handleRollback}
-      />
-      <SettingsModal 
-        isOpen={isSettingsModalOpen}
-        onClose={() => setIsSettingsModalOpen(false)}
-      />
       
       <main className="container mx-auto p-4 font-sans">
         <header className="mb-6 flex justify-between items-center">
@@ -2512,9 +1968,15 @@ export default function Home() {
                 </button>
                 <button onClick={() => {
                   setSelectedSchedule(null);
-                  setIsSettingsModalOpen(true);
-                }} className="px-4 py-2 text-sm font-medium text-white bg-gray-600 border border-transparent rounded-md hover:bg-gray-700">
-                    ⚙️ 設定
+                  setIsCsvUploadModalOpen(true);
+                }} className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700">
+                    スケジュールインポート
+                </button>
+                <button onClick={() => {
+                  setSelectedSchedule(null);
+                  setIsJsonUploadModalOpen(true);
+                }} className="px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md hover:bg-green-700">
+                    社員情報インポート
                 </button>
             </div>
         </header>
@@ -2712,7 +2174,7 @@ export default function Home() {
                                   const startPosition = timeToPositionPercent(schedule.start);
                                   const endPosition = timeToPositionPercent(schedule.end);
                                   const barWidth = endPosition - startPosition;
-                                  const scheduleLayer = schedule.layer || 'adjustment';
+                                  const scheduleLayer = (schedule as any).layer || 'adjustment';
                                   const isContract = scheduleLayer === 'contract';
                                   
                                   return (

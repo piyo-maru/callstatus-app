@@ -1,0 +1,32 @@
+{
+  "employeeData": [
+    {
+      "empNo": "2001",
+      "name": "佐々木一郎",
+      "dept": "システム開発部",
+      "team": "基盤開発チーム", 
+      "email": "sasaki@example.com",
+      "mondayHours": "09:00-18:00",
+      "tuesdayHours": "09:00-18:00",
+      "wednesdayHours": "09:00-18:00",
+      "thursdayHours": "09:00-18:00",
+      "fridayHours": "09:00-18:00",
+      "saturdayHours": "",
+      "sundayHours": ""
+    },
+    {
+      "empNo": "2002", 
+      "name": "佐々木花子",
+      "dept": "人事部",
+      "team": "採用チーム",
+      "email": "sasaki2@example.com",
+      "mondayHours": "10:00-19:00",
+      "tuesdayHours": "10:00-19:00",
+      "wednesdayHours": "10:00-19:00", 
+      "thursdayHours": "10:00-19:00",
+      "fridayHours": "10:00-19:00",
+      "saturdayHours": "",
+      "sundayHours": ""
+    }
+  ]
+}
