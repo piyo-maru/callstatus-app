@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import SessionProvider from "../components/SessionProvider";
 
 export const metadata: Metadata = {
   title: "出社状況管理ボード",
@@ -19,7 +20,11 @@ export default function RootLayout({
       <head>
         <script src="/config.js"></script>
       </head>
-      <body>{children}</body>
+      <body>
+        <SessionProvider>
+          {children}
+        </SessionProvider>
+      </body>
     </html>
   );
 }

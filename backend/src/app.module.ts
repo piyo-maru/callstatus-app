@@ -6,10 +6,11 @@ import { DailyAssignmentsModule } from './daily-assignments/daily-assignments.mo
 import { CsvImportModule } from './csv-import/csv-import.module';
 import { ContractModule } from './contract/contract.module';
 import { ResponsibilitiesModule } from './responsibilities/responsibilities.module';
+import { AuthModule } from './auth/auth.module';
 import { PrismaModule } from './prisma.module';
 
 @Module({
-  imports: [SchedulesModule, StaffModule, AssignmentsModule, DailyAssignmentsModule, CsvImportModule, ContractModule, ResponsibilitiesModule, PrismaModule],
+  imports: [SchedulesModule, StaffModule, AssignmentsModule, DailyAssignmentsModule, CsvImportModule, ContractModule, ResponsibilitiesModule, AuthModule, PrismaModule],
   controllers: [],
   providers: [],
 })

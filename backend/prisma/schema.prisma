@@ -22,6 +22,7 @@ model Staff {
   schedules            Schedule[]
   temporaryAssignments TemporaryAssignment[]
   responsibilities     StaffResponsibility[]
+  user                 User?                 // 1:1関係でUserと紐付け
 }
 
 model Schedule {
@@ -124,4 +125,90 @@ model StaffResponsibility {
   staff           Staff    @relation(fields: [staffId], references: [id])
 
   @@unique([staffId, date])
+}
+
+// === 認証関連テーブル（NextAuth.js標準） ===
+
+// ユーザーアカウント
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  emailVerified DateTime?
+  password      String?   // bcryptハッシュ化パスワード
+  role          Role      @default(USER)
+  isActive      Boolean   @default(true)
+  lastLoginAt   DateTime?
+  staffId       Int?      @unique
+  staff         Staff?    @relation(fields: [staffId], references: [id])
+  
+  // NextAuth.js関連
+  accounts      Account[]
+  sessions      Session[]
+  auditLogs     AuditLog[]
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+// 外部プロバイダー情報（OAuth用、今回は基本未使用）
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+// セッション管理
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// メール認証トークン
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ユーザーロール
+enum Role {
+  USER      // 一般ユーザー：自分の予定のみ
+  ADMIN     // 管理者：全員分+インポート機能
+  READONLY  // 閲覧のみ
+}
+
+// 監査ログ
+model AuditLog {
+  id         String    @id @default(cuid())
+  userId     String?
+  user       User?     @relation(fields: [userId], references: [id])
+  action     String    // CREATE/UPDATE/DELETE/IMPORT/LOGIN/LOGOUT
+  resource   String    // SCHEDULE/STAFF/CSV_IMPORT/AUTH
+  resourceId String?   // 対象リソースのID
+  targetStaffId Int?   // 操作対象のスタッフID（権限チェック用）
+  oldData    Json?     // 変更前データ
+  newData    Json?     // 変更後データ
+  ipAddress  String?
+  userAgent  String?
+  timestamp  DateTime  @default(now())
+  
+  @@index([userId, timestamp])
+  @@index([action, resource])
 }
