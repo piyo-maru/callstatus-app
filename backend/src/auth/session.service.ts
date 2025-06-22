@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
+import { PrismaService } from '../prisma.service';
 import { JwtService } from '@nestjs/jwt';
 import * as crypto from 'crypto';
 

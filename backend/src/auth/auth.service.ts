@@ -36,7 +36,7 @@ export class AuthService {
     
     try {
       // ユーザー検索（Staff情報も含める）
-      const user = await this.prisma.user.findUnique({
+      const user = await this.prisma.userAuth.findUnique({
         where: { email },
         include: { 
           staff: true 
@@ -63,19 +63,19 @@ export class AuthService {
       }
 
       // 最終ログイン時刻を更新
-      await this.prisma.user.update({
+      await this.prisma.userAuth.update({
         where: { id: user.id },
         data: { lastLoginAt: new Date() }
       });
 
       // ログイン成功ログ
-      await this.createAuditLog(user.id, 'LOGIN', 'AUTH', null, null, null);
+      // await this.createAuditLog(user.id, 'LOGIN', 'AUTH', null, null, null);
 
       // JWTトークンを生成
       const payload = {
         sub: user.id,
         email: user.email,
-        role: user.role,
+        userType: user.userType,
         staffId: user.staffId
       };
       const token = this.jwtService.sign(payload);
@@ -114,7 +114,7 @@ export class AuthService {
 
     try {
       // ユーザー検索
-      const user = await this.prisma.user.findUnique({
+      const user = await this.prisma.userAuth.findUnique({
         where: { email },
         include: { staff: true }
       });
@@ -135,7 +135,7 @@ export class AuthService {
       const hashedPassword = await bcrypt.hash(password, 12);
 
       // パスワード設定
-      const updatedUser = await this.prisma.user.update({
+      const updatedUser = await this.prisma.userAuth.update({
         where: { id: user.id },
         data: { 
           password: hashedPassword,
@@ -145,13 +145,13 @@ export class AuthService {
       });
 
       // パスワード設定ログ
-      await this.createAuditLog(user.id, 'CREATE', 'AUTH', 'password', null, { action: 'password_set' });
+      // await this.createAuditLog(user.id, 'CREATE', 'AUTH', 'password', null, { action: 'password_set' });
 
       // JWTトークンを生成
       const payload = {
         sub: updatedUser.id,
         email: updatedUser.email,
-        role: updatedUser.role,
+        userType: updatedUser.userType,
         staffId: updatedUser.staffId
       };
       const token = this.jwtService.sign(payload);
@@ -191,7 +191,7 @@ export class AuthService {
 
     try {
       // ユーザー検索
-      const user = await this.prisma.user.findUnique({
+      const user = await this.prisma.userAuth.findUnique({
         where: { email }
       });
 
@@ -209,13 +209,13 @@ export class AuthService {
       const hashedNewPassword = await bcrypt.hash(newPassword, 12);
 
       // パスワード更新
-      await this.prisma.user.update({
+      await this.prisma.userAuth.update({
         where: { id: user.id },
         data: { password: hashedNewPassword }
       });
 
       // パスワード変更ログ
-      await this.createAuditLog(user.id, 'UPDATE', 'AUTH', 'password', null, { action: 'password_change' });
+      // await this.createAuditLog(user.id, 'UPDATE', 'AUTH', 'password', null, { action: 'password_change' });
 
       console.log(`Password changed for user: ${email}`);
       return { message: 'パスワードが正常に変更されました' };
@@ -236,7 +236,7 @@ export class AuthService {
    */
   async getUserByEmail(email: string) {
     try {
-      const user = await this.prisma.user.findUnique({
+      const user = await this.prisma.userAuth.findUnique({
         where: { email },
         include: { staff: true }
       });
@@ -277,8 +277,7 @@ export class AuthService {
           action,
           resource,
           resourceId,
-          oldData: oldData ? JSON.stringify(oldData) : null,
-          newData: newData ? JSON.stringify(newData) : null,
+          details: JSON.stringify({ oldData, newData }),
           timestamp: new Date()
         }
       });

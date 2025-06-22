@@ -1,8 +1,13 @@
-import { Controller, Post, Delete, Get, UseInterceptors, UploadedFile, BadRequestException, Body } from '@nestjs/common';
+import { Controller, Post, Delete, Get, UseInterceptors, UploadedFile, BadRequestException, Body, UseGuards } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { CsvImportService } from './csv-import.service';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { Role } from '@prisma/client';
 
 @Controller('api/csv-import')
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class CsvImportController {
   constructor(private readonly csvImportService: CsvImportService) {}
 
@@ -10,6 +15,7 @@ export class CsvImportController {
    * CSV月次スケジュールファイルのアップロード
    */
   @Post('schedules')
+  @Roles(Role.ADMIN)
   @UseInterceptors(FileInterceptor('file'))
   async importSchedules(@UploadedFile() file: Express.Multer.File) {
     console.log('=== CSV import endpoint called ===');
@@ -51,6 +57,7 @@ export class CsvImportController {
    * 指定したバッチIDのCSVインポートデータをロールバック
    */
   @Delete('rollback')
+  @Roles(Role.ADMIN)
   async rollbackCsvImport(@Body() body: { batchId: string }) {
     console.log('=== CSV rollback endpoint called ===');
     console.log('BatchID to rollback:', body.batchId);
@@ -76,6 +83,7 @@ export class CsvImportController {
    * CSVインポート履歴を取得
    */
   @Get('history')
+  @Roles(Role.ADMIN)
   async getCsvImportHistory() {
     console.log('=== CSV import history endpoint called ===');
     

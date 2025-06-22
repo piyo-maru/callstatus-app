@@ -31,7 +31,7 @@ export class StaffSimpleService {
           data: {
             empNo: emp.empNo,
             name: emp.name,
-            department: emp.dept,
+            department: emp.department,
             group: emp.team,
             isActive: true
           }
@@ -42,7 +42,7 @@ export class StaffSimpleService {
           data: {
             empNo: emp.empNo,
             name: emp.name,
-            dept: emp.dept,
+            department: emp.department,
             team: emp.team,
             email: emp.email || '',
             mondayHours: emp.mondayHours || null,

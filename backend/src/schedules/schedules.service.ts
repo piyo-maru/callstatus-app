@@ -41,8 +41,8 @@ export class SchedulesService {
       id: this.generateLayerBasedId(ls.layer, ls.id, index),
       staffId: ls.staffId,
       status: this.convertStatusFormat(ls.status),
-      start: this.utcToJstIsoString(ls.start),
-      end: this.utcToJstIsoString(ls.end),
+      start: this.utcToJstDecimal(ls.start),
+      end: this.utcToJstDecimal(ls.end),
       memo: ls.memo || null,
       editable: ls.layer === 'adjustment', // 調整レイヤーのみ編集可能
       layer: ls.layer // レイヤー情報を追加
@@ -62,16 +62,23 @@ export class SchedulesService {
     };
   }
 
-  async create(createScheduleDto: { staffId: number; status: string; start: string; end: string; memo?: string; }) {
-    const newSchedule = await this.prisma.schedule.create({
+  async create(createScheduleDto: { staffId: number; status: string; start: number; end: number; date: string; memo?: string; }) {
+    console.log('Creating adjustment schedule with data:', createScheduleDto);
+    
+    // 新しい予定はすべて調整レイヤー（Adjustment）に作成
+    const newSchedule = await this.prisma.adjustment.create({
       data: {
         staffId: createScheduleDto.staffId,
-        status: createScheduleDto.status,
-        start: new Date(createScheduleDto.start),
-        end: new Date(createScheduleDto.end),
+        status: createScheduleDto.status.toLowerCase(), // 小文字で保存
+        start: this.jstToUtc(createScheduleDto.start, createScheduleDto.date),
+        end: this.jstToUtc(createScheduleDto.end, createScheduleDto.date),
+        date: new Date(createScheduleDto.date),
+        reason: 'UI操作による手動調整',
         memo: createScheduleDto.memo || null
       },
     });
+    
+    console.log('Adjustment schedule created:', newSchedule);
     this.gateway.sendNewSchedule(newSchedule);
     return newSchedule;
   }
@@ -212,5 +219,45 @@ export class SchedulesService {
     const seconds = String(jstDate.getSeconds()).padStart(2, '0');
     
     return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}.000+09:00`;
+  }
+
+  /**
+   * UTC時刻を数値のJST時刻に変換（フロントエンド互換性のため）
+   */
+  private utcToJstDecimal(utcDate: Date): number {
+    // UTC時刻をJSTに変換（+9時間）
+    const jstDate = new Date(utcDate.getTime() + 9 * 60 * 60 * 1000);
+    
+    const hours = jstDate.getHours();
+    const minutes = jstDate.getMinutes();
+    
+    // 小数点時刻に変換（例: 14:30 = 14.5）
+    return hours + minutes / 60;
+  }
+
+  /**
+   * IDで単一スケジュールを取得
+   */
+  async findOne(id: number) {
+    try {
+      // まずAdjustmentテーブルから検索
+      const adjustment = await this.prisma.adjustment.findUnique({
+        where: { id }
+      });
+      
+      if (adjustment) {
+        return adjustment;
+      }
+      
+      // Adjustmentにない場合はScheduleテーブルから検索（旧データ用）
+      const schedule = await this.prisma.schedule.findUnique({
+        where: { id }
+      });
+      
+      return schedule;
+    } catch (error) {
+      console.error('Error finding schedule:', error);
+      throw new NotFoundException('スケジュールが見つかりません');
+    }
   }
 }

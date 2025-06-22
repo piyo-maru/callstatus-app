@@ -1,6 +1,6 @@
 import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { Role } from '@prisma/client';
+import { UserType } from '@prisma/client';
 
 export const ROLES_KEY = 'roles';
 
@@ -10,7 +10,7 @@ export class RolesGuard implements CanActivate {
 
   canActivate(context: ExecutionContext): boolean {
     // 必要なロールを取得
-    const requiredRoles = this.reflector.getAllAndOverride<Role[]>(ROLES_KEY, [
+    const requiredRoles = this.reflector.getAllAndOverride<UserType[]>(ROLES_KEY, [
       context.getHandler(),
       context.getClass(),
     ]);
@@ -27,7 +27,7 @@ export class RolesGuard implements CanActivate {
     }
 
     // ユーザーのロールが必要なロールに含まれているかチェック
-    const hasRole = requiredRoles.includes(user.role);
+    const hasRole = requiredRoles.includes(user.userType);
 
     if (!hasRole) {
       throw new ForbiddenException('この操作を実行する権限がありません');

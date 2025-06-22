@@ -1,8 +1,13 @@
-import { Controller, Get, Post, Body, Param, Delete, Patch, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Delete, Patch, UseInterceptors, UploadedFile, UseGuards } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { StaffService } from './staff.service';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { Role } from '@prisma/client';
 
 @Controller('api/staff')
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class StaffController {
   constructor(private readonly staffService: StaffService) {}
 
@@ -12,11 +17,13 @@ export class StaffController {
   }
 
   @Post()
+  @Roles(Role.ADMIN)
   create(@Body() createStaffDto: { name: string; department: string; group: string; }) {
     return this.staffService.create(createStaffDto);
   }
 
   @Post('bulk')
+  @Roles(Role.ADMIN)
   async createBulk(@Body() createBulkStaffDto: { staff: Array<{ name: string; department: string; group: string; }> }) {
     try {
       console.log('Creating bulk staff with data:', createBulkStaffDto);
@@ -30,16 +37,19 @@ export class StaffController {
   }
 
   @Patch(':id')
+  @Roles(Role.ADMIN)
   update(@Param('id') id: string, @Body() updateStaffDto: { name?: string; department?: string; group?: string; }) {
     return this.staffService.update(+id, updateStaffDto);
   }
 
   @Delete(':id')
+  @Roles(Role.ADMIN)
   remove(@Param('id') id: string) {
     return this.staffService.remove(+id);
   }
 
   @Post('sync-from-json-body')
+  @Roles(Role.ADMIN)
   async syncFromJsonBody(@Body() jsonData: any) {
     console.log('=== syncFromJsonBody endpoint called ===');
     try {
@@ -55,6 +65,7 @@ export class StaffController {
   }
 
   @Post('sync-from-json')
+  @Roles(Role.ADMIN)
   @UseInterceptors(FileInterceptor('file'))
   async syncFromJson(@UploadedFile() file: Express.Multer.File) {
     console.log('=== syncFromJson endpoint called ===');

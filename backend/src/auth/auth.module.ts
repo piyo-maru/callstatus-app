@@ -3,6 +3,8 @@ import { JwtModule } from '@nestjs/jwt';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { SimpleAuthService } from './simple-auth.service';
+import { RateLimitService } from './rate-limit.service';
+import { SessionService } from './session.service';
 // import { UnifiedAuthService } from './unified-auth.service'; // 一時的にコメントアウト
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { RolesGuard } from './roles.guard';
@@ -16,7 +18,23 @@ import { PrismaService } from '../prisma.service';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, SimpleAuthService, JwtAuthGuard, RolesGuard, PrismaService],
-  exports: [AuthService, SimpleAuthService, JwtAuthGuard, RolesGuard, JwtModule], // 他のモジュールで使用可能にする
+  providers: [
+    AuthService, 
+    SimpleAuthService, 
+    RateLimitService,
+    SessionService,
+    JwtAuthGuard, 
+    RolesGuard, 
+    PrismaService
+  ],
+  exports: [
+    AuthService, 
+    SimpleAuthService, 
+    RateLimitService,
+    SessionService,
+    JwtAuthGuard, 
+    RolesGuard, 
+    JwtModule
+  ],
 })
 export class AuthModule {}

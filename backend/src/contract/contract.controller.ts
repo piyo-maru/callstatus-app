@@ -1,10 +1,14 @@
-import { Controller, Post, Body, HttpException, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Body, HttpException, HttpStatus, UseGuards } from '@nestjs/common';
 import { ContractService } from './contract.service';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { Role } from '@prisma/client';
 
 export interface ContractData {
   empNo: string;
   name: string;
-  dept: string;
+  department: string;
   team: string;
   email: string;
   mondayHours?: string;
@@ -17,10 +21,12 @@ export interface ContractData {
 }
 
 @Controller('api/contracts')
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class ContractController {
   constructor(private readonly contractService: ContractService) {}
 
   @Post('import')
+  @Roles(Role.ADMIN)
   async importContracts(@Body() contractsData: ContractData[]) {
     try {
       const result = await this.contractService.importContracts(contractsData);
@@ -39,6 +45,7 @@ export class ContractController {
   }
 
   @Post('analyze-impact')
+  @Roles(Role.ADMIN)
   async analyzeReplaceImpact() {
     try {
       const result = await this.contractService.analyzeReplaceImpact();
@@ -56,6 +63,7 @@ export class ContractController {
   }
 
   @Post('replace')
+  @Roles(Role.ADMIN)
   async replaceContracts(
     @Body() body: { 
       data: ContractData[], 

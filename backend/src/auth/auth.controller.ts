@@ -3,7 +3,7 @@ import { AuthService, LoginDto, SetPasswordDto, ChangePasswordDto } from './auth
 import { SimpleAuthService } from './simple-auth.service';
 import { Public } from './decorators/public.decorator';
 
-@Controller('api/auth')
+@Controller('auth')
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
@@ -20,7 +20,7 @@ export class AuthController {
     
     try {
       const result = await this.authService.login(loginDto);
-      console.log('Login successful:', { email: loginDto.email, role: result.user.role });
+      console.log('Login successful:', { email: loginDto.email, userType: result.user.userType });
       return result;
     } catch (error) {
       console.error('Login failed:', { email: loginDto.email, error: error.message });
@@ -123,5 +123,24 @@ export class AuthController {
       console.error('Set password failed (simple):', { email: setPasswordDto.email, error: error.message });
       throw error;
     }
+  }
+
+  /**
+   * テスト用エンドポイント（認証システム動作確認用）
+   */
+  @Public()
+  @Get('test')
+  async test() {
+    return { 
+      message: '認証システム動作中',
+      timestamp: new Date().toISOString(),
+      endpoints: [
+        'POST /api/auth/login',
+        'POST /api/auth/set-password', 
+        'POST /api/auth/change-password',
+        'GET /api/auth/user-info',
+        'GET /api/auth/test'
+      ]
+    };
   }
 }

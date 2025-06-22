@@ -38,7 +38,7 @@ export class JwtAuthGuard implements CanActivate {
       });
 
       // ユーザー情報を取得
-      const user = await this.prisma.user.findUnique({
+      const user = await this.prisma.userAuth.findUnique({
         where: { id: payload.sub },
         include: { staff: true },
       });
@@ -51,7 +51,7 @@ export class JwtAuthGuard implements CanActivate {
       request.user = {
         id: user.id,
         email: user.email,
-        role: user.role,
+        role: user.userType,
         staffId: user.staffId,
         staff: user.staff,
       };

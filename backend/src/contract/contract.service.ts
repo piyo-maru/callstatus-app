@@ -42,7 +42,7 @@ export class ContractService {
             where: { empNo: contractData.empNo },
             data: {
               name: contractData.name,
-              dept: contractData.dept,
+              department: contractData.dept,
               team: contractData.team,
               email: contractData.email,
               mondayHours: contractData.mondayHours,
@@ -62,7 +62,7 @@ export class ContractService {
             data: {
               empNo: contractData.empNo,
               name: contractData.name,
-              dept: contractData.dept,
+              department: contractData.dept,
               team: contractData.team,
               email: contractData.email,
               mondayHours: contractData.mondayHours,
@@ -194,7 +194,7 @@ export class ContractService {
             data: {
               empNo: contractData.empNo,
               name: contractData.name,
-              dept: contractData.dept,
+              department: contractData.dept,
               team: contractData.team,
               email: contractData.email,
               mondayHours: contractData.mondayHours,

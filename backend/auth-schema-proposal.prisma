@@ -1,0 +1,105 @@
+// === 認証専用テーブル設計提案 ===
+
+// 統一認証テーブル
+model UserAuth {
+  id              String    @id @default(cuid())
+  email           String    @unique
+  password        String?   // bcryptハッシュ
+  userType        UserType  // 'ADMIN' | 'STAFF'
+  
+  // 認証情報
+  isActive        Boolean   @default(true)
+  emailVerified   DateTime?
+  lastLoginAt     DateTime?
+  passwordSetAt   DateTime?
+  loginAttempts   Int       @default(0)
+  lockedAt        DateTime?
+  
+  // 業務データとの関連
+  staffId         Int?      // Staffテーブルとの関連（NULLで管理者）
+  adminRole       AdminRole? // 管理者の詳細権限
+  
+  // 外部連携用
+  externalId      String?   // 他システムとの連携ID
+  metadata        Json?     // 拡張属性
+  
+  // 監査
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime? // 論理削除
+  
+  // リレーション
+  staff           Staff?    @relation(fields: [staffId], references: [id])
+  sessions        AuthSession[]
+  auditLogs       AuthAuditLog[]
+  
+  @@map("user_auth")
+}
+
+enum UserType {
+  ADMIN
+  STAFF
+}
+
+enum AdminRole {
+  SUPER_ADMIN     // 全権限
+  STAFF_ADMIN     // スタッフ管理のみ
+  SYSTEM_ADMIN    // システム設定のみ
+}
+
+// セッション管理（JWT補完用）
+model AuthSession {
+  id            String    @id @default(cuid())
+  userAuthId    String
+  token         String    @unique
+  refreshToken  String?   @unique
+  expiresAt     DateTime
+  ipAddress     String?
+  userAgent     String?
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  
+  userAuth      UserAuth  @relation(fields: [userAuthId], references: [id], onDelete: Cascade)
+  
+  @@map("auth_sessions")
+}
+
+// 認証監査ログ
+model AuthAuditLog {
+  id           String      @id @default(cuid())
+  userAuthId   String?     // NULL可（失敗時はユーザー不明）
+  action       AuthAction
+  email        String      // 試行されたメールアドレス
+  ipAddress    String?
+  userAgent    String?
+  success      Boolean
+  failureReason String?
+  timestamp    DateTime    @default(now())
+  
+  userAuth     UserAuth?   @relation(fields: [userAuthId], references: [id])
+  
+  @@map("auth_audit_logs")
+}
+
+enum AuthAction {
+  LOGIN_ATTEMPT
+  LOGIN_SUCCESS
+  LOGIN_FAILURE
+  PASSWORD_SET
+  PASSWORD_CHANGE
+  LOGOUT
+  TOKEN_REFRESH
+  ACCOUNT_LOCKED
+  ACCOUNT_UNLOCKED
+}
+
+// Staff テーブル（既存）への追加
+model Staff {
+  // ... 既存フィールド
+  
+  // 認証との関連
+  userAuth        UserAuth?             // 1:1関係
+  
+  // 論理削除時の猶予期間管理
+  authGracePeriod DateTime?             // 認証失効日時（削除から7日後）
+}

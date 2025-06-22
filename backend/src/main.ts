@@ -39,10 +39,10 @@ async function bootstrap() {
     console.error('Unhandled Rejection at:', promise, 'reason:', reason);
   });
 
-  // ★★★ 下の行をコメントアウトして、グローバルプレフィックスを無効化します ★★★
-  // app.setGlobalPrefix('api');
+  // APIプレフィックス設定（認証テスト用）
+  app.setGlobalPrefix('api');
 
-  // CORS設定を動的に適用
+  // CORS設定を動的に適用（元の仕様通り）
   const allowedOrigins = config.cors?.allowed_origins || 'http://localhost:3000';
   const origins = allowedOrigins.split(',').map((origin: string) => origin.trim());
   
