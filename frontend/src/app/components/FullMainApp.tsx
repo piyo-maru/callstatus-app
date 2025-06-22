@@ -376,7 +376,7 @@ const hoursToTimeString = (hours: number): string => {
 const generateTimeOptions = (startHour: number, endHour: number) => {
     const options = [];
     
-    // 8:00から15分刻みで追加
+    // 指定された開始時刻から15分刻みで追加
     for (let h = startHour; h < endHour; h++) {
         for (let m = 0; m < 60; m += 15) {
             const timeValue = h + m / 60;
@@ -389,14 +389,13 @@ const generateTimeOptions = (startHour: number, endHour: number) => {
 };
 
 // --- 登録・編集モーダル ---
-const ScheduleModal = ({ isOpen, onClose, staffList, onSave, scheduleToEdit, initialData, currentUser }: { 
+const ScheduleModal = ({ isOpen, onClose, staffList, onSave, scheduleToEdit, initialData }: { 
     isOpen: boolean; 
     onClose: () => void; 
     staffList: Staff[]; 
     onSave: (data: any) => void;
     scheduleToEdit: Schedule | null;
     initialData?: Partial<Schedule>;
-    currentUser?: any;
 }) => {
   const isEditMode = !!scheduleToEdit;
   const [staffId, setStaffId] = useState('');
@@ -407,13 +406,10 @@ const ScheduleModal = ({ isOpen, onClose, staffList, onSave, scheduleToEdit, ini
   const timeOptions = useMemo(() => generateTimeOptions(8, 21), []);
   const [isClient, setIsClient] = useState(false);
   
-  // 一般ユーザーの場合は自分のスタッフ情報のみに制限
+  // 一般ユーザーの場合は自分のスタッフ情報のみに制限（一時的に無効化）
   const filteredStaffList = useMemo(() => {
-    if (currentUser?.role === 'USER' && currentUser?.staffId) {
-      return staffList.filter(staff => staff.id === currentUser.staffId);
-    }
     return staffList;
-  }, [staffList, currentUser]);
+  }, [staffList]);
   
   useEffect(() => { setIsClient(true); }, []);
 
@@ -429,6 +425,21 @@ const ScheduleModal = ({ isOpen, onClose, staffList, onSave, scheduleToEdit, ini
         setStaffId(''); setStatus('Online'); setStartTime('8'); setEndTime('8.25'); setMemo('');
     }
   }, [scheduleToEdit, initialData, isOpen]);
+
+  // 開始時刻変更時に終了時刻を自動調整（新規作成時のみ）
+  useEffect(() => {
+    if (!isEditMode && startTime && parseFloat(startTime) > 0) {
+      const start = parseFloat(startTime);
+      let newEndTime = start + 1; // 1時間後
+      
+      // 21時を超える場合は21時に調整
+      if (newEndTime > 21) {
+        newEndTime = 21;
+      }
+      
+      setEndTime(newEndTime.toString());
+    }
+  }, [startTime, isEditMode]);
 
   if (!isOpen || !isClient) return null;
 
@@ -458,17 +469,10 @@ const ScheduleModal = ({ isOpen, onClose, staffList, onSave, scheduleToEdit, ini
         <div className="mt-4 space-y-4">
           <div>
             <label htmlFor="staff" className="block text-sm font-medium text-gray-700">スタッフ</label>
-            {currentUser?.role === 'USER' && filteredStaffList.length === 1 ? (
-              // 一般ユーザーで自分のスタッフのみの場合は選択不可の表示
-              <div className="mt-1 block w-full p-2 bg-gray-100 border border-gray-300 rounded-md text-gray-700">
-                {filteredStaffList[0].name}
-              </div>
-            ) : (
-              <select id="staff" value={staffId} onChange={e => setStaffId(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm" disabled={isEditMode || !!initialData?.staffId}>
-                <option value="" disabled>選択してください</option>
-                {filteredStaffList.map(staff => <option key={staff.id} value={staff.id}>{staff.name}</option>)}
-              </select>
-            )}
+            <select id="staff" value={staffId} onChange={e => setStaffId(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm" disabled={isEditMode}>
+              <option value="" disabled>選択してください</option>
+              {staffList.map(staff => <option key={staff.id} value={staff.id}>{staff.name}</option>)}
+            </select>
           </div>
           <div>
             <label htmlFor="status" className="block text-sm font-medium text-gray-700">ステータス</label>
@@ -1836,6 +1840,7 @@ export default function FullMainApp() {
   const [displayDate, setDisplayDate] = useState(new Date());
   const [dragInfo, setDragInfo] = useState<DragInfo | null>(null);
   const [draggedSchedule, setDraggedSchedule] = useState<Partial<Schedule> | null>(null);
+  const [dragOffset, setDragOffset] = useState<number>(0); // ゴーストエレメント位置調整用オフセット
   const [isJsonUploadModalOpen, setIsJsonUploadModalOpen] = useState(false);
   const [isCsvUploadModalOpen, setIsCsvUploadModalOpen] = useState(false);
   const [isAssignmentModalOpen, setIsAssignmentModalOpen] = useState(false);
@@ -1901,24 +1906,16 @@ export default function FullMainApp() {
       console.log('Fetching data for date:', dateString);
       console.log('API URL:', currentApiUrl);
       
-      // スケジュール、支援状況、担当設定を並列で取得
-      const [scheduleRes, supportRes, responsibilityRes] = await Promise.all([
-        authenticatedFetch(`${currentApiUrl}/api/schedules/layered?date=${dateString}`),
-        authenticatedFetch(`${currentApiUrl}/api/assignments/status`),
-        authenticatedFetch(`${currentApiUrl}/api/responsibilities/status?date=${dateString}`)
-      ]);
+      // スタッフとスケジュールデータを取得
+      const scheduleRes = await fetch(`${currentApiUrl}/api/schedules?date=${dateString}`);
       
       console.log('Schedule API response status:', scheduleRes.status);
-      console.log('Support API response status:', supportRes.status);
-      console.log('Responsibility API response status:', responsibilityRes.status);
       
       if (!scheduleRes.ok) throw new Error(`Schedule API response was not ok`);
-      if (!supportRes.ok) throw new Error(`Support API response was not ok`);
-      if (!responsibilityRes.ok) throw new Error(`Responsibility API response was not ok`);
       
       const scheduleData: { staff: Staff[], schedules: ScheduleFromDB[] } = await scheduleRes.json();
-      const supportData = await supportRes.json();
-      const responsibilityData = await responsibilityRes.json();
+      const supportData = { assignments: [] };
+      const responsibilityData = { responsibilities: [] };
       
       console.log('Schedule data received:', scheduleData);
       console.log('Support data received:', supportData);
@@ -1972,14 +1969,14 @@ export default function FullMainApp() {
       
       setStaffList(staffWithSupportAndResponsibility);
       
-      // バックエンドからISO文字列で返されるスケジュールを数値時刻に変換
+      // バックエンドからJST小数点時刻で返されるスケジュールをそのまま使用
       console.log('Raw schedules from backend:', scheduleData.schedules);
       const convertedSchedules: Schedule[] = scheduleData.schedules.map(s => ({
         id: s.id,
         staffId: s.staffId,
         status: s.status,
-        start: timeStringToHours(s.start),
-        end: timeStringToHours(s.end),
+        start: typeof s.start === 'number' ? s.start : timeStringToHours(s.start),
+        end: typeof s.end === 'number' ? s.end : timeStringToHours(s.end),
         memo: s.memo,
         layer: s.layer  // layer情報を保持
       }));
@@ -2158,14 +2155,20 @@ export default function FullMainApp() {
       let response;
       if (scheduleData.id) {
         console.log('PATCH request to:', `${currentApiUrl}/api/schedules/${scheduleData.id}`);
-        response = await authenticatedFetch(`${currentApiUrl}/api/schedules/${scheduleData.id}`, { 
-          method: 'PATCH', 
+        response = await fetch(`${currentApiUrl}/api/schedules/${scheduleData.id}`, { 
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
           body: JSON.stringify(payload) 
         });
       } else {
         console.log('POST request to:', `${currentApiUrl}/api/schedules`);
-        response = await authenticatedFetch(`${currentApiUrl}/api/schedules`, { 
-          method: 'POST', 
+        response = await fetch(`${currentApiUrl}/api/schedules`, { 
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
           body: JSON.stringify(payload) 
         });
       }
@@ -2200,6 +2203,9 @@ export default function FullMainApp() {
     const currentApiUrl = getApiUrl();
     try {
       await authenticatedFetch(`${currentApiUrl}/api/schedules/${id}`, { method: 'DELETE' });
+      console.log('Schedule deleted successfully, fetching updated data...');
+      // データを再取得してUIを更新
+      await fetchData(displayDate);
     } catch (error) { console.error('予定の削除に失敗しました', error); }
     setDeletingScheduleId(null);
   };
@@ -2361,62 +2367,11 @@ export default function FullMainApp() {
     staffId: number;
     responsibilities: ResponsibilityData;
   }) => {
-    const currentApiUrl = getApiUrl();
-    // JST基準で正しい日付文字列を生成
-    const year = displayDate.getFullYear();
-    const month = String(displayDate.getMonth() + 1).padStart(2, '0');
-    const day = String(displayDate.getDate()).padStart(2, '0');
-    const today = `${year}-${month}-${day}`;
-    
-    try {
-      console.log('=== 担当設定保存開始 ===');
-      console.log('送信データ:', data);
-      console.log('対象日:', today);
-      
-      const response = await authenticatedFetch(`${currentApiUrl}/api/responsibilities`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          staffId: data.staffId,
-          date: today,
-          responsibilities: data.responsibilities
-        })
-      });
-
-      console.log('レスポンス status:', response.status);
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('=== 担当設定エラー詳細 ===');
-        console.error('Status:', response.status);
-        console.error('StatusText:', response.statusText);
-        console.error('ErrorText:', errorText);
-        
-        let errorMessage = `担当設定の保存に失敗しました (${response.status})`;
-        if (errorText) {
-          try {
-            const errorJson = JSON.parse(errorText);
-            errorMessage += `\nエラー: ${errorJson.message || errorText}`;
-          } catch {
-            errorMessage += `\nエラー: ${errorText}`;
-          }
-        }
-        throw new Error(errorMessage);
-      }
-
-      const result = await response.json();
-      console.log('=== 担当設定保存成功 ===');
-      console.log('結果:', result);
-      
-      // データを再取得してUIを更新
-      await fetchData(displayDate);
-      setIsResponsibilityModalOpen(false);
-      setSelectedStaffForResponsibility(null);
-    } catch (error) {
-      console.error('=== 担当設定の保存に失敗 ===');
-      console.error('エラー詳細:', error);
-      alert('担当設定の保存に失敗しました。再度お試しください。\n詳細: ' + (error instanceof Error ? error.message : String(error)));
-    }
+    console.log('責任管理機能は現在無効化されています');
+    alert('責任管理機能は現在無効化されています。今後のアップデートをお待ちください。');
+    setIsResponsibilityModalOpen(false);
+    setSelectedStaffForResponsibility(null);
+    return;
   };
 
   const handleJsonUpload = async (file: File) => {
@@ -2853,7 +2808,7 @@ export default function FullMainApp() {
   return (
     <Fragment>
       <AuthHeader />
-      <ScheduleModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} staffList={staffList as Staff[]} onSave={handleSaveSchedule} scheduleToEdit={editingSchedule} initialData={draggedSchedule || undefined} currentUser={user} />
+      <ScheduleModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} staffList={staffList as Staff[]} onSave={handleSaveSchedule} scheduleToEdit={editingSchedule} initialData={draggedSchedule || undefined} />
       <ConfirmationModal isOpen={deletingScheduleId !== null} onClose={() => setDeletingScheduleId(null)} onConfirm={() => { if (deletingScheduleId) handleDeleteSchedule(deletingScheduleId); }} message="この予定を削除しますか？" />
       <JsonUploadModal isOpen={isJsonUploadModalOpen} onClose={() => setIsJsonUploadModalOpen(false)} onUpload={handleJsonUpload} />
       <CsvUploadModal isOpen={isCsvUploadModalOpen} onClose={() => setIsCsvUploadModalOpen(false)} onUpload={handleCsvUpload} />
@@ -3113,16 +3068,35 @@ export default function FullMainApp() {
                                      const scheduleData = e.dataTransfer.getData('application/json');
                                      if (scheduleData && draggedSchedule && draggedSchedule.start !== undefined && draggedSchedule.end !== undefined && draggedSchedule.id !== undefined) {
                                        const rect = e.currentTarget.getBoundingClientRect();
-                                       const dropX = e.clientX - rect.left;
-                                       const dropPercent = (dropX / rect.width) * 100;
-                                       const newStartTime = positionPercentToTime(dropPercent);
-                                       const duration = draggedSchedule.end - draggedSchedule.start;
-                                       const snappedStart = Math.round(newStartTime * 4) / 4;
-                                       const snappedEnd = snappedStart + duration;
                                        
-                                       if (snappedStart >= 8 && snappedEnd <= 21) {
+                                       // ゴーストエレメントの左端位置を計算（マウスポインタ位置からオフセットを引く）
+                                       const ghostLeftX = e.clientX - rect.left - dragOffset;
+                                       
+                                       // 13時間分（8:00-21:00）を52マス（15分×4マス/時間）に分割
+                                       const TIMELINE_HOURS = 13; // 21 - 8
+                                       const QUARTERS_PER_HOUR = 4;
+                                       const TOTAL_QUARTERS = TIMELINE_HOURS * QUARTERS_PER_HOUR; // 52マス
+                                       
+                                       // ゴースト左端位置を15分単位のマス数に変換
+                                       const quarterPosition = (ghostLeftX / rect.width) * TOTAL_QUARTERS;
+                                       const snappedQuarter = Math.round(quarterPosition); // 最近傍の15分単位にスナップ
+                                       
+                                       // マス数を時刻に変換
+                                       const newStartTime = 8 + (snappedQuarter / QUARTERS_PER_HOUR);
+                                       const duration = draggedSchedule.end - draggedSchedule.start;
+                                       const snappedEnd = newStartTime + duration;
+                                       
+                                       console.log('=== ドラッグ移動デバッグ（ゴーストエレメント位置対応版） ===');
+                                       console.log('マウス位置:', e.clientX - rect.left, 'ドラッグオフセット:', dragOffset);
+                                       console.log('ゴースト左端位置:', ghostLeftX, 'タイムライン幅:', rect.width);
+                                       console.log('quarterPosition:', quarterPosition, 'snappedQuarter:', snappedQuarter);
+                                       console.log('newStartTime:', newStartTime, 'duration:', duration);
+                                       console.log('元の時刻:', draggedSchedule.start, '-', draggedSchedule.end);
+                                       console.log('新しい時刻:', newStartTime, '-', snappedEnd);
+                                       
+                                       if (newStartTime >= 8 && snappedEnd <= 21) {
                                          // スケジュール移動のAPI呼び出し
-                                         handleMoveSchedule(draggedSchedule.id, staff.id, snappedStart, snappedEnd);
+                                         handleMoveSchedule(draggedSchedule.id, staff.id, newStartTime, snappedEnd);
                                        }
                                      }
                                    }}>
@@ -3181,14 +3155,23 @@ export default function FullMainApp() {
                                              e.preventDefault();
                                              return;
                                            }
+                                           
                                            // ドラッグ開始時に選択状態をクリア
                                            setSelectedSchedule(null);
                                            setDraggedSchedule(schedule);
+                                           
+                                           // ゴーストエレメント位置調整用オフセットを計算
+                                           const scheduleElement = e.currentTarget as HTMLElement;
+                                           const scheduleRect = scheduleElement.getBoundingClientRect();
+                                           const mouseOffsetX = e.clientX - scheduleRect.left;
+                                           setDragOffset(mouseOffsetX);
+                                           
                                            e.dataTransfer.setData('application/json', JSON.stringify(schedule));
                                            e.dataTransfer.effectAllowed = 'move';
                                          }}
                                          onDragEnd={() => {
                                            setDraggedSchedule(null);
+                                           setDragOffset(0);
                                          }}
                                          title={`${schedule.status}${schedule.memo ? ': ' + schedule.memo : ''} (${isContract ? 'レイヤー1:契約' : 'レイヤー2:調整'})`}>
                                       <span className="truncate">

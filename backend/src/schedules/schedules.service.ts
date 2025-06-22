@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, Inject, forwardRef } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { SchedulesGateway } from './schedules.gateway';
-import { LayerManagerService } from '../layer-manager/layer-manager.service';
+// import { LayerManagerService } from '../layer-manager/layer-manager.service'; // 一時的に無効化
 
 @Injectable()
 export class SchedulesService {
@@ -9,20 +9,19 @@ export class SchedulesService {
     private prisma: PrismaService,
     @Inject(forwardRef(() => SchedulesGateway))
     private readonly gateway: SchedulesGateway,
-    private layerManager: LayerManagerService,
+    // private layerManager: LayerManagerService, // 一時的に無効化
   ) {}
 
   // JST入力値を内部UTC時刻に変換（厳格ルール準拠）
   private jstToUtc(decimalHour: number, baseDateString: string): Date {
-    const baseDate = new Date(baseDateString);
     const hours = Math.floor(decimalHour);
     const minutes = Math.round((decimalHour % 1) * 60);
     
-    // JST時刻をUTCに変換（-9時間）
-    // 入力: JST 14:00 → 出力: UTC 05:00
-    const jstDate = new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate(), hours, minutes, 0, 0);
-    const utcDate = new Date(jstDate.getTime() - 9 * 60 * 60 * 1000);
-    return utcDate;
+    // JST時刻文字列を構築（ISO-8601形式、+09:00タイムゾーン付き）
+    const jstIsoString = `${baseDateString}T${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:00+09:00`;
+    
+    // JST時刻文字列からDateオブジェクトを作成（内部的にUTCで保存される）
+    return new Date(jstIsoString);
   };
 
   async findAll(dateString: string) {
@@ -32,25 +31,50 @@ export class SchedulesService {
     const staff = await this.prisma.staff.findMany();
     console.log(`Found ${staff.length} staff members`);
 
-    // 3層構造のスケジュールを取得
-    const layeredSchedules = await this.layerManager.getLayeredSchedules(dateString);
-    console.log(`Found ${layeredSchedules.length} layered schedules`);
+    // 一時的にScheduleテーブルから直接取得（LayerManagerService無効化のため）
+    // JST日付範囲をUTC時刻で表現（厳格ルール準拠）
+    const startOfDayUtc = new Date(`${dateString}T00:00:00+09:00`); // JST 00:00 = UTC前日15:00
+    const endOfDayUtc = new Date(`${dateString}T23:59:59+09:00`);   // JST 23:59 = UTC当日14:59
+    
+    console.log(`Date range for query:`, {
+      dateString,
+      startOfDayUtc: startOfDayUtc.toISOString(),
+      endOfDayUtc: endOfDayUtc.toISOString()
+    });
+    
+    const schedules = await this.prisma.schedule.findMany({
+      where: {
+        start: {
+          gte: startOfDayUtc,
+          lt: endOfDayUtc
+        }
+      }
+    });
+    
+    console.log(`Found ${schedules.length} schedules from Schedule table`);
+    if (schedules.length > 0) {
+      console.log('First schedule:', {
+        id: schedules[0].id,
+        start: schedules[0].start.toISOString(),
+        end: schedules[0].end.toISOString()
+      });
+    }
 
-    // LayeredScheduleを従来のSchedule形式に変換
-    const schedules = layeredSchedules.map((ls, index) => ({
-      id: this.generateLayerBasedId(ls.layer, ls.id, index),
-      staffId: ls.staffId,
-      status: this.convertStatusFormat(ls.status),
-      start: this.utcToJstDecimal(ls.start),
-      end: this.utcToJstDecimal(ls.end),
-      memo: ls.memo || null,
-      editable: ls.layer === 'adjustment', // 調整レイヤーのみ編集可能
-      layer: ls.layer // レイヤー情報を追加
+    // Schedule形式に変換
+    const convertedSchedules = schedules.map(s => ({
+      id: s.id,
+      staffId: s.staffId,
+      status: this.convertStatusFormat(s.status),
+      start: this.utcToJstDecimal(s.start),
+      end: this.utcToJstDecimal(s.end),
+      memo: s.memo || null,
+      editable: true, // 従来のScheduleテーブルは編集可能
+      layer: 'adjustment' // デフォルトで調整レイヤー扱い
     }));
 
-    console.log(`Converted to ${schedules.length} schedule records`);
+    console.log(`Converted to ${convertedSchedules.length} schedule records`);
     return { 
-      schedules,
+      schedules: convertedSchedules,
       staff: staff.map(s => ({
         id: s.id,
         empNo: s.empNo,
@@ -63,24 +87,42 @@ export class SchedulesService {
   }
 
   async create(createScheduleDto: { staffId: number; status: string; start: number; end: number; date: string; memo?: string; }) {
-    console.log('Creating adjustment schedule with data:', createScheduleDto);
+    console.log('Creating schedule with data:', createScheduleDto);
     
-    // 新しい予定はすべて調整レイヤー（Adjustment）に作成
-    const newSchedule = await this.prisma.adjustment.create({
+    // 時刻変換のデバッグログ（厳格ルール準拠）
+    const startUtc = this.jstToUtc(createScheduleDto.start, createScheduleDto.date);
+    const endUtc = this.jstToUtc(createScheduleDto.end, createScheduleDto.date);
+    console.log(`JST時刻 ${createScheduleDto.start} → UTC時刻 ${startUtc.toISOString()}`);
+    console.log(`JST時刻 ${createScheduleDto.end} → UTC時刻 ${endUtc.toISOString()}`);
+    
+    // 一時的にScheduleテーブルを使用（本来はAdjustmentテーブルに保存すべき）
+    const newSchedule = await this.prisma.schedule.create({
       data: {
         staffId: createScheduleDto.staffId,
         status: createScheduleDto.status.toLowerCase(), // 小文字で保存
-        start: this.jstToUtc(createScheduleDto.start, createScheduleDto.date),
-        end: this.jstToUtc(createScheduleDto.end, createScheduleDto.date),
-        date: new Date(createScheduleDto.date),
-        reason: 'UI操作による手動調整',
+        start: startUtc,
+        end: endUtc,
         memo: createScheduleDto.memo || null
       },
     });
     
-    console.log('Adjustment schedule created:', newSchedule);
+    console.log('Schedule created with UTC times:', {
+      id: newSchedule.id,
+      start: newSchedule.start.toISOString(),
+      end: newSchedule.end.toISOString()
+    });
+    
+    // フロントエンド互換性のためJST小数点時刻に変換してレスポンス
+    const response = {
+      ...newSchedule,
+      start: this.utcToJstDecimal(newSchedule.start),
+      end: this.utcToJstDecimal(newSchedule.end),
+      editable: true,
+      layer: 'adjustment'
+    };
+    
     this.gateway.sendNewSchedule(newSchedule);
-    return newSchedule;
+    return response;
   }
 
   async update(id: number, updateScheduleDto: { status?: string; start?: number; end?: number; date: string; memo?: string; }) {
@@ -95,19 +137,29 @@ export class SchedulesService {
 
 
   private async updateAdjustmentSchedule(id: number, updateScheduleDto: { status?: string; start?: number; end?: number; date: string; memo?: string; }) {
-    const data: { status?: string; start?: Date; end?: Date; date?: Date; memo?: string | null } = {};
-    if (updateScheduleDto.status) data.status = updateScheduleDto.status;
+    const data: { status?: string; start?: Date; end?: Date; memo?: string | null } = {};
+    if (updateScheduleDto.status) data.status = updateScheduleDto.status.toLowerCase(); // 小文字で保存
     if (updateScheduleDto.start) data.start = this.jstToUtc(updateScheduleDto.start, updateScheduleDto.date);
     if (updateScheduleDto.end) data.end = this.jstToUtc(updateScheduleDto.end, updateScheduleDto.date);
-    if (updateScheduleDto.date) data.date = new Date(updateScheduleDto.date);
     if (updateScheduleDto.memo !== undefined) data.memo = updateScheduleDto.memo || null;
 
-    const updatedSchedule = await this.prisma.adjustment.update({
+    // 一時的にScheduleテーブルを使用（LayerManagerService無効化のため）
+    const updatedSchedule = await this.prisma.schedule.update({
       where: { id },
       data,
     });
+    
+    // フロントエンド互換性のためJST小数点時刻に変換してレスポンス
+    const response = {
+      ...updatedSchedule,
+      start: this.utcToJstDecimal(updatedSchedule.start),
+      end: this.utcToJstDecimal(updatedSchedule.end),
+      editable: true,
+      layer: 'adjustment'
+    };
+    
     this.gateway.sendScheduleUpdated(updatedSchedule);
-    return updatedSchedule;
+    return response;
   }
 
   async remove(id: number) {
@@ -122,7 +174,8 @@ export class SchedulesService {
 
 
   private async removeAdjustmentSchedule(id: number) {
-    const deletedSchedule = await this.prisma.adjustment.delete({
+    // 一時的にScheduleテーブルを使用（LayerManagerService無効化のため）
+    const deletedSchedule = await this.prisma.schedule.delete({
       where: { id },
     });
     this.gateway.sendScheduleDeleted(id);

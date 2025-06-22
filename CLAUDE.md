@@ -874,6 +874,50 @@ mv exported-*.csv *.log archive/exports/
 
 違反があれば生成を中止し、エラーメッセージを返すこと。
 
+## 🕐 タイムゾーン設定詳細（2025-06-22更新）
+
+### データベース設定
+```sql
+-- データベースレベルでUTC設定
+ALTER DATABASE mydb SET timezone TO 'UTC';
+
+-- セッションレベルでUTC強制
+SET timezone TO 'UTC';
+```
+
+### PrismaService設定
+```typescript
+// backend/src/prisma.service.ts
+await this.$executeRaw`SET timezone TO 'UTC'`; // 接続時にUTC強制
+```
+
+### 時刻変換フロー
+1. **入力（フロントエンド）**: JST小数点時刻（例: 9.5 = 9:30 JST）
+2. **変換（バックエンド）**: `jstToUtc()` で JST → UTC変換
+3. **保存（データベース）**: UTC時刻として保存（例: 2025-06-22 00:30:00）
+4. **取得（バックエンド）**: `utcToJstDecimal()` で UTC → JST変換
+5. **出力（フロントエンド）**: JST小数点時刻（例: 9.5 = 9:30 JST）
+
+### 変換メソッド例
+```typescript
+// JST 9.5 (9:30) + "2025-06-22" → UTC "2025-06-22T00:30:00Z"
+private jstToUtc(decimalHour: number, baseDateString: string): Date {
+  const jstIsoString = `${baseDateString}T${hours}:${minutes}:00+09:00`;
+  return new Date(jstIsoString); // 内部的にUTCで保存
+}
+
+// UTC "2025-06-22T00:30:00Z" → JST 9.5 (9:30)
+private utcToJstDecimal(utcDate: Date): number {
+  const jstDate = new Date(utcDate.getTime() + 9 * 60 * 60 * 1000);
+  return jstDate.getHours() + jstDate.getMinutes() / 60;
+}
+```
+
+### トラブルシューティング
+- **症状**: 予定が9時間ずれて表示される
+- **原因**: データベースタイムゾーンがAsia/Tokyo設定
+- **解決**: 上記設定でUTCに統一
+
 # 重要な指示リマインダー
 求められたことを行う。それ以上でも以下でもない。
 目標達成に絶対必要でない限り、ファイルを作成しない。
