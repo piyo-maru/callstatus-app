@@ -1,4 +1,5 @@
 import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma.service';
 import * as bcrypt from 'bcryptjs';
 
@@ -22,7 +23,10 @@ export interface ChangePasswordDto {
 
 @Injectable()
 export class AuthService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private jwtService: JwtService
+  ) {}
 
   /**
    * ユーザーログイン認証
@@ -67,9 +71,21 @@ export class AuthService {
       // ログイン成功ログ
       await this.createAuditLog(user.id, 'LOGIN', 'AUTH', null, null, null);
 
-      // パスワードを除いたユーザー情報を返す
+      // JWTトークンを生成
+      const payload = {
+        sub: user.id,
+        email: user.email,
+        role: user.role,
+        staffId: user.staffId
+      };
+      const token = this.jwtService.sign(payload);
+
+      // パスワードを除いたユーザー情報とトークンを返す
       const { password: _, ...userWithoutPassword } = user;
-      return userWithoutPassword;
+      return {
+        token,
+        user: userWithoutPassword
+      };
 
     } catch (error) {
       console.error('Login error:', error);
@@ -119,19 +135,34 @@ export class AuthService {
       const hashedPassword = await bcrypt.hash(password, 12);
 
       // パスワード設定
-      await this.prisma.user.update({
+      const updatedUser = await this.prisma.user.update({
         where: { id: user.id },
         data: { 
           password: hashedPassword,
           emailVerified: new Date() // メール認証済みとする
-        }
+        },
+        include: { staff: true }
       });
 
       // パスワード設定ログ
       await this.createAuditLog(user.id, 'CREATE', 'AUTH', 'password', null, { action: 'password_set' });
 
+      // JWTトークンを生成
+      const payload = {
+        sub: updatedUser.id,
+        email: updatedUser.email,
+        role: updatedUser.role,
+        staffId: updatedUser.staffId
+      };
+      const token = this.jwtService.sign(payload);
+
+      // パスワードを除いたユーザー情報とトークンを返す
+      const { password: _, ...userWithoutPassword } = updatedUser;
       console.log(`Password set for user: ${email}`);
-      return { message: 'パスワードが正常に設定されました' };
+      return {
+        token,
+        user: userWithoutPassword
+      };
 
     } catch (error) {
       console.error('Set password error:', error);
@@ -216,6 +247,7 @@ export class AuthService {
 
       return {
         email: user.email,
+        name: user.staff?.name || user.email.split('@')[0], // Staffの名前、なければメールアドレスのローカル部分
         hasPassword: !!user.password,
         isActive: user.isActive,
         staff: user.staff

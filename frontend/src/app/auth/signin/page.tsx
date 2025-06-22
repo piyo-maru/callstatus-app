@@ -1,52 +1,21 @@
 'use client';
 
 import { useState } from 'react';
-import { signIn, getSession } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useAuth } from '../../components/AuthProvider';
+import LoadingSpinner from '../../components/LoadingSpinner';
 
 export default function SignInPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const [needsPassword, setNeedsPassword] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   
   const router = useRouter();
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get('callbackUrl') || '/';
-
-  const handleEmailCheck = async () => {
-    if (!email) {
-      setError('メールアドレスを入力してください');
-      return;
-    }
-
-    setIsLoading(true);
-    setError('');
-
-    try {
-      // バックエンドでユーザー情報確認
-      const response = await fetch(`${getApiHost()}/api/auth/user?email=${encodeURIComponent(email)}`);
-      
-      if (!response.ok) {
-        throw new Error('ユーザーが見つかりません');
-      }
-
-      const userData = await response.json();
-      
-      if (!userData.hasPassword) {
-        // パスワード未設定の場合は設定ページに遷移
-        router.push(`/auth/set-password?email=${encodeURIComponent(email)}`);
-      } else {
-        // パスワード設定済みの場合はパスワード入力欄を表示
-        setNeedsPassword(true);
-      }
-    } catch (error) {
-      setError('ユーザーの確認に失敗しました');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const { loginWithCredentials, setTransitioning } = useAuth();
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,133 +29,110 @@ export default function SignInPage() {
     setError('');
 
     try {
-      const result = await signIn('credentials', {
-        email,
-        password,
-        redirect: false,
-      });
-
-      if (result?.error) {
-        setError('ログインに失敗しました。メールアドレスとパスワードを確認してください。');
-        return;
-      }
-
-      if (result?.ok) {
-        // セッション情報を更新
-        await getSession();
-        router.push(callbackUrl);
-      }
-    } catch (error) {
-      setError('ログイン処理中にエラーが発生しました');
+      // 新しい認証システムでログイン
+      await loginWithCredentials(email, password);
+      
+      // ログイン成功時は遷移ローディングを表示
+      setTransitioning(true);
+      
+      // メイン画面にリダイレクト
+      router.push(callbackUrl);
+      
+    } catch (error: any) {
+      console.error('ログインエラー:', error);
+      setError(error.message || 'ログイン処理中にエラーが発生しました');
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            コールステータスシステム
-          </h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
-            ログインしてください
-          </p>
+    <div className="min-h-screen flex items-center justify-center" style={{backgroundColor: '#f5f5f5'}}>
+      <div className="w-full max-w-sm">
+        {/* Header */}
+        <div className="text-white text-center py-4 mb-0" style={{backgroundColor: '#1F2937'}}>
+          <h1 className="text-lg font-medium">出社状況管理ボード</h1>
         </div>
-
-        <div className="mt-8 space-y-6">
+        
+        {/* Login Form */}
+        <div className="bg-white p-8 shadow-lg">
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded relative">
+            <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded text-sm mb-4">
               {error}
             </div>
           )}
 
-          {!needsPassword ? (
-            // メール入力フェーズ
+          <form onSubmit={handleSignIn} className="space-y-6">
             <div>
-              <label htmlFor="email" className="sr-only">
-                メールアドレス
-              </label>
               <input
-                id="email"
-                name="email"
                 type="email"
-                autoComplete="email"
-                required
-                className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                placeholder="メールアドレス"
+                placeholder="e-mail"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleEmailCheck()}
+                required
+                className="w-full px-0 py-3 border-0 border-b-2 border-gray-300 bg-transparent text-gray-700 placeholder-gray-400 focus:outline-none focus:border-teal-500 transition-colors"
               />
-              
+            </div>
+
+            <div className="relative">
+              <input
+                type={showPassword ? "text" : "password"}
+                placeholder="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                className="w-full px-0 py-3 border-0 border-b-2 border-gray-300 bg-transparent text-gray-700 placeholder-gray-400 focus:outline-none focus:border-teal-500 transition-colors"
+              />
               <button
                 type="button"
-                onClick={handleEmailCheck}
-                disabled={isLoading}
-                className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 mt-4"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-0 top-3 text-gray-400 hover:text-gray-600"
               >
-                {isLoading ? '確認中...' : '次へ'}
+                {showPassword ? (
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" />
+                  </svg>
+                ) : (
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                  </svg>
+                )}
               </button>
             </div>
-          ) : (
-            // パスワード入力フェーズ
-            <form className="space-y-4" onSubmit={handleSignIn}>
-              <div>
-                <label htmlFor="email-display" className="block text-sm font-medium text-gray-700">
-                  メールアドレス
-                </label>
-                <input
-                  id="email-display"
-                  type="email"
-                  value={email}
-                  disabled
-                  className="mt-1 appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 bg-gray-50 text-gray-500 sm:text-sm"
-                />
-                <button
-                  type="button"
-                  onClick={() => {setNeedsPassword(false); setPassword(''); setError('');}}
-                  className="mt-1 text-sm text-indigo-600 hover:text-indigo-500"
-                >
-                  メールアドレスを変更
-                </button>
-              </div>
 
-              <div>
-                <label htmlFor="password" className="sr-only">
-                  パスワード
-                </label>
-                <input
-                  id="password"
-                  name="password"
-                  type="password"
-                  autoComplete="current-password"
-                  required
-                  className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                  placeholder="パスワード"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-              </div>
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="w-full bg-teal-500 hover:bg-teal-600 text-white font-medium py-3 px-4 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isLoading ? 'ログイン中...' : 'Login'}
+            </button>
 
+            <div className="flex justify-between text-sm">
               <button
-                type="submit"
-                disabled={isLoading}
-                className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+                type="button"
+                onClick={() => router.push('/auth/request-initial-setup')}
+                className="text-teal-500 hover:text-teal-600"
               >
-                {isLoading ? 'ログイン中...' : 'ログイン'}
+                はじめての方はこちら
               </button>
-            </form>
-          )}
+              <button
+                type="button"
+                onClick={() => router.push('/auth/forgot-password')}
+                className="text-teal-500 hover:text-teal-600"
+              >
+                パスワードを忘れた場合はこちら
+              </button>
+            </div>
+          </form>
 
-          <div className="text-center">
-            <p className="text-sm text-gray-600">
-              テストアカウント：
-              <br />
-              管理者: admin@example.com
-              <br />
-              一般ユーザー: user@example.com
+          <div className="mt-6 pt-4 border-t border-gray-200">
+            <p className="text-xs text-gray-500 text-center">
+              テストアカウント<br />
+              管理者: admin@example.com<br />
+              一般ユーザー: tanaka@example.com<br />
+              新規ユーザー: test-new-user@example.com
             </p>
           </div>
         </div>
@@ -195,14 +141,4 @@ export default function SignInPage() {
   );
 }
 
-function getApiHost(): string {
-  if (typeof window === 'undefined') {
-    return process.env.NEXTAUTH_BACKEND_URL || 'http://localhost:3002';
-  }
-  
-  const currentHost = window.location.hostname;
-  if (currentHost === '10.99.129.21') {
-    return 'http://10.99.129.21:3002';
-  }
-  return 'http://localhost:3002';
-}
+// getApiHostは不要（AuthProviderが統一管理）

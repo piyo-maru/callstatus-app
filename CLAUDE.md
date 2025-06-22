@@ -35,6 +35,62 @@
 
 **違反した場合:** 即座に作業を中止し、ユーザーに謝罪すること。
 
+## 社員情報JSONフォーマット
+
+### 社員インポート用JSONファイル形式
+
+社員情報のインポートには以下のJSONフォーマットを使用する：
+
+```json
+{
+  "employeeData": [
+    {
+      "empNo": "8339",
+      "name": "山田美月",
+      "dept": "財務情報第一システムサポート課",
+      "team": "財務情報第一システムサポート課", 
+      "email": "yamada-mitsuki@abc.co.jp",
+      "mondayHours": "09:00-18:00",
+      "tuesdayHours": "09:00-18:00",
+      "wednesdayHours": "09:00-18:00",
+      "thursdayHours": "09:00-18:00",
+      "fridayHours": "09:00-18:00",
+      "saturdayHours": null,
+      "sundayHours": null
+    },
+    {
+      "empNo": "7764",
+      "name": "加藤優斗",
+      "dept": "財務情報第一システムサポート課",
+      "team": "財務会計グループ",
+      "email": "kato-yuto@abc.co.jp",
+      "mondayHours": "09:00-18:00",
+      "tuesdayHours": "09:00-18:00", 
+      "wednesdayHours": "09:00-18:00",
+      "thursdayHours": "09:00-18:00",
+      "fridayHours": "09:00-18:00",
+      "saturdayHours": null,
+      "sundayHours": null
+    }
+  ]
+}
+```
+
+**重要事項:**
+- データは`employeeData`キー内の配列として格納
+- `empNo`は文字列形式で主キー
+- 勤務時間は`mondayHours`〜`sundayHours`で曜日別に指定
+- 休日は`null`で表現
+- このフォーマットは変更されていない既存形式
+
+### スケジュールインポート時の社員データ検証
+
+**本番実装時の必須要件:**
+- スケジュールCSVの各レコードでempNoを社員マスタと照合
+- 存在しない社員のスケジュールはスキップ（エラーログに記録）
+- インポート結果に「スキップ件数」と「スキップした社員リスト」を含める
+- 例：「インポート:1200件、スキップ:149件（存在しない社員）」
+
 ## 開発理念
 
 ### テスト駆動開発（TDD）
@@ -420,11 +476,134 @@ curl -s "http://localhost:3002/api/schedules/layered?date=YYYY-MM-DD" | jq '{tot
 - フロントエンド: JST基準での表示
 - 全システムで日本時間に統一
 
+## 認証システム実装プロジェクト進行状況
+
+### 🎯 現在進行中のプロジェクト
+**認証システム実装** - エンタープライズレベルのセキュリティ機能追加
+- **開始日**: 2025-06-21
+- **ブランチ**: `feature/authentication-system`
+- **目的**: JWT認証・権限管理・監査ログによるセキュリティ強化
+
+### 📋 認証システム実装フェーズ
+
+#### フェーズ1: 基盤構築 【完了】
+- [x] 認証要件分析とアーキテクチャ設計
+- [x] データベーススキーマ設計（User、Role、AuditLogテーブル）
+- [x] Next-Auth（Auth.js）基本設定
+- **完了日**: 2025-06-21
+
+#### フェーズ2: バックエンド認証機能 【完了】
+- [x] JWT認証ガード実装（JwtAuthGuard）
+- [x] 権限管理システム（RolesGuard、デコレーター）
+- [x] API保護機能（全エンドポイントに認証・権限チェック）
+- [x] ユーザー管理API（ログイン・パスワード設定・変更）
+- **完了日**: 2025-06-21
+
+#### フェーズ3: フロントエンド認証UI 【進行中】
+- [ ] ログイン画面実装
+- [ ] 権限レベル別UI表示制御
+- [ ] 認証状態管理
+- [ ] Next.js認証統合
+- **目標**: 完全な認証フロー実現
+
+#### フェーズ4: セキュリティ強化 【計画中】
+- [ ] 監査ログ機能実装
+- [ ] セッション管理強化
+- [ ] **パスワード設定・リセット機能**
+  - 初回ログイン時パスワード設定
+  - パスワード失念時のメール通知リセット機能
+  - 安全なトークン管理（有効期限付き）
+  - メール送信機能統合
+- [ ] 認証機能テスト
+- **目標**: エンタープライズ級セキュリティ
+
+### パスワード設定・リセット機能設計
+
+**実装範囲:**
+1. **初回ログイン時パスワード設定**
+   - 社員インポート時の自動UserAuth作成（パスワードなし）
+   - 初回ログイン試行時の自動パスワード設定画面遷移
+   - パスワード設定後の自動ログイン
+
+2. **パスワード失念時リセット**
+   - パスワードリセット申請画面
+   - 安全なトークン生成（JWT/UUID + 有効期限）
+   - メール通知機能（パスワード設定URL送信）
+   - トークン検証 + パスワード設定画面
+
+**技術要件:**
+- メール送信: Nodemailer/SendGrid統合
+- トークン管理: 有効期限・回数制限
+- 監査ログ: パスワード変更履歴記録
+- セキュリティ: CSRF対策、ブルートフォース対策
+
+### 🔒 認証システム技術仕様
+
+#### 権限レベル設計
+```typescript
+enum Role {
+  USER      // 一般ユーザー：自分の予定のみ操作可能
+  ADMIN     // 管理者：全機能利用可能（スタッフ管理、データ投入等）
+  READONLY  // 閲覧専用：読み取りのみ（将来拡張用）
+}
+```
+
+#### 保護対象API
+- **スケジュール管理**: USER（自分の予定のみ）、ADMIN（全予定）
+- **スタッフ管理**: ADMIN専用
+- **CSVインポート**: ADMIN専用  
+- **契約管理**: ADMIN専用
+- **認証API**: 公開（@Public デコレーター）
+
+#### データベーススキーマ（認証用）
+```prisma
+model User {
+  id          Int      @id @default(autoincrement())
+  email       String   @unique
+  name        String
+  password    String?
+  role        Role     @default(USER)
+  staffId     Int?     @unique
+  staff       Staff?   @relation(fields: [staffId], references: [id])
+  isActive    Boolean  @default(true)
+  lastLogin   DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  auditLogs   AuditLog[]
+}
+
+enum Role {
+  USER
+  ADMIN
+  READONLY
+}
+
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  action    String
+  resource  String
+  details   Json?
+  ipAddress String?
+  userAgent String?
+  timestamp DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+}
+```
+
+### 🚨 現在の状況
+**バックエンド**: 認証システム完全実装済み（全API保護）
+**フロントエンド**: 認証UIが未実装のため、Webサイト接続時にエラー
+**次のステップ**: フロントエンド認証UI実装（ログイン画面等）
+
+---
+
 ## 機能拡張プロジェクト進行状況
 
 ### 🎯 プロジェクト概要
 2層データ階層による大規模機能拡張（契約・個別調整）
 - **開始日**: 2025-06-18
+- **ステータス**: 一時中断（認証システム実装優先）
 - **目的**: シンプルな単層構造から企業レベルの2層データ管理システムへの移行
 
 ### 📋 実装フェーズ
