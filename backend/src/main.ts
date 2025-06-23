@@ -53,8 +53,18 @@ async function bootstrap() {
   console.log('CORS allowed origins:', origins);
   
   app.enableCors({
-    origin: origins,
-    credentials: true
+    origin: (origin, callback) => {
+      // 開発環境では全てのオリジンを許可
+      if (!origin || origins.includes(origin)) {
+        callback(null, true);
+      } else {
+        console.log('CORS blocked origin:', origin);
+        callback(null, false);
+      }
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
   });
   
   const port = process.env.PORT || 3002;

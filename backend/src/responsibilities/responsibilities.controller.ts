@@ -1,64 +1,48 @@
-import { Controller, Get, Post, Put, Body, Param, Query, BadRequestException } from '@nestjs/common';
-import { ResponsibilitiesService, CreateResponsibilityDto, UpdateResponsibilityDto } from './responsibilities.service';
+import { Controller, Get, Post, Body, Delete, Query } from '@nestjs/common';
+import { ResponsibilitiesService } from './responsibilities.service';
 
-@Controller('api/responsibilities')
+interface ResponsibilityData {
+  // 一般部署用
+  fax?: boolean;
+  subjectCheck?: boolean;
+  custom?: string;
+  
+  // 受付部署用（上記に加えて）
+  lunch?: boolean;
+  cs?: boolean;
+}
+
+@Controller('responsibilities')
 export class ResponsibilitiesController {
   constructor(private readonly responsibilitiesService: ResponsibilitiesService) {}
 
-  /**
-   * 指定日の全スタッフ担当状況を取得
-   */
-  @Get('status')
-  async getAllResponsibilities(@Query('date') date?: string) {
-    const targetDate = date || new Date().toISOString().split('T')[0];
-    return this.responsibilitiesService.getAllStaffResponsibilities(targetDate);
+  @Get()
+  async getResponsibilities(@Query('date') date: string) {
+    if (!date) {
+      throw new Error('date parameter is required');
+    }
+    return this.responsibilitiesService.getResponsibilitiesByDate(date);
   }
 
-  /**
-   * 指定スタッフの指定日担当設定を取得
-   */
-  @Get('staff/:staffId')
-  async getByStaffIdAndDate(
-    @Param('staffId') staffId: string,
-    @Query('date') date?: string
-  ) {
-    const targetDate = date || new Date().toISOString().split('T')[0];
-    return this.responsibilitiesService.findByStaffIdAndDate(parseInt(staffId), targetDate);
-  }
-
-  /**
-   * 指定日の担当設定一覧を取得
-   */
-  @Get('date/:date')
-  async getByDate(@Param('date') date: string) {
-    return this.responsibilitiesService.findByDate(date);
-  }
-
-  /**
-   * 担当設定を作成・更新
-   */
   @Post()
-  async upsert(@Body() createDto: CreateResponsibilityDto) {
-    try {
-      return await this.responsibilitiesService.upsert(createDto);
-    } catch (error) {
-      throw new BadRequestException(error.message);
-    }
+  async saveResponsibility(@Body() data: {
+    staffId: number;
+    date?: string;
+    responsibilities: ResponsibilityData;
+  }) {
+    const targetDate = data.date || new Date().toISOString().split('T')[0];
+    return this.responsibilitiesService.saveResponsibilities(
+      data.staffId,
+      targetDate,
+      data.responsibilities
+    );
   }
 
-  /**
-   * 担当設定をクリア
-   */
-  @Put('clear/:staffId')
-  async clear(
-    @Param('staffId') staffId: string,
-    @Query('date') date?: string
-  ) {
-    try {
-      const targetDate = date || new Date().toISOString().split('T')[0];
-      return await this.responsibilitiesService.clear(parseInt(staffId), targetDate);
-    } catch (error) {
-      throw new BadRequestException(error.message);
+  @Delete()
+  async deleteResponsibility(@Query('staffId') staffId: string, @Query('date') date: string) {
+    if (!staffId || !date) {
+      throw new Error('staffId and date parameters are required');
     }
+    return this.responsibilitiesService.deleteResponsibilities(+staffId, date);
   }
 }

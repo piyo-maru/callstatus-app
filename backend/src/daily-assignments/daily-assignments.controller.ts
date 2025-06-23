@@ -1,44 +1,73 @@
-import { Controller, Get, Post, Delete, Body, Query, Param } from '@nestjs/common';
-import { DailyAssignmentsService, CreateDailyAssignmentDto } from './daily-assignments.service';
+import { Controller, Get, Post, Body, Delete, Query, Param } from '@nestjs/common';
+import { DailyAssignmentsService } from './daily-assignments.service';
 
-@Controller('api/daily-assignments')
+@Controller('daily-assignments')
 export class DailyAssignmentsController {
   constructor(private readonly dailyAssignmentsService: DailyAssignmentsService) {}
 
-  /**
-   * 指定日の全担当状況を取得
-   */
   @Get()
-  async getDailyAssignments(@Query('date') date: string) {
-    const targetDate = date || new Date().toISOString().split('T')[0];
-    return this.dailyAssignmentsService.getDailyAssignmentsByDate(targetDate);
+  async getAssignments(@Query('date') date: string) {
+    return this.dailyAssignmentsService.getAssignmentsByDate(date);
   }
 
-  /**
-   * 担当設定を作成または更新
-   */
   @Post()
-  async createOrUpdate(@Body() createDto: CreateDailyAssignmentDto) {
+  async upsertAssignment(@Body() data: {
+    staffId: number;
+    date?: string;
+    startDate?: string;
+    endDate?: string;
+    assignmentType?: string;
+    customLabel?: string;
+    tempDept?: string;
+    tempGroup?: string;
+  }) {
+    console.log('=== DailyAssignmentsController POST received ===');
+    console.log('Request data:', JSON.stringify(data, null, 2));
+    
     try {
-      return await this.dailyAssignmentsService.createOrUpdateDailyAssignment(createDto);
+      // 支援設定データの場合（tempDept, tempGroupがある）
+      if (data.tempDept || data.tempGroup) {
+        console.log('=> Routing to upsertSupportAssignment');
+        const result = await this.dailyAssignmentsService.upsertSupportAssignment(data);
+        console.log('=> Support assignment success:', result);
+        return result;
+      }
+      
+      // 担当設定データの場合
+      console.log('=> Routing to upsertAssignment (daily)');
+      return this.dailyAssignmentsService.upsertAssignment({
+        staffId: data.staffId,
+        date: data.date,
+        assignmentType: data.assignmentType,
+        customLabel: data.customLabel
+      });
     } catch (error) {
-      throw new Error(error.message);
+      console.error('=== Controller error ===');
+      console.error('Error:', error.message);
+      console.error('Stack:', error.stack);
+      throw error;
     }
   }
 
-  /**
-   * 担当設定を削除
-   */
-  @Delete(':staffId/:date')
-  async remove(@Param('staffId') staffId: string, @Param('date') date: string) {
-    return this.dailyAssignmentsService.removeDailyAssignment(parseInt(staffId), date);
+  @Delete()
+  async deleteAssignment(@Query('staffId') staffId: string, @Query('date') date: string) {
+    return this.dailyAssignmentsService.deleteAssignment(+staffId, date);
   }
 
-  /**
-   * スタッフの担当履歴を取得
-   */
-  @Get('history/:staffId')
-  async getStaffHistory(@Param('staffId') staffId: string) {
-    return this.dailyAssignmentsService.getStaffAssignmentHistory(parseInt(staffId));
+  @Delete('staff/:staffId/current')
+  async deleteSupportAssignment(@Param('staffId') staffId: string) {
+    console.log('=== DailyAssignmentsController DELETE staff/:staffId/current ===');
+    console.log('StaffId:', staffId);
+    
+    try {
+      const result = await this.dailyAssignmentsService.deleteSupportAssignment(+staffId);
+      console.log('=> Support assignment deletion success:', result);
+      return result;
+    } catch (error) {
+      console.error('=== Support assignment deletion error ===');
+      console.error('Error:', error.message);
+      console.error('Stack:', error.stack);
+      throw error;
+    }
   }
 }

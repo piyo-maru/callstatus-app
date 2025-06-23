@@ -36,6 +36,15 @@ const nextConfig = {
   },
   // 出力設定を明示
   output: 'standalone',
+  // APIプロキシ設定（CORSを回避）
+  async rewrites() {
+    return [
+      {
+        source: '/api/:path*',
+        destination: 'http://backend:3002/api/:path*', // Docker内部通信
+      },
+    ];
+  },
   // 開発環境での追加設定
   ...(process.env.NODE_ENV === 'development' && {
     onDemandEntries: {

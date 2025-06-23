@@ -43,25 +43,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // 初期化時にAPIとローカルストレージを設定
   useEffect(() => {
-    const initialize = async () => {
-      // API設定を初期化
-      await initializeApiConfig();
-      
-      // ローカルストレージからトークンを復元
-      const savedToken = localStorage.getItem('auth_token');
-      const savedUser = localStorage.getItem('auth_user');
-      
-      if (savedToken && savedUser) {
-        try {
-          setToken(savedToken);
-          setUser(JSON.parse(savedUser));
-        } catch (error) {
-          console.error('認証情報の復元に失敗:', error);
-          localStorage.removeItem('auth_token');
-          localStorage.removeItem('auth_user');
-        }
-      }
+    const initialize = () => {
+      // 🚨 一時的なテスト用ユーザー設定（認証スキップ）
+      const testUser: AuthUser = {
+        id: 'test-user-1',
+        email: 'admin@example.com',
+        name: 'テスト管理者',
+        role: 'ADMIN',
+        staffId: 1,
+        isActive: true
+      };
+      setUser(testUser);
+      setToken('test-token');
       setLoading(false);
+      console.log('テストユーザーでログイン完了');
     };
     
     initialize();

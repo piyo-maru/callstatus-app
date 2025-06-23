@@ -86,7 +86,10 @@ export class StaffService {
   async findAll() {
     return this.prisma.staff.findMany({
       where: { isActive: true },
-      orderBy: { id: 'asc' }
+      orderBy: [
+        { empNo: 'asc' }, // empNo順でソート（nullは後ろに）
+        { id: 'asc' }     // empNoが同じ場合はid順
+      ]
     });
   }
 

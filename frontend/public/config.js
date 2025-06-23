@@ -12,7 +12,7 @@ window.APP_CONFIG = {
       return 'http://localhost:3002';
     } else if (hostname === '10.99.129.21') {
       // 社内テスト環境
-      return 'http://10.99.129.21:3002';
+      return 'http://10.99.129.21:3003';
     } else {
       // その他の環境（本番環境など）
       // 現在のホストと同じドメインのポート3002を使用

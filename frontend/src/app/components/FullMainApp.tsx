@@ -158,11 +158,8 @@ const teamColors: { [key: string]: string } = {
 };
 // 設定ファイルからAPIのURLを取得する関数
 const getApiUrl = (): string => {
-  if (typeof window !== 'undefined' && window.APP_CONFIG) {
-    return window.APP_CONFIG.API_HOST;
-  }
-  // フォールバック（サーバーサイドレンダリング時など）
-  return 'http://localhost:3002';
+  // 相対パスを使用してCORSを回避
+  return '';
 };
 const availableStatuses = ['Online', 'Remote', 'Meeting', 'Training', 'Break', 'Off', 'Unplanned', 'Night Duty'];
 const AVAILABLE_STATUSES = ['Online', 'Remote', 'Night Duty'];
@@ -343,18 +340,17 @@ const positionPercentToTime = (percent: number): number => {
 
 // --- 時刻変換ヘルパー関数 ---
 const timeStringToHours = (timeString: string): number => {
-    // ISO文字列（例: "2025-06-21T10:30:00.000Z"）を日本時間の数値時刻に変換
+    // ISO文字列をパースしてJST時刻の数値表現に変換
     const date = new Date(timeString);
-    // 日本時間に変換（UTC + 9時間）
-    const jstHours = date.getUTCHours() + 9;
-    const minutes = date.getUTCMinutes();
-    // 24時間を超える場合の調整（日付境界の処理）
-    const adjustedHours = jstHours >= 24 ? jstHours - 24 : jstHours;
-    return adjustedHours + minutes / 60;
+    // JST時刻に変換（UTC + 9時間オフセット）
+    const jstDate = new Date(date.getTime() + 9 * 60 * 60 * 1000);
+    const hours = jstDate.getUTCHours();
+    const minutes = jstDate.getUTCMinutes();
+    return hours + minutes / 60;
 };
 
 const hoursToTimeString = (hours: number): string => {
-    // 数値時刻（例: 10.5）をISO文字列に変換
+    // 数値時刻（例: 10.5）をUTC保存用のISO文字列に変換
     const hour = Math.floor(hours);
     const minute = Math.round((hours - hour) * 60);
     
@@ -364,12 +360,11 @@ const hoursToTimeString = (hours: number): string => {
     const month = now.getMonth();
     const day = now.getDate();
     
-    // JST時刻でDateオブジェクトを作成し、UTCに変換
-    const jstDate = new Date(year, month, day, hour, minute, 0, 0);
-    // JST → UTC変換（-9時間）
-    const utcDate = new Date(jstDate.getTime() - 9 * 60 * 60 * 1000);
+    // JST時刻をISO-8601形式のタイムゾーン付き文字列として構築
+    const jstIsoString = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00+09:00`;
     
-    return utcDate.toISOString();
+    // JST文字列をパースしてUTC時刻のDateオブジェクトを作成
+    return new Date(jstIsoString).toISOString();
 };
 
 // --- 時間選択肢を生成するヘルパー関数 ---
@@ -1409,8 +1404,295 @@ const ImportHistoryModal = ({ isOpen, onClose, onRollback, authenticatedFetch }:
   );
 };
 
+// --- 部署・グループ設定コンポーネント ---
+const DepartmentGroupSettings = ({ authenticatedFetch, staffList }: { 
+  authenticatedFetch: (url: string, options?: RequestInit) => Promise<Response>;
+  staffList: Staff[];
+}) => {
+  const [departments, setDepartments] = useState<any[]>([]);
+  const [groups, setGroups] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  // 設定データを取得
+  const fetchSettings = useCallback(async () => {
+    setLoading(true);
+    try {
+      const currentApiUrl = getApiUrl();
+      const response = await authenticatedFetch(`${currentApiUrl}/api/department-settings`);
+      if (response.ok) {
+        const data = await response.json();
+        setDepartments(data.departments || []);
+        setGroups(data.groups || []);
+      }
+    } catch (error) {
+      console.error('Failed to fetch department settings:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [authenticatedFetch]);
+
+  // 自動生成
+  const handleAutoGenerate = async () => {
+    setLoading(true);
+    try {
+      const currentApiUrl = getApiUrl();
+      const response = await authenticatedFetch(`${currentApiUrl}/api/department-settings/auto-generate`);
+      if (response.ok) {
+        const result = await response.json();
+        alert(`${result.generated}個の新しい設定が生成されました`);
+        await fetchSettings();
+      }
+    } catch (error) {
+      console.error('Failed to auto-generate settings:', error);
+      alert('自動生成に失敗しました');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 設定保存
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const currentApiUrl = getApiUrl();
+      const allSettings = [...departments, ...groups];
+      const response = await authenticatedFetch(`${currentApiUrl}/api/department-settings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(allSettings.map(item => ({
+          type: item.type,
+          name: item.name,
+          shortName: item.shortName,
+          backgroundColor: item.backgroundColor,
+          displayOrder: item.displayOrder || 0
+        })))
+      });
+      
+      if (response.ok) {
+        alert('設定を保存しました');
+        // 保存後に設定を再取得して画面の並び順も更新
+        await fetchSettings();
+      }
+    } catch (error) {
+      console.error('Failed to save settings:', error);
+      alert('保存に失敗しました');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // 短縮名変更
+  const updateShortName = (type: 'department' | 'group', id: number, shortName: string) => {
+    if (type === 'department') {
+      setDepartments(prev => prev.map(d => d.id === id ? { ...d, shortName } : d));
+    } else {
+      setGroups(prev => prev.map(g => g.id === id ? { ...g, shortName } : g));
+    }
+  };
+
+  // 背景色変更
+  const updateBackgroundColor = (type: 'department' | 'group', id: number, backgroundColor: string) => {
+    if (type === 'department') {
+      setDepartments(prev => prev.map(d => d.id === id ? { ...d, backgroundColor } : d));
+    } else {
+      setGroups(prev => prev.map(g => g.id === id ? { ...g, backgroundColor } : g));
+    }
+  };
+
+  // 表示順変更
+  const updateDisplayOrder = (type: 'department' | 'group', id: number, displayOrder: number) => {
+    if (type === 'department') {
+      setDepartments(prev => prev.map(d => d.id === id ? { ...d, displayOrder } : d));
+    } else {
+      setGroups(prev => prev.map(g => g.id === id ? { ...g, displayOrder } : g));
+    }
+  };
+
+  // グループを部署順→グループ順でソートする関数
+  const sortGroupsByDepartment = useCallback((groups: any[]) => {
+    return groups.sort((a, b) => {
+      // スタッフデータからグループが属する部署を特定
+      const staffA = staffList.find(staff => staff.group === a.name);
+      const staffB = staffList.find(staff => staff.group === b.name);
+      
+      const deptA = staffA?.department || '';
+      const deptB = staffB?.department || '';
+      
+      // 部署の表示順序を取得
+      const deptSettingA = departments.find(d => d.name === deptA);
+      const deptSettingB = departments.find(d => d.name === deptB);
+      
+      const deptOrderA = deptSettingA?.displayOrder || 0;
+      const deptOrderB = deptSettingB?.displayOrder || 0;
+      
+      // まず部署順で比較
+      if (deptOrderA !== deptOrderB) {
+        return deptOrderA - deptOrderB;
+      }
+      
+      // 同じ部署なら部署名で比較
+      if (deptA !== deptB) {
+        return deptA.localeCompare(deptB);
+      }
+      
+      // 同じ部署内ならグループの表示順序で比較
+      const groupOrderA = a.displayOrder || 0;
+      const groupOrderB = b.displayOrder || 0;
+      
+      if (groupOrderA !== groupOrderB) {
+        return groupOrderA - groupOrderB;
+      }
+      
+      // 最後にグループ名で比較
+      return a.name.localeCompare(b.name);
+    });
+  }, [staffList, departments]);
+
+  useEffect(() => {
+    fetchSettings();
+  }, [fetchSettings]);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h3 className="text-lg font-medium text-gray-900">🏢 部署・グループ設定</h3>
+        <div className="space-x-2">
+          <button
+            onClick={handleAutoGenerate}
+            disabled={loading}
+            className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+          >
+            🔄 自動生成
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="px-3 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+          >
+            💾 保存
+          </button>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="text-center py-8">読み込み中...</div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* 部署設定 */}
+          <div>
+            <h4 className="font-medium text-gray-900 mb-3">部署設定 ({departments.length})</h4>
+            <div className="border border-gray-200 rounded-lg">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 sticky top-0">
+                  <tr>
+                    <th className="px-3 py-2 text-left">部署名</th>
+                    <th className="px-3 py-2 text-left">短縮名</th>
+                    <th className="px-3 py-2 text-left">背景色</th>
+                    <th className="px-3 py-2 text-left">表示順</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {departments.map((dept) => (
+                    <tr key={dept.id} className="border-t border-gray-200">
+                      <td className="px-3 py-2 text-xs">{dept.name}</td>
+                      <td className="px-3 py-2">
+                        <input
+                          type="text"
+                          value={dept.shortName || ''}
+                          onChange={(e) => updateShortName('department', dept.id, e.target.value)}
+                          className="w-full px-2 py-1 text-xs border border-gray-300 rounded"
+                          maxLength={8}
+                        />
+                      </td>
+                      <td className="px-3 py-2">
+                        <input
+                          type="color"
+                          value={dept.backgroundColor || '#ffffff'}
+                          onChange={(e) => updateBackgroundColor('department', dept.id, e.target.value)}
+                          className="w-8 h-6 border border-gray-300 rounded"
+                        />
+                      </td>
+                      <td className="px-3 py-2">
+                        <input
+                          type="number"
+                          value={dept.displayOrder || 0}
+                          onChange={(e) => updateDisplayOrder('department', dept.id, parseInt(e.target.value) || 0)}
+                          className="w-16 px-2 py-1 text-xs border border-gray-300 rounded"
+                          min="0"
+                          step="10"
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* グループ設定 */}
+          <div>
+            <h4 className="font-medium text-gray-900 mb-3">グループ設定 ({groups.length})</h4>
+            <div className="border border-gray-200 rounded-lg">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 sticky top-0">
+                  <tr>
+                    <th className="px-3 py-2 text-left">グループ名</th>
+                    <th className="px-3 py-2 text-left">短縮名</th>
+                    <th className="px-3 py-2 text-left">背景色</th>
+                    <th className="px-3 py-2 text-left">表示順</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortGroupsByDepartment([...groups]).map((group) => (
+                    <tr key={group.id} className="border-t border-gray-200">
+                      <td className="px-3 py-2 text-xs" style={{
+                        backgroundColor: departments.find(d => d.name === (staffList.find(staff => staff.group === group.name)?.department))?.backgroundColor || '#f9fafb'
+                      }}>
+                        {group.name}
+                      </td>
+                      <td className="px-3 py-2 text-xs">
+                        <input
+                          type="text"
+                          value={group.shortName || ''}
+                          onChange={(e) => updateShortName('group', group.id, e.target.value)}
+                          className="w-full px-2 py-1 text-xs border border-gray-300 rounded"
+                          maxLength={8}
+                        />
+                      </td>
+                      <td className="px-3 py-2">
+                        <input
+                          type="color"
+                          value={group.backgroundColor || '#ffffff'}
+                          onChange={(e) => updateBackgroundColor('group', group.id, e.target.value)}
+                          className="w-8 h-6 border border-gray-300 rounded"
+                        />
+                      </td>
+                      <td className="px-3 py-2 text-xs">
+                        <input
+                          type="number"
+                          value={group.displayOrder || 0}
+                          onChange={(e) => updateDisplayOrder('group', group.id, parseInt(e.target.value) || 0)}
+                          className="w-16 px-2 py-1 text-xs border border-gray-300 rounded"
+                          min="0"
+                          step="10"
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+    </div>
+  );
+};
+
 // --- 設定モーダルコンポーネント ---
-const SettingsModal = ({ isOpen, onClose, viewMode, setViewMode, setIsCsvUploadModalOpen, setIsJsonUploadModalOpen, setIsImportHistoryModalOpen, canManage }: {
+const SettingsModal = ({ isOpen, onClose, viewMode, setViewMode, setIsCsvUploadModalOpen, setIsJsonUploadModalOpen, setIsImportHistoryModalOpen, canManage, authenticatedFetch, staffList }: {
   isOpen: boolean;
   onClose: () => void;
   viewMode: 'normal' | 'compact';
@@ -1419,14 +1701,16 @@ const SettingsModal = ({ isOpen, onClose, viewMode, setViewMode, setIsCsvUploadM
   setIsJsonUploadModalOpen: (open: boolean) => void;
   setIsImportHistoryModalOpen: (open: boolean) => void;
   canManage: boolean;
+  authenticatedFetch: (url: string, options?: RequestInit) => Promise<Response>;
+  staffList: Staff[];
 }) => {
   const [activeTab, setActiveTab] = useState(canManage ? 'import' : 'display');
 
   if (!isOpen) return null;
 
   return createPortal(
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[80vh] overflow-hidden">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-center z-50 p-4 pt-16">
+      <div className="bg-white rounded-lg shadow-xl max-w-5xl w-full max-h-[85vh] overflow-hidden">
         <div className="flex justify-between items-center p-6 border-b border-gray-200">
           <h2 className="text-xl font-bold text-gray-800">⚙️ 設定</h2>
           <button
@@ -1472,11 +1756,23 @@ const SettingsModal = ({ isOpen, onClose, viewMode, setViewMode, setIsCsvUploadM
             >
               📤 エクスポート
             </button>
+            {canManage && (
+              <button 
+                onClick={() => setActiveTab('departments')} 
+                className={`py-3 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === 'departments' 
+                    ? 'border-blue-500 text-blue-600' 
+                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                🏢 部署・グループ設定
+              </button>
+            )}
           </nav>
         </div>
 
         {/* タブコンテンツ */}
-        <div className="p-6 overflow-y-auto max-h-[60vh]">
+        <div className="p-6 overflow-y-auto max-h-[70vh]">
           {activeTab === 'import' && canManage && (
             <div className="space-y-6">
               <div>
@@ -1661,6 +1957,10 @@ const SettingsModal = ({ isOpen, onClose, viewMode, setViewMode, setIsCsvUploadM
                 </div>
               </div>
             </div>
+          )}
+
+          {activeTab === 'departments' && canManage && (
+            <DepartmentGroupSettings authenticatedFetch={authenticatedFetch} staffList={staffList} />
           )}
         </div>
       </div>
@@ -1852,6 +2152,10 @@ export default function FullMainApp() {
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [isImporting, setIsImporting] = useState(false);
+  const [departmentSettings, setDepartmentSettings] = useState<{
+    departments: Array<{id: number, name: string, shortName?: string, backgroundColor?: string, displayOrder?: number}>,
+    groups: Array<{id: number, name: string, shortName?: string, backgroundColor?: string, displayOrder?: number}>
+  }>({ departments: [], groups: [] });
   // viewMode設定をlocalStorageで永続化
   const [viewMode, setViewMode] = useState<'normal' | 'compact'>(() => {
     if (typeof window !== 'undefined') {
@@ -1890,6 +2194,56 @@ export default function FullMainApp() {
   useEffect(() => {
     fetchHolidays().then(setHolidays);
   }, []);
+
+  // 部署・グループ設定を取得
+  const fetchDepartmentSettings = useCallback(async () => {
+    try {
+      const currentApiUrl = getApiUrl();
+      const response = await authenticatedFetch(`${currentApiUrl}/api/department-settings`);
+      if (response.ok) {
+        const data = await response.json();
+        setDepartmentSettings(data);
+      }
+    } catch (error) {
+      console.warn('Failed to fetch department settings:', error);
+    }
+  }, [authenticatedFetch]);
+
+  useEffect(() => {
+    fetchDepartmentSettings();
+  }, [fetchDepartmentSettings]);
+
+  // 支援先の短縮テキストを生成（グループのみ）
+  const getSupportDestinationText = useCallback((staff: Staff): string => {
+    if (!staff.isSupporting || !staff.currentGroup) {
+      return '不明';
+    }
+
+    // グループの設定から短縮名を取得
+    const groupSetting = departmentSettings.groups.find(g => g.name === staff.currentGroup);
+    const shortGroup = groupSetting?.shortName || staff.currentGroup;
+
+    return shortGroup;
+  }, [departmentSettings]);
+
+  // 16進数カラーをrgbaに変換する関数
+  const hexToRgba = useCallback((hex: string, alpha: number): string => {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }, []);
+
+  // 支援先グループの枠線色を取得
+  const getSupportBorderColor = useCallback((staff: Staff): string | null => {
+    if (!staff.isSupporting || !staff.currentGroup) {
+      return null;
+    }
+
+    // グループの設定から背景色を取得して枠線色として使用
+    const groupSetting = departmentSettings.groups.find(g => g.name === staff.currentGroup);
+    return groupSetting?.backgroundColor || null;
+  }, [departmentSettings]);
   
   const fetchData = useCallback(async (date: Date) => {
     setIsLoading(true);
@@ -1914,8 +2268,47 @@ export default function FullMainApp() {
       if (!scheduleRes.ok) throw new Error(`Schedule API response was not ok`);
       
       const scheduleData: { staff: Staff[], schedules: ScheduleFromDB[] } = await scheduleRes.json();
-      const supportData = { assignments: [] };
-      const responsibilityData = { responsibilities: [] };
+      // 支援データを取得
+      let supportData = { assignments: [] };
+      try {
+        const supportRes = await fetch(`${currentApiUrl}/api/daily-assignments?date=${dateString}`);
+        if (supportRes.ok) {
+          supportData = await supportRes.json();
+          console.log('Support (daily-assignments) data fetched:', supportData);
+        } else {
+          console.warn('Support API failed:', supportRes.status);
+        }
+      } catch (error) {
+        console.warn('Failed to fetch support data:', error);
+      }
+      
+      // 責任データを取得
+      let responsibilityData = { responsibilities: [] };
+      try {
+        const responsibilityRes = await fetch(`${currentApiUrl}/api/responsibilities?date=${dateString}`);
+        if (responsibilityRes.ok) {
+          responsibilityData = await responsibilityRes.json();
+          console.log('Responsibility data fetched:', responsibilityData);
+        } else {
+          console.warn('Responsibility API failed:', responsibilityRes.status);
+        }
+      } catch (error) {
+        console.warn('Failed to fetch responsibility data:', error);
+      }
+      
+      // 部署設定データを取得
+      try {
+        const departmentRes = await authenticatedFetch(`${currentApiUrl}/api/department-settings`);
+        if (departmentRes.ok) {
+          const deptData = await departmentRes.json();
+          setDepartmentSettings(deptData);
+          console.log('Department settings data fetched:', deptData);
+        } else {
+          console.warn('Department settings API failed:', departmentRes.status);
+        }
+      } catch (error) {
+        console.warn('Failed to fetch department settings data:', error);
+      }
       
       console.log('Schedule data received:', scheduleData);
       console.log('Support data received:', supportData);
@@ -1925,21 +2318,28 @@ export default function FullMainApp() {
       
       // 支援状況と担当設定をスタッフデータにマージ
       const staffWithSupportAndResponsibility = scheduleData.staff.map(staff => {
-        const supportInfo = supportData.assignments?.find((s: any) => s.id === staff.id);
-        const responsibilityInfo = responsibilityData.responsibilities?.find((r: any) => r.id === staff.id);
+        // 支援設定（temporary assignment）を探す
+        const tempAssignment = supportData.assignments?.find((s: any) => 
+          s.staffId === staff.id && s.type === 'temporary'
+        );
+        const responsibilityInfo = responsibilityData.responsibilities?.find((r: any) => r.staffId === staff.id);
         
         let result = { ...staff };
         
         // 支援状況をマージ
-        if (supportInfo && supportInfo.isSupporting) {
+        if (tempAssignment) {
           result = {
             ...result,
             isSupporting: true,
-            originalDept: supportInfo.originalDept,
-            originalGroup: supportInfo.originalGroup,
-            currentDept: supportInfo.currentDept,
-            currentGroup: supportInfo.currentGroup,
-            supportInfo: supportInfo.supportInfo
+            originalDept: staff.department,
+            originalGroup: staff.group,
+            currentDept: tempAssignment.tempDept,
+            currentGroup: tempAssignment.tempGroup,
+            supportInfo: {
+              startDate: tempAssignment.startDate,
+              endDate: tempAssignment.endDate,
+              reason: tempAssignment.reason
+            }
           };
         } else {
           result.isSupporting = false;
@@ -2238,9 +2638,9 @@ export default function FullMainApp() {
       };
       
       console.log('送信データ:', backendData);
-      console.log('API URL:', `${currentApiUrl}/api/assignments`);
+      console.log('API URL:', `${currentApiUrl}/api/daily-assignments`);
       
-      const response = await authenticatedFetch(`${currentApiUrl}/api/assignments`, {
+      const response = await authenticatedFetch(`${currentApiUrl}/api/daily-assignments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(backendData)
@@ -2290,9 +2690,9 @@ export default function FullMainApp() {
     try {
       console.log('=== 支援設定削除処理開始 ===');
       console.log('削除対象スタッフID:', staffId);
-      console.log('API URL:', `${currentApiUrl}/api/assignments/staff/${staffId}/current`);
+      console.log('API URL:', `${currentApiUrl}/api/daily-assignments/staff/${staffId}/current`);
       
-      const response = await authenticatedFetch(`${currentApiUrl}/api/assignments/staff/${staffId}/current`, {
+      const response = await authenticatedFetch(`${currentApiUrl}/api/daily-assignments/staff/${staffId}/current`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' }
       });
@@ -2367,11 +2767,37 @@ export default function FullMainApp() {
     staffId: number;
     responsibilities: ResponsibilityData;
   }) => {
-    console.log('責任管理機能は現在無効化されています');
-    alert('責任管理機能は現在無効化されています。今後のアップデートをお待ちください。');
-    setIsResponsibilityModalOpen(false);
-    setSelectedStaffForResponsibility(null);
-    return;
+    const currentApiUrl = getApiUrl();
+    try {
+      console.log('責任設定を保存中:', data);
+      
+      const response = await authenticatedFetch(`${currentApiUrl}/api/responsibilities`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          staffId: data.staffId,
+          date: displayDate.toISOString().split('T')[0],
+          responsibilities: data.responsibilities
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('責任設定の保存に失敗しました');
+      }
+
+      const result = await response.json();
+      console.log('責任設定保存完了:', result);
+      
+      // データを再取得してUIを更新
+      await fetchData(displayDate);
+      
+      setIsResponsibilityModalOpen(false);
+      setSelectedStaffForResponsibility(null);
+      
+    } catch (error) {
+      console.error('責任設定の保存に失敗しました:', error);
+      alert('責任設定の保存に失敗しました: ' + (error instanceof Error ? error.message : String(error)));
+    }
   };
 
   const handleJsonUpload = async (file: File) => {
@@ -2399,13 +2825,16 @@ export default function FullMainApp() {
       }
       
       // 文字チェックが通った場合のみAPIに送信
-      const formData = new FormData();
-      formData.append('file', file);
       const currentApiUrl = getApiUrl();
-
-      const response = await authenticatedFetch(`${currentApiUrl}/api/staff/sync-from-json`, {
+      
+      console.log(`JSONファイルサイズ: ${fileContent.length} 文字, 社員数: ${jsonData.employeeData?.length || 0}名`);
+      
+      const response = await authenticatedFetch(`${currentApiUrl}/api/staff/sync-from-json-body`, {
         method: 'POST',
-        body: formData
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(jsonData)
       });
       
       if (!response.ok) {
@@ -2441,13 +2870,50 @@ export default function FullMainApp() {
   const handleCsvUpload = async (file: File) => {
     setIsImporting(true);
     try {
-      const formData = new FormData();
-      formData.append('file', file);
+      // CSVファイルを読み込み
+      const csvText = await file.text();
+      const lines = csvText.trim().split('\n');
+      
+      if (lines.length < 2) {
+        throw new Error('CSVファイルが空または不正です');
+      }
+      
+      // ヘッダー行を確認（オプション）
+      const hasHeader = lines[0].toLowerCase().includes('empno') || lines[0].toLowerCase().includes('date');
+      const dataLines = hasHeader ? lines.slice(1) : lines;
+      
+      // データを解析
+      const schedules = dataLines.map((line, index) => {
+        const columns = line.split(',');
+        if (columns.length < 5) {
+          throw new Error(`${index + (hasHeader ? 2 : 1)}行目: 必要な列が不足しています`);
+        }
+        
+        // フォーマット: date,empNo,name,status,time,memo,assignmentType,customLabel
+        return {
+          date: columns[0]?.trim(),
+          empNo: columns[1]?.trim(),
+          name: columns[2]?.trim(),
+          status: columns[3]?.trim(),
+          time: columns[4]?.trim(),
+          memo: columns[5]?.trim() || undefined,
+          assignmentType: columns[6]?.trim() || undefined,
+          customLabel: columns[7]?.trim() || undefined
+        };
+      }).filter(s => s.empNo && s.date && (
+        // スケジュール情報または担当設定のいずれかがあればOK
+        (s.status && s.time) || s.assignmentType
+      ));
+      
+      console.log('Parsed CSV schedules:', schedules);
       const currentApiUrl = getApiUrl();
 
       const response = await authenticatedFetch(`${currentApiUrl}/api/csv-import/schedules`, {
         method: 'POST',
-        body: formData
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ schedules })
       });
       
       if (!response.ok) {
@@ -2635,6 +3101,70 @@ export default function FullMainApp() {
 
   const availableStaffCount = useMemo(() => departmentGroupFilteredStaff.filter(staff => AVAILABLE_STATUSES.includes(staff.currentStatus)).length, [departmentGroupFilteredStaff]);
 
+  // フィルター用のソート済み部署リスト
+  const sortedDepartmentsForFilter = useMemo(() => {
+    const uniqueDepts = [...new Set(staffList.map(s => s.isSupporting ? (s.currentDept || s.department) : s.department))];
+    return uniqueDepts.sort((a, b) => {
+      const settingA = departmentSettings.departments.find(d => d.name === a);
+      const settingB = departmentSettings.departments.find(d => d.name === b);
+      const orderA = settingA?.displayOrder || 0;
+      const orderB = settingB?.displayOrder || 0;
+      if (orderA !== orderB) {
+        return orderA - orderB;
+      }
+      return a.localeCompare(b);
+    });
+  }, [staffList, departmentSettings.departments]);
+
+  // フィルター用のソート済みグループリスト（部署順→グループ順）
+  const sortedGroupsForFilter = useMemo(() => {
+    const filteredStaff = staffList.filter(s => {
+      const currentDept = s.isSupporting ? (s.currentDept || s.department) : s.department;
+      return selectedDepartment === 'all' || currentDept === selectedDepartment;
+    });
+    const uniqueGroups = [...new Set(filteredStaff.map(s => s.isSupporting ? (s.currentGroup || s.group) : s.group))];
+    
+    return uniqueGroups.sort((a, b) => {
+      // スタッフデータからグループが属する部署を特定
+      const staffA = staffList.find(staff => staff.group === a);
+      const staffB = staffList.find(staff => staff.group === b);
+      
+      const deptA = staffA?.department || '';
+      const deptB = staffB?.department || '';
+      
+      // 部署の表示順序を取得
+      const deptSettingA = departmentSettings.departments.find(d => d.name === deptA);
+      const deptSettingB = departmentSettings.departments.find(d => d.name === deptB);
+      
+      const deptOrderA = deptSettingA?.displayOrder || 0;
+      const deptOrderB = deptSettingB?.displayOrder || 0;
+      
+      // まず部署順で比較
+      if (deptOrderA !== deptOrderB) {
+        return deptOrderA - deptOrderB;
+      }
+      
+      // 同じ部署なら部署名で比較
+      if (deptA !== deptB) {
+        return deptA.localeCompare(deptB);
+      }
+      
+      // 同じ部署内ならグループの表示順序で比較
+      const groupSettingA = departmentSettings.groups.find(g => g.name === a);
+      const groupSettingB = departmentSettings.groups.find(g => g.name === b);
+      
+      const groupOrderA = groupSettingA?.displayOrder || 0;
+      const groupOrderB = groupSettingB?.displayOrder || 0;
+      
+      if (groupOrderA !== groupOrderB) {
+        return groupOrderA - groupOrderB;
+      }
+      
+      // 最後にグループ名で比較
+      return a.localeCompare(b);
+    });
+  }, [staffList, selectedDepartment, departmentSettings.departments, departmentSettings.groups]);
+
   // 今日かどうかを判定
   const isToday = useMemo(() => {
     const now = new Date();
@@ -2712,8 +3242,24 @@ export default function FullMainApp() {
           checkTime < s.end
         );
         
+        // レイヤー優先順位: adjustment > contract
+        // 同じレイヤー内では新しいIDを優先
         const topSchedule = applicableSchedules.length > 0 ? 
-          applicableSchedules.reduce((latest, current) => latest.id > current.id ? latest : current) : null;
+          applicableSchedules.reduce((best, current) => {
+            const bestLayer = (best as any).layer || 'adjustment';
+            const currentLayer = (current as any).layer || 'adjustment';
+            
+            // 調整レイヤーが契約レイヤーより優先
+            if (currentLayer === 'adjustment' && bestLayer === 'contract') {
+              return current;
+            }
+            if (bestLayer === 'adjustment' && currentLayer === 'contract') {
+              return best;
+            }
+            
+            // 同じレイヤーなら新しいIDを優先
+            return current.id > best.id ? current : best;
+          }) : null;
         const status = topSchedule ? topSchedule.status : 'Off';
         if (statusesToDisplay.includes(status)) { counts[status]++; }
       });
@@ -2732,16 +3278,52 @@ export default function FullMainApp() {
   }, [currentTime, displayDate]);
 
   const groupedStaffForGantt = useMemo(() => {
-    return filteredStaffForDisplay.reduce((acc, staff) => {
-      // 支援中の場合は現在の部署/グループを使用、そうでなければ元の部署/グループを使用
-      const department = staff.isSupporting ? (staff.currentDept || staff.department) : staff.department;
-      const group = staff.isSupporting ? (staff.currentGroup || staff.group) : staff.group;
+    // 部署・グループごとに集約
+    const grouped = filteredStaffForDisplay.reduce((acc, staff) => {
+      // 支援中でも元の部署/グループの位置に表示（表示順序の混乱を防ぐため）
+      const department = staff.department;
+      const group = staff.group;
       if (!acc[department]) { acc[department] = {}; }
       if (!acc[department][group]) { acc[department][group] = []; }
       acc[department][group].push(staff);
       return acc;
     }, {} as Record<string, Record<string, Staff[]>>);
+
+    // 各グループ内のスタッフをempNo順でソート
+    Object.keys(grouped).forEach(department => {
+      Object.keys(grouped[department]).forEach(group => {
+        grouped[department][group].sort((a, b) => {
+          // empNoがない場合は後ろに配置
+          if (!a.empNo && !b.empNo) return a.id - b.id;
+          if (!a.empNo) return 1;
+          if (!b.empNo) return -1;
+          return a.empNo.localeCompare(b.empNo);
+        });
+      });
+    });
+
+    return grouped;
   }, [filteredStaffForDisplay]);
+
+  // 部署・グループの表示順序に基づいてソートする関数
+  const sortByDisplayOrder = useCallback((entries: [string, any][], type: 'department' | 'group') => {
+    return entries.sort((a, b) => {
+      const aName = a[0];
+      const bName = b[0];
+      
+      const aSettings = departmentSettings[type === 'department' ? 'departments' : 'groups'].find(s => s.name === aName);
+      const bSettings = departmentSettings[type === 'department' ? 'departments' : 'groups'].find(s => s.name === bName);
+      
+      const aOrder = aSettings?.displayOrder || 0;
+      const bOrder = bSettings?.displayOrder || 0;
+      
+      // displayOrderで比較、同じ場合は名前順
+      if (aOrder !== bOrder) {
+        return aOrder - bOrder;
+      }
+      return aName.localeCompare(bName);
+    });
+  }, [departmentSettings]);
   
   
   const handleDateChange = (days: number) => { 
@@ -2847,6 +3429,8 @@ export default function FullMainApp() {
         setIsJsonUploadModalOpen={setIsJsonUploadModalOpen}
         setIsImportHistoryModalOpen={setIsImportHistoryModalOpen}
         canManage={canManage()}
+        authenticatedFetch={authenticatedFetch}
+        staffList={staffList}
       />
       
       <main className={`container mx-auto p-4 font-sans ${viewMode === 'compact' ? 'compact-mode' : ''}`}>
@@ -2900,11 +3484,8 @@ export default function FullMainApp() {
 
         <div className="mb-2 p-3 bg-gray-50 rounded-lg flex items-center justify-between">
             <div className="flex items-center space-x-4">
-                <select onChange={(e) => setSelectedDepartment(e.target.value)} value={selectedDepartment} className="rounded-md border-gray-300 shadow-sm"><option value="all">すべての部署</option>{Array.from(new Set(staffList.map(s => s.isSupporting ? (s.currentDept || s.department) : s.department))).map(dep => <option key={dep} value={dep}>{dep}</option>)}</select>
-                <select onChange={(e) => setSelectedGroup(e.target.value)} value={selectedGroup} className="rounded-md border-gray-300 shadow-sm"><option value="all">すべてのグループ</option>{Array.from(new Set(staffList.filter(s => {
-                  const currentDept = s.isSupporting ? (s.currentDept || s.department) : s.department;
-                  return selectedDepartment === 'all' || currentDept === selectedDepartment;
-                }).map(s => s.isSupporting ? (s.currentGroup || s.group) : s.group))).map(grp => <option key={grp} value={grp}>{grp}</option>)}</select>
+                <select onChange={(e) => setSelectedDepartment(e.target.value)} value={selectedDepartment} className="rounded-md border-gray-300 shadow-sm"><option value="all">すべての部署</option>{sortedDepartmentsForFilter.map(dep => <option key={dep} value={dep}>{dep}</option>)}</select>
+                <select onChange={(e) => setSelectedGroup(e.target.value)} value={selectedGroup} className="rounded-md border-gray-300 shadow-sm"><option value="all">すべてのグループ</option>{sortedGroupsForFilter.map(grp => <option key={grp} value={grp}>{grp}</option>)}</select>
                 <div className="inline-flex rounded-md shadow-sm" role="group">
                     <button type="button" onClick={() => setSelectedSettingFilter('all')} className={`px-4 py-2 text-sm font-medium transition-colors duration-150 rounded-l-lg border ${selectedSettingFilter === 'all' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-900 hover:bg-gray-100'}`}>すべて</button>
                     <button type="button" onClick={() => setSelectedSettingFilter('responsibility')} className={`px-4 py-2 text-sm font-medium transition-colors duration-150 border-t border-b ${selectedSettingFilter === 'responsibility' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-900 hover:bg-gray-100'}`}>担当設定</button>
@@ -2936,16 +3517,20 @@ export default function FullMainApp() {
               {/* ヘッダー行 - 時刻行と同じ高さに調整 */}
               <div className="px-2 py-2 bg-gray-100 font-bold text-gray-600 text-sm text-center border-b whitespace-nowrap">部署 / グループ / スタッフ名</div>
               {Object.keys(groupedStaffForGantt).length > 0 ? (
-                Object.entries(groupedStaffForGantt).map(([department, groups]) => (
+                sortByDisplayOrder(Object.entries(groupedStaffForGantt), 'department').map(([department, groups]) => (
                   <div key={department} className="department-group">
                     <h3 className="px-2 min-h-[33px] text-sm font-bold whitespace-nowrap flex items-center" style={{backgroundColor: departmentColors[department] || '#f5f5f5'}}>{department}</h3>
-                    {Object.entries(groups).map(([group, staffInGroup]) => (
+                    {sortByDisplayOrder(Object.entries(groups), 'group').map(([group, staffInGroup]) => (
                       <div key={group}>
                         <h4 className="px-2 pl-6 min-h-[33px] text-xs font-semibold whitespace-nowrap flex items-center" style={{backgroundColor: teamColors[group] || '#f5f5f5'}}>{group}</h4>
-                        {staffInGroup.map(staff => (
-                          <div key={staff.id} className={`staff-timeline-row px-2 pl-12 text-sm font-medium whitespace-nowrap h-[45px] hover:bg-gray-50 flex items-center cursor-pointer ${
-                            staff.isSupporting ? 'bg-amber-50 border border-amber-400' : ''
-                          }`}
+                        {staffInGroup.map(staff => {
+                          const supportBorderColor = getSupportBorderColor(staff);
+                          return (
+                          <div key={staff.id} 
+                               className="staff-timeline-row px-2 pl-12 text-sm font-medium whitespace-nowrap h-[45px] hover:bg-gray-50 flex items-center cursor-pointer"
+                               style={{
+                                 border: supportBorderColor ? `2px solid ${supportBorderColor}` : undefined
+                               }}
                                onClick={() => handleOpenResponsibilityModal(staff)}
                                onContextMenu={(e) => {
                                  e.preventDefault(); // デフォルトのコンテキストメニューを無効化
@@ -2956,12 +3541,15 @@ export default function FullMainApp() {
                             <span className={`staff-name ${staff.isSupporting ? 'text-amber-800' : ''}`}>
                               {staff.name}
                               {staff.isSupporting && (
-                                <span className="support-info ml-1 text-xs text-amber-600 font-semibold">[支援]</span>
+                                <span className="support-info ml-1 text-xs text-amber-600 font-semibold">
+                                  [支援:{getSupportDestinationText(staff)}]
+                                </span>
                               )}
                               {generateResponsibilityBadges(staff.responsibilities || null, staff.isReception || false)}
                             </span>
                           </div>
-                        ))}
+                        );
+                        })}
                       </div>
                     ))}
                   </div>
@@ -3044,16 +3632,20 @@ export default function FullMainApp() {
                     </div>
                   )}
                   {Object.keys(groupedStaffForGantt).length > 0 ? (
-                    Object.entries(groupedStaffForGantt).map(([department, groups]) => (
+                    sortByDisplayOrder(Object.entries(groupedStaffForGantt), 'department').map(([department, groups]) => (
                       <div key={department} className="department-group">
                         <div className="min-h-[33px]" style={{backgroundColor: departmentColors[department] || '#f5f5f5'}}></div>
-                        {Object.entries(groups).map(([group, staffInGroup]) => (
+                        {sortByDisplayOrder(Object.entries(groups), 'group').map(([group, staffInGroup]) => (
                           <div key={group}>
                             <div className="min-h-[33px]" style={{backgroundColor: teamColors[group] || '#f5f5f5'}}></div>
-                            {staffInGroup.map(staff => (
-                              <div key={staff.id} className={`staff-timeline-row h-[45px] relative hover:bg-gray-50 ${
-                                     staff.isSupporting ? 'bg-amber-50' : ''
-                                   }`}
+                            {staffInGroup.map(staff => {
+                              const supportBorderColor = getSupportBorderColor(staff);
+                              return (
+                              <div key={staff.id} 
+                                   className="staff-timeline-row h-[45px] relative hover:bg-gray-50"
+                                   style={{
+                                     backgroundColor: supportBorderColor ? hexToRgba(supportBorderColor, 0.5) : undefined
+                                   }}
                                    onMouseDown={(e) => handleTimelineMouseDown(e, staff)}
                                    onMouseLeave={() => {
                                      // マウスがスタッフ行から離れたら選択解除
@@ -3106,7 +3698,7 @@ export default function FullMainApp() {
                                   const aLayer = (a as any).layer || 'adjustment';
                                   const bLayer = (b as any).layer || 'adjustment';
                                   return layerOrder[aLayer] - layerOrder[bLayer];
-                                }).map((schedule) => {
+                                }).map((schedule, index) => {
                                   const startPosition = timeToPositionPercent(schedule.start);
                                   const endPosition = timeToPositionPercent(schedule.end);
                                   const barWidth = endPosition - startPosition;
@@ -3114,7 +3706,7 @@ export default function FullMainApp() {
                                   const isContract = scheduleLayer === 'contract';
                                   
                                   return (
-                                    <div key={`${schedule.id}-${scheduleLayer}-${schedule.staffId}`} 
+                                    <div key={`${schedule.id}-${scheduleLayer}-${schedule.staffId}-${index}`} 
                                          draggable={!isContract && canEdit(schedule.staffId)}
                                          className={`schedule-block absolute h-6 rounded text-white text-xs flex items-center justify-between px-2 ${
                                            isContract ? 'cursor-default' : 
@@ -3197,7 +3789,8 @@ export default function FullMainApp() {
                                        }} />
                                 )}
                               </div>
-                            ))}
+                            );
+                            })}
                           </div>
                         ))}
                       </div>

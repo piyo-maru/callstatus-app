@@ -31,7 +31,7 @@ export class StaffSimpleService {
           data: {
             empNo: emp.empNo,
             name: emp.name,
-            department: emp.department,
+            department: emp.dept || emp.department,
             group: emp.team,
             isActive: true
           }
@@ -42,16 +42,9 @@ export class StaffSimpleService {
           data: {
             empNo: emp.empNo,
             name: emp.name,
-            department: emp.department,
+            dept: emp.dept || emp.department,
             team: emp.team,
             email: emp.email || '',
-            mondayHours: emp.mondayHours || null,
-            tuesdayHours: emp.tuesdayHours || null,
-            wednesdayHours: emp.wednesdayHours || null,
-            thursdayHours: emp.thursdayHours || null,
-            fridayHours: emp.fridayHours || null,
-            saturdayHours: emp.saturdayHours || null,
-            sundayHours: emp.sundayHours || null,
             staffId: staff.id
           }
         });

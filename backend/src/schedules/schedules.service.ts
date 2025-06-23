@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, Inject, forwardRef } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { SchedulesGateway } from './schedules.gateway';
-// import { LayerManagerService } from '../layer-manager/layer-manager.service'; // 一時的に無効化
+import { LayerManagerService } from '../layer-manager/layer-manager.service';
 
 @Injectable()
 export class SchedulesService {
@@ -9,8 +9,13 @@ export class SchedulesService {
     private prisma: PrismaService,
     @Inject(forwardRef(() => SchedulesGateway))
     private readonly gateway: SchedulesGateway,
-    // private layerManager: LayerManagerService, // 一時的に無効化
+    private layerManager: LayerManagerService,
   ) {}
+
+  // テスト用にLayerManagerServiceを公開
+  getLayerManager(): LayerManagerService {
+    return this.layerManager;
+  }
 
   // JST入力値を内部UTC時刻に変換（厳格ルール準拠）
   private jstToUtc(decimalHour: number, baseDateString: string): Date {
@@ -27,20 +32,56 @@ export class SchedulesService {
   async findAll(dateString: string) {
     console.log(`Finding schedules for date: ${dateString}`);
     
+    try {
+      // スタッフ情報を取得
+      const staff = await this.prisma.staff.findMany();
+      console.log(`Found ${staff.length} staff members`);
+
+      // 2層データ統合システムから取得
+      const layeredSchedules = await this.layerManager.getLayeredSchedules(dateString);
+      console.log(`Found ${layeredSchedules.length} layered schedules`);
+
+      // LayeredScheduleを従来のSchedule形式に変換
+      const schedules = layeredSchedules.map((ls, index) => ({
+        id: this.generateLayerBasedId(ls.layer, ls.id, index),
+        staffId: ls.staffId,
+        status: this.convertStatusFormat(ls.status),
+        start: this.utcToJstDecimal(ls.start),
+        end: this.utcToJstDecimal(ls.end),
+        memo: ls.memo || null,
+        editable: ls.layer === 'adjustment', // 調整レイヤーのみ編集可能
+        layer: ls.layer // レイヤー情報を追加
+      }));
+
+      console.log(`Converted to ${schedules.length} schedule records`);
+      return { 
+        schedules,
+        staff: staff.map(s => ({
+          id: s.id,
+          empNo: s.empNo,
+          name: s.name,
+          department: s.department,
+          group: s.group,
+          isActive: s.isActive
+        }))
+      };
+    } catch (error) {
+      console.error('Error in findAll:', error);
+      // エラー時は従来のScheduleテーブルから取得
+      return this.findAllFallback(dateString);
+    }
+  }
+
+  private async findAllFallback(dateString: string) {
+    console.log(`Fallback: Finding schedules from Schedule table for date: ${dateString}`);
+    
     // スタッフ情報を取得
     const staff = await this.prisma.staff.findMany();
     console.log(`Found ${staff.length} staff members`);
 
-    // 一時的にScheduleテーブルから直接取得（LayerManagerService無効化のため）
-    // JST日付範囲をUTC時刻で表現（厳格ルール準拠）
-    const startOfDayUtc = new Date(`${dateString}T00:00:00+09:00`); // JST 00:00 = UTC前日15:00
-    const endOfDayUtc = new Date(`${dateString}T23:59:59+09:00`);   // JST 23:59 = UTC当日14:59
-    
-    console.log(`Date range for query:`, {
-      dateString,
-      startOfDayUtc: startOfDayUtc.toISOString(),
-      endOfDayUtc: endOfDayUtc.toISOString()
-    });
+    // 従来のScheduleテーブルから直接取得
+    const startOfDayUtc = new Date(`${dateString}T00:00:00+09:00`);
+    const endOfDayUtc = new Date(`${dateString}T23:59:59+09:00`);
     
     const schedules = await this.prisma.schedule.findMany({
       where: {
@@ -52,13 +93,6 @@ export class SchedulesService {
     });
     
     console.log(`Found ${schedules.length} schedules from Schedule table`);
-    if (schedules.length > 0) {
-      console.log('First schedule:', {
-        id: schedules[0].id,
-        start: schedules[0].start.toISOString(),
-        end: schedules[0].end.toISOString()
-      });
-    }
 
     // Schedule形式に変換
     const convertedSchedules = schedules.map(s => ({
@@ -68,11 +102,10 @@ export class SchedulesService {
       start: this.utcToJstDecimal(s.start),
       end: this.utcToJstDecimal(s.end),
       memo: s.memo || null,
-      editable: true, // 従来のScheduleテーブルは編集可能
-      layer: 'adjustment' // デフォルトで調整レイヤー扱い
+      editable: true,
+      layer: 'adjustment'
     }));
 
-    console.log(`Converted to ${convertedSchedules.length} schedule records`);
     return { 
       schedules: convertedSchedules,
       staff: staff.map(s => ({

@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
-import { ResponsibilitiesService } from './responsibilities.service';
 import { ResponsibilitiesController } from './responsibilities.controller';
+import { ResponsibilitiesService } from './responsibilities.service';
 import { PrismaModule } from '../prisma.module';
 
 @Module({

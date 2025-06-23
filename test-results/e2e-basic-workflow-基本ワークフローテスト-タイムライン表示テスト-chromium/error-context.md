@@ -1,0 +1,75 @@
+# Page snapshot
+
+```yaml
+- alert
+- heading "出社状況管理ボード" [level=1]
+- text: admin@example.com (管理者)
+- button "ログアウト"
+- main:
+  - group:
+    - button "<"
+    - button "今日"
+    - button ">"
+  - button "2025年6月23日(月)"
+  - button "予定を追加"
+  - button "⚙️ 設定"
+  - 'button "表示密度: 標準"'
+  - combobox:
+    - option "すべての部署" [selected]
+    - option "システム部"
+    - option "営業部"
+    - option "経理部"
+    - option "人事部"
+  - combobox:
+    - option "すべてのグループ" [selected]
+    - option "運用グループ"
+    - option "営業一課"
+    - option "営業二課"
+    - option "会計グループ"
+    - option "財務グループ"
+    - option "採用グループ"
+    - option "労務グループ"
+  - group:
+    - button "すべて"
+    - button "担当設定"
+    - button "支援設定"
+  - group:
+    - button "すべて"
+    - button "対応可能"
+    - button "対応不可"
+  - paragraph: 現在の対応可能人数
+  - paragraph: 6人
+  - text: Online Remote Night Duty Off Unplanned Break Meeting Training
+  - img: 8:00 9:00 10:00 11:00 12:00 13:00 14:00 15:00 16:00 17:00 18:00 19:00 20:00 0 4 8
+  - text: 部署 / グループ / スタッフ名
+  - heading "システム部" [level=3]
+  - heading "開発グループ" [level=4]
+  - text: 田中太郎[支援:営業一課]
+  - heading "運用グループ" [level=4]
+  - text: 佐藤花子
+  - heading "営業部" [level=3]
+  - heading "営業一課" [level=4]
+  - text: 山田次郎
+  - heading "営業二課" [level=4]
+  - text: 鈴木美咲
+  - heading "経理部" [level=3]
+  - heading "会計グループ" [level=4]
+  - text: 高橋健太
+  - heading "財務グループ" [level=4]
+  - text: 渡辺雅子
+  - heading "人事部" [level=3]
+  - heading "採用グループ" [level=4]
+  - text: 中村慎也
+  - heading "労務グループ" [level=4]
+  - text: 小林知美 8:00 9:00 10:00 11:00 12:00 13:00 14:00 15:00 16:00 17:00 18:00 19:00 20:00 Online📝 Online📝
+  - button "×"
+  - text: Meeting📝
+  - button "×"
+  - text: Online📝 Remote📝
+  - button "×"
+  - text: Training📝
+  - button "×"
+  - text: Online📝 Online📝 Off📝
+  - button "×"
+  - text: Online📝 Online📝 Online📝 Online📝
+```

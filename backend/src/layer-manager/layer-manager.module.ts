@@ -1,10 +1,9 @@
 import { Module } from '@nestjs/common';
 import { LayerManagerService } from './layer-manager.service';
-import { PrismaModule } from '../prisma.module';
+import { PrismaService } from '../prisma.service';
 
 @Module({
-  imports: [PrismaModule],
-  providers: [LayerManagerService],
+  providers: [LayerManagerService, PrismaService],
   exports: [LayerManagerService],
 })
 export class LayerManagerModule {}

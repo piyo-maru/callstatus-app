@@ -14,7 +14,10 @@ export class PrismaService extends PrismaClient implements OnModuleInit {
       try {
         this.logger.log(`データベース接続試行 ${attempt}/${maxRetries}...`);
         await this.$connect();
-        this.logger.log('データベース接続成功');
+        
+        // データベースセッションタイムゾーンをUTCに強制設定
+        await this.$executeRaw`SET timezone TO 'UTC'`;
+        this.logger.log('データベース接続成功（タイムゾーン: UTC）');
         return;
       } catch (error) {
         this.logger.error(`データベース接続失敗 (試行 ${attempt}/${maxRetries}):`, error.message);

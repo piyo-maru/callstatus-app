@@ -8,10 +8,16 @@ const detectApiPort = async (): Promise<number> => {
   
   for (const port of candidatePorts) {
     try {
+      // タイムアウト用のAbortController（ブラウザ互換性対応）
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 1000);
+      
       const response = await fetch(`http://localhost:${port}/api/test`, {
         method: 'GET',
-        signal: AbortSignal.timeout(1000) // 1秒でタイムアウト
+        signal: controller.signal
       });
+      
+      clearTimeout(timeoutId);
       
       if (response.ok) {
         console.log(`✅ API detected on port ${port}`);

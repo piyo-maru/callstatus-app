@@ -1,0 +1,6 @@
+date,empNo,name,status,time,memo,assignmentType,customLabel
+2025-06-23,8339,田中太郎,training,14:00-16:00,新人研修,main,主担当
+2025-06-23,7764,佐藤花子,meeting,15:00-16:00,チームミーティング,sub,
+2025-06-23,1234,鈴木一郎,break,12:00-13:00,昼休み延長,,
+2025-06-24,8339,田中太郎,online,09:00-18:00,,support,支援A
+2025-06-24,7764,佐藤花子,remote,10:00-19:00,,main,
