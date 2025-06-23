@@ -1584,7 +1584,7 @@ const DepartmentGroupSettings = ({ authenticatedFetch, staffList }: {
             <h4 className="font-medium text-gray-900 mb-3">部署設定 ({departments.length})</h4>
             <div className="border border-gray-200 rounded-lg">
               <table className="w-full text-sm">
-                <thead className="bg-gray-50 sticky top-0">
+                <thead className="bg-gray-50">
                   <tr>
                     <th className="px-3 py-2 text-left">部署名</th>
                     <th className="px-3 py-2 text-left">短縮名</th>
@@ -1635,7 +1635,7 @@ const DepartmentGroupSettings = ({ authenticatedFetch, staffList }: {
             <h4 className="font-medium text-gray-900 mb-3">グループ設定 ({groups.length})</h4>
             <div className="border border-gray-200 rounded-lg">
               <table className="w-full text-sm">
-                <thead className="bg-gray-50 sticky top-0">
+                <thead className="bg-gray-50">
                   <tr>
                     <th className="px-3 py-2 text-left">グループ名</th>
                     <th className="px-3 py-2 text-left">短縮名</th>
@@ -3358,7 +3358,7 @@ export default function FullMainApp() {
     const displayText = formatDateWithHoliday(displayDate, holidays);
     
     return (
-      <button className={`text-xl font-semibold ${colorClass}`} onClick={onClick} ref={ref}>
+      <button className={`text-lg font-semibold ${colorClass}`} onClick={onClick} ref={ref}>
         {displayText}
       </button>
     );
@@ -3433,13 +3433,13 @@ export default function FullMainApp() {
         staffList={staffList}
       />
       
-      <main className={`container mx-auto p-4 font-sans ${viewMode === 'compact' ? 'compact-mode' : ''}`}>
-        <header className="mb-6 flex justify-between items-center">
-            <div className="flex items-center space-x-4">
+      <main className={`container mx-auto p-2 font-sans ${viewMode === 'compact' ? 'compact-mode' : ''}`}>
+        <header className="mb-2 flex justify-between items-center">
+            <div className="flex items-center space-x-3">
                 <div className="inline-flex rounded-md shadow-sm" role="group">
-                    <button type="button" onClick={() => handleDateChange(-1)} className="px-3 py-1 text-sm font-medium text-gray-900 bg-white border border-gray-200 rounded-l-lg hover:bg-gray-100">&lt;</button>
-                    <button type="button" onClick={goToToday} className="px-3 py-1 text-sm font-medium text-gray-900 bg-white border-t border-b border-gray-200 hover:bg-gray-100">今日</button>
-                    <button type="button" onClick={() => handleDateChange(1)} className="px-3 py-1 text-sm font-medium text-gray-900 bg-white border border-gray-200 rounded-r-lg hover:bg-gray-100">&gt;</button>
+                    <button type="button" onClick={() => handleDateChange(-1)} className="px-2 py-1 text-xs font-medium text-gray-900 bg-white border border-gray-200 rounded-l-lg hover:bg-gray-100 h-7">&lt;</button>
+                    <button type="button" onClick={goToToday} className="px-2 py-1 text-xs font-medium text-gray-900 bg-white border-t border-b border-gray-200 hover:bg-gray-100 h-7">今日</button>
+                    <button type="button" onClick={() => handleDateChange(1)} className="px-2 py-1 text-xs font-medium text-gray-900 bg-white border border-gray-200 rounded-r-lg hover:bg-gray-100 h-7">&gt;</button>
                 </div>
                 <DatePicker
                   selected={displayDate}
@@ -3461,14 +3461,14 @@ export default function FullMainApp() {
                 <button onClick={() => {
                   setSelectedSchedule(null);
                   handleOpenModal();
-                }} className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md hover:bg-indigo-700">
+                }} className="px-3 py-1 text-xs font-medium text-white bg-indigo-600 border border-transparent rounded-md hover:bg-indigo-700 h-7">
                     予定を追加
                 </button>
                 {canManage() && (
                   <button onClick={() => {
                     setSelectedSchedule(null);
                     setIsSettingsModalOpen(true);
-                  }} className="px-4 py-2 text-sm font-medium text-white bg-gray-600 border border-transparent rounded-md hover:bg-gray-700">
+                  }} className="px-3 py-1 text-xs font-medium text-white bg-gray-600 border border-transparent rounded-md hover:bg-gray-700 h-7">
                       ⚙️ 設定
                   </button>
                 )}
@@ -3482,20 +3482,20 @@ export default function FullMainApp() {
             </div>
         </header>
 
-        <div className="mb-2 p-3 bg-gray-50 rounded-lg flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-                <select onChange={(e) => setSelectedDepartment(e.target.value)} value={selectedDepartment} className="rounded-md border-gray-300 shadow-sm"><option value="all">すべての部署</option>{sortedDepartmentsForFilter.map(dep => <option key={dep} value={dep}>{dep}</option>)}</select>
-                <select onChange={(e) => setSelectedGroup(e.target.value)} value={selectedGroup} className="rounded-md border-gray-300 shadow-sm"><option value="all">すべてのグループ</option>{sortedGroupsForFilter.map(grp => <option key={grp} value={grp}>{grp}</option>)}</select>
+        <div className="mb-2 p-2 bg-gray-50 rounded-lg flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+                <select onChange={(e) => setSelectedDepartment(e.target.value)} value={selectedDepartment} className="rounded-md border-gray-300 shadow-sm text-xs h-6"><option value="all">すべての部署</option>{sortedDepartmentsForFilter.map(dep => <option key={dep} value={dep}>{dep}</option>)}</select>
+                <select onChange={(e) => setSelectedGroup(e.target.value)} value={selectedGroup} className="rounded-md border-gray-300 shadow-sm text-xs h-6"><option value="all">すべてのグループ</option>{sortedGroupsForFilter.map(grp => <option key={grp} value={grp}>{grp}</option>)}</select>
                 <div className="inline-flex rounded-md shadow-sm" role="group">
-                    <button type="button" onClick={() => setSelectedSettingFilter('all')} className={`px-4 py-2 text-sm font-medium transition-colors duration-150 rounded-l-lg border ${selectedSettingFilter === 'all' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-900 hover:bg-gray-100'}`}>すべて</button>
-                    <button type="button" onClick={() => setSelectedSettingFilter('responsibility')} className={`px-4 py-2 text-sm font-medium transition-colors duration-150 border-t border-b ${selectedSettingFilter === 'responsibility' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-900 hover:bg-gray-100'}`}>担当設定</button>
-                    <button type="button" onClick={() => setSelectedSettingFilter('support')} className={`px-4 py-2 text-sm font-medium transition-colors duration-150 rounded-r-lg border ${selectedSettingFilter === 'support' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-900 hover:bg-gray-100'}`}>支援設定</button>
+                    <button type="button" onClick={() => setSelectedSettingFilter('all')} className={`px-3 py-1 text-xs font-medium transition-colors duration-150 rounded-l-lg border h-7 ${selectedSettingFilter === 'all' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-900 hover:bg-gray-100'}`}>すべて</button>
+                    <button type="button" onClick={() => setSelectedSettingFilter('responsibility')} className={`px-3 py-1 text-xs font-medium transition-colors duration-150 border-t border-b h-7 ${selectedSettingFilter === 'responsibility' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-900 hover:bg-gray-100'}`}>担当設定</button>
+                    <button type="button" onClick={() => setSelectedSettingFilter('support')} className={`px-3 py-1 text-xs font-medium transition-colors duration-150 rounded-r-lg border h-7 ${selectedSettingFilter === 'support' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-900 hover:bg-gray-100'}`}>支援設定</button>
                 </div>
                 {isToday && (
                   <div className="inline-flex rounded-md shadow-sm" role="group">
-                      <button type="button" onClick={() => setSelectedStatus('all')} className={`px-4 py-2 text-sm font-medium transition-colors duration-150 rounded-l-lg border ${selectedStatus === 'all' ? 'bg-teal-500 text-white' : 'bg-white text-gray-900 hover:bg-gray-100'}`}>すべて</button>
-                      <button type="button" onClick={() => setSelectedStatus('available')} className={`px-4 py-2 text-sm font-medium transition-colors duration-150 border-t border-b ${selectedStatus === 'available' ? 'bg-teal-500 text-white' : 'bg-white text-gray-900 hover:bg-gray-100'}`}>対応可能</button>
-                      <button type="button" onClick={() => setSelectedStatus('unavailable')} className={`px-4 py-2 text-sm font-medium transition-colors duration-150 rounded-r-lg border ${selectedStatus === 'unavailable' ? 'bg-teal-500 text-white' : 'bg-white text-gray-900 hover:bg-gray-100'}`}>対応不可</button>
+                      <button type="button" onClick={() => setSelectedStatus('all')} className={`px-3 py-1 text-xs font-medium transition-colors duration-150 rounded-l-lg border h-7 ${selectedStatus === 'all' ? 'bg-teal-500 text-white' : 'bg-white text-gray-900 hover:bg-gray-100'}`}>すべて</button>
+                      <button type="button" onClick={() => setSelectedStatus('available')} className={`px-3 py-1 text-xs font-medium transition-colors duration-150 border-t border-b h-7 ${selectedStatus === 'available' ? 'bg-teal-500 text-white' : 'bg-white text-gray-900 hover:bg-gray-100'}`}>対応可能</button>
+                      <button type="button" onClick={() => setSelectedStatus('unavailable')} className={`px-3 py-1 text-xs font-medium transition-colors duration-150 rounded-r-lg border h-7 ${selectedStatus === 'unavailable' ? 'bg-teal-500 text-white' : 'bg-white text-gray-900 hover:bg-gray-100'}`}>対応不可</button>
                   </div>
                 )}
             </div>
