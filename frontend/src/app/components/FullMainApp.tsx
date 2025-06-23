@@ -1895,6 +1895,27 @@ const SettingsModal = ({ isOpen, onClose, viewMode, setViewMode, setIsCsvUploadM
                 </div>
               </div>
 
+              {/* マスキング設定 */}
+              <div className="border border-gray-200 rounded-lg p-4">
+                <h4 className="font-medium text-gray-900 mb-3">🔒 プライバシー設定</h4>
+                <div className="space-y-3">
+                  <label className="flex items-center">
+                    <input 
+                      type="checkbox" 
+                      className="mr-3" 
+                      checked={maskingEnabled}
+                      onChange={toggleMasking}
+                    />
+                    <div>
+                      <span className="font-medium">退職済み社員の名前をマスキング</span>
+                      <p className="text-sm text-gray-600 mt-1">
+                        過去データ閲覧時に退職済み社員の名前を「退職済み社員」として表示します
+                      </p>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
               {/* 時間軸設定 */}
               <div className="border border-gray-200 rounded-lg p-4">
                 <h4 className="font-medium text-gray-900 mb-3">⏰ 時間軸設定</h4>
@@ -2173,12 +2194,33 @@ export default function FullMainApp() {
     message?: string;
   }>({});
 
+  // マスキング機能関連のstate
+  const [maskingEnabled, setMaskingEnabled] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('callstatus-maskingEnabled') === 'true';
+    }
+    return true; // デフォルトはマスキング有効
+  });
+
   // viewMode変更時にlocalStorageに保存
   const toggleViewMode = () => {
     const newMode = viewMode === 'normal' ? 'compact' : 'normal';
     setViewMode(newMode);
     if (typeof window !== 'undefined') {
       localStorage.setItem('callstatus-viewMode', newMode);
+    }
+  };
+
+  // マスキング設定のトグル
+  const toggleMasking = () => {
+    const newMaskingEnabled = !maskingEnabled;
+    setMaskingEnabled(newMaskingEnabled);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('callstatus-maskingEnabled', newMaskingEnabled.toString());
+    }
+    // 履歴モードの場合は即座にデータを再取得
+    if (isHistoricalMode) {
+      fetchData(displayDate);
     }
   };
 
@@ -2270,7 +2312,9 @@ export default function FullMainApp() {
       console.log('API URL:', currentApiUrl);
       
       // スタッフとスケジュールデータを統合API（履歴対応）で取得
-      const scheduleRes = await fetch(`${currentApiUrl}/api/schedules/unified?date=${dateString}`);
+      // マスキング設定も含めて送信
+      const maskingParam = maskingEnabled ? 'true' : 'false';
+      const scheduleRes = await fetch(`${currentApiUrl}/api/schedules/unified?date=${dateString}&includeMasking=${maskingParam}`);
       
       console.log('Unified API response status:', scheduleRes.status);
       
@@ -2421,7 +2465,7 @@ export default function FullMainApp() {
       console.error('データの取得に失敗しました', error); 
     } 
     finally { setIsLoading(false); }
-  }, []);
+  }, [maskingEnabled]);
   
   useEffect(() => {
     fetchData(displayDate);
