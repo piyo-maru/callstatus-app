@@ -37,4 +37,13 @@ export class SnapshotsController {
   async runDailySnapshot() {
     return this.snapshotsService.createDailySnapshot();
   }
+
+  /**
+   * 初期履歴データ作成（過去30日分）
+   */
+  @Post('initial/:days')
+  async createInitialData(@Param('days') days: string) {
+    const daysNum = parseInt(days, 10) || 30;
+    return this.snapshotsService.createInitialHistoricalData(daysNum);
+  }
 }

@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../prisma.service';
 import { SnapshotStatus } from '@prisma/client';
 import { v4 as uuidv4 } from 'uuid';
@@ -6,8 +7,68 @@ import { v4 as uuidv4 } from 'uuid';
 @Injectable()
 export class SnapshotsService {
   private readonly logger = new Logger(SnapshotsService.name);
+  private isRetryRunning = false;
 
   constructor(private prisma: PrismaService) {}
+
+  /**
+   * 日次スナップショット自動実行（毎日深夜0時5分）
+   */
+  @Cron('5 0 * * *', {
+    name: 'daily-snapshot',
+    timeZone: 'Asia/Tokyo'
+  })
+  async handleDailyCron() {
+    this.logger.log('日次スナップショット Cronジョブ開始');
+    
+    try {
+      const result = await this.createDailySnapshot();
+      this.logger.log(`日次スナップショット Cronジョブ完了: ${result.recordCount}件`);
+    } catch (error) {
+      this.logger.error(`日次スナップショット Cronジョブ失敗: ${error.message}`);
+      // 失敗時は1時間後にリトライをスケジュール
+      await this.scheduleRetry();
+    }
+  }
+
+  /**
+   * 失敗時のリトライスケジューリング（1時間後、最大3回）
+   */
+  @Cron('5 */1 * * *', {
+    name: 'snapshot-retry',
+    timeZone: 'Asia/Tokyo'
+  })
+  async handleRetryCron() {
+    if (!this.isRetryRunning) {
+      return;
+    }
+
+    const yesterday = this.getYesterday();
+    const existingSnapshot = await this.checkExistingSnapshot(yesterday);
+
+    if (existingSnapshot && existingSnapshot.status === 'COMPLETED') {
+      this.logger.log('既に完了したスナップショットが存在するため、リトライを停止');
+      this.isRetryRunning = false;
+      return;
+    }
+
+    this.logger.log('スナップショット リトライ実行');
+    
+    try {
+      const result = await this.createDailySnapshot();
+      this.logger.log(`スナップショット リトライ成功: ${result.recordCount}件`);
+      this.isRetryRunning = false;
+    } catch (error) {
+      this.logger.error(`スナップショット リトライ失敗: ${error.message}`);
+      
+      // 3回失敗したらリトライを停止
+      const failedCount = await this.getFailedRetryCount(yesterday);
+      if (failedCount >= 3) {
+        this.logger.error('リトライ回数上限に達したため、リトライを停止');
+        this.isRetryRunning = false;
+      }
+    }
+  }
 
   /**
    * 指定日のスナップショットを手動作成
@@ -200,6 +261,36 @@ export class SnapshotsService {
   }
 
   /**
+   * 指定日の履歴スケジュールデータを取得
+   */
+  async getHistoricalSchedules(dateString: string) {
+    const targetDate = new Date(dateString);
+    const startOfDay = new Date(targetDate);
+    startOfDay.setHours(0, 0, 0, 0);
+    
+    const endOfDay = new Date(targetDate);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    this.logger.log(`履歴スケジュール取得: ${dateString}`);
+
+    const historicalData = await this.prisma.historicalSchedule.findMany({
+      where: {
+        date: {
+          gte: startOfDay,
+          lte: endOfDay
+        }
+      },
+      orderBy: [
+        { staffName: 'asc' },
+        { start: 'asc' }
+      ]
+    });
+
+    this.logger.log(`履歴スケジュール取得完了: ${historicalData.length}件`);
+    return historicalData;
+  }
+
+  /**
    * スナップショット履歴を取得
    */
   async getSnapshotHistory(days: number = 30) {
@@ -246,5 +337,116 @@ export class SnapshotsService {
         deletedCount: deleteResult.count
       };
     });
+  }
+
+  /**
+   * リトライフラグを設定
+   */
+  private async scheduleRetry() {
+    this.isRetryRunning = true;
+    this.logger.log('スナップショットリトライをスケジュール');
+  }
+
+  /**
+   * 指定日の既存スナップショットをチェック
+   */
+  private async checkExistingSnapshot(date: Date) {
+    const startOfDay = new Date(date);
+    startOfDay.setHours(0, 0, 0, 0);
+    
+    const endOfDay = new Date(date);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    return await this.prisma.snapshotLog.findFirst({
+      where: {
+        targetDate: {
+          gte: startOfDay,
+          lte: endOfDay
+        },
+        status: 'COMPLETED'
+      },
+      orderBy: {
+        startedAt: 'desc'
+      }
+    });
+  }
+
+  /**
+   * 指定日の失敗したリトライ回数を取得
+   */
+  private async getFailedRetryCount(date: Date) {
+    const startOfDay = new Date(date);
+    startOfDay.setHours(0, 0, 0, 0);
+    
+    const endOfDay = new Date(date);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const failedLogs = await this.prisma.snapshotLog.findMany({
+      where: {
+        targetDate: {
+          gte: startOfDay,
+          lte: endOfDay
+        },
+        status: 'FAILED'
+      }
+    });
+
+    return failedLogs.length;
+  }
+
+  /**
+   * 過去30日分の初期スナップショットデータを作成
+   */
+  async createInitialHistoricalData(days: number = 30) {
+    this.logger.log(`過去${days}日分のスナップショット作成開始`);
+    
+    const results = [];
+    const errors = [];
+    
+    for (let i = 1; i <= days; i++) {
+      const targetDate = new Date();
+      targetDate.setDate(targetDate.getDate() - i);
+      targetDate.setHours(0, 0, 0, 0);
+      
+      const dateString = targetDate.toISOString().split('T')[0];
+      
+      try {
+        // 既存のスナップショットをチェック
+        const existing = await this.checkExistingSnapshot(targetDate);
+        if (existing) {
+          this.logger.log(`スキップ: ${dateString} (既にスナップショット存在)`);
+          continue;
+        }
+
+        // サンプルデータを生成してスナップショット作成
+        const result = await this.createManualSnapshot(dateString);
+        results.push({
+          date: dateString,
+          status: 'success',
+          recordCount: result.recordCount
+        });
+        
+        this.logger.log(`完了: ${dateString} (${result.recordCount}件)`);
+        
+        // レート制限（1秒待機）
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+      } catch (error) {
+        this.logger.error(`エラー: ${dateString} - ${error.message}`);
+        errors.push({
+          date: dateString,
+          error: error.message
+        });
+      }
+    }
+    
+    this.logger.log(`初期スナップショット作成完了: 成功${results.length}件, エラー${errors.length}件`);
+    
+    return {
+      success: results.length,
+      errors: errors.length,
+      results,
+      errorDetails: errors
+    };
   }
 }
