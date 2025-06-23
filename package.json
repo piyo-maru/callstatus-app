@@ -1,5 +1,25 @@
 {
   "dependencies": {
     "node-fetch": "^2.7.0"
-  }
+  },
+  "name": "callstatus-app",
+  "version": "1.0.0",
+  "main": "index.js",
+  "devDependencies": {
+    "@playwright/test": "^1.53.1",
+    "playwright": "^1.53.1"
+  },
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:ui": "playwright test --ui",
+    "test:basic": "playwright test tests/e2e/basic-workflow.spec.js",
+    "test:layers": "playwright test tests/e2e/layer-system.spec.js",
+    "test:support": "playwright test tests/e2e/support-features.spec.js",
+    "test:setup": "cd backend && npm run db:seed"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": ""
 }
