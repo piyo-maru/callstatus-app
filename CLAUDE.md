@@ -55,6 +55,136 @@ const getApiUrl = (): string => {
 - Network タブで /api/* リクエストが200 OKを返すことを確認
 ```
 
+## 📅 履歴データ閲覧システム（実装完了）
+
+**概要**: 日次スナップショット方式による過去データ閲覧機能
+
+### 🎯 実装完了機能（2025-06-23〜24）
+
+**Day 1: 基盤構築**
+- ✅ Prismaスキーマ拡張（HistoricalSchedule・SnapshotLogテーブル）
+- ✅ SnapshotsServiceモジュール実装
+- ✅ 手動スナップショット作成API（`/api/admin/snapshots/manual/:date`）
+
+**Day 2: 自動化・統合API**
+- ✅ Cronジョブ実装（毎日深夜0:05自動実行）
+- ✅ リトライメカニズム（失敗時1時間ごと、最大3回）
+- ✅ 統合API実装（`/api/schedules/unified`）
+- ✅ 現在データ・履歴データ自動切り替えロジック
+
+**Day 3: フロントエンド統合**
+- ✅ 履歴モード表示切り替えUI
+- ✅ 視覚的区別（琥珀色バナー・点線枠・横線パターン）
+- ✅ 編集機能の動的無効化（履歴データは編集不可）
+
+**Day 4: プライバシー機能**
+- ✅ 退職済み社員の動的マスキング機能
+- ✅ 設定画面のプライバシー設定
+- ✅ localStorage による設定永続化
+
+**Day 5: 品質確保**
+- ✅ 包括的機能テスト
+- ✅ 既存機能との統合テスト
+- ✅ パフォーマンステスト（中小企業規模で実用性確認）
+- ✅ Cronジョブ動作確認
+
+### 🔧 技術仕様
+
+**データベース設計:**
+```prisma
+model HistoricalSchedule {
+  id              Int      @id @default(autoincrement())
+  date            DateTime @db.Date
+  staffId         Int
+  staffName       String
+  staffDepartment String
+  staffGroup      String
+  status          String
+  start           DateTime
+  end             DateTime
+  batchId         String   // スナップショット識別子
+  // ... 他フィールド
+}
+
+model SnapshotLog {
+  id          String         @id @default(cuid())
+  targetDate  DateTime       @db.Date
+  status      SnapshotStatus @default(PENDING)
+  recordCount Int            @default(0)
+  batchId     String         @unique
+  // ... タイムスタンプ・エラー情報
+}
+```
+
+**API エンドポイント:**
+- `GET /api/schedules/unified?date=YYYY-MM-DD&includeMasking=true/false`
+  - 現在データ・履歴データの自動判定・取得
+  - マスキング機能対応
+- `POST /api/admin/snapshots/manual/:date` - 手動スナップショット作成
+- `GET /api/admin/snapshots/history` - スナップショット履歴取得
+
+**Cronジョブ設定:**
+```typescript
+@Cron('5 0 * * *', {
+  name: 'daily-snapshot',
+  timeZone: 'Asia/Tokyo'
+})
+async handleDailyCron() {
+  // 毎日深夜0:05に前日分スナップショット作成
+}
+
+@Cron('5 */1 * * *', {
+  name: 'snapshot-retry',
+  timeZone: 'Asia/Tokyo'
+})
+async handleRetryCron() {
+  // 失敗時1時間ごとリトライ（最大3回）
+}
+```
+
+### 📊 パフォーマンス特性
+
+**動作確認済み規模:**
+- スタッフ数: 15名以下で高速動作
+- 調整データ: 34件で良好なレスポンス
+- 履歴データ: 過去データ閲覧機能正常動作
+
+**本番運用時の推奨最適化:**
+1. データベースインデックス追加
+   - `Adjustment(date, staffId)` 複合インデックス
+   - `Contract(staffId)` インデックス
+2. クエリ最適化・キャッシュ機能導入
+3. 50名以上の大規模組織での性能チューニング
+
+### 🔒 セキュリティ・プライバシー
+
+**マスキング機能:**
+- 退職済み社員（契約データ存在しない）を自動判定
+- 「退職済み社員」として表示
+- ユーザー設定で有効/無効切り替え可能
+
+**データ保護:**
+- 履歴データは編集不可（改ざん防止）
+- スナップショット完全性保証（バッチID管理）
+- タイムゾーン統一（Asia/Tokyo）
+
+### 🚀 本番運用ガイド
+
+**初回セットアップ:**
+1. `npx prisma migrate deploy` - データベースマイグレーション
+2. バックエンドサービス起動（Cronジョブ自動開始）
+3. 初回手動スナップショット作成（任意）
+
+**日常運用:**
+- 毎日0:05に自動スナップショット作成
+- 失敗時は自動リトライ（ログ監視推奨）
+- 過去データは `/api/schedules/unified` で透明に取得
+
+**モニタリングポイント:**
+- SnapshotLogテーブルでスナップショット成功/失敗状況確認
+- レスポンス時間監視（大量データ時）
+- ディスク容量監視（履歴データ蓄積）
+
 ## 🚨 LayeredAPI保護ルール（絶対遵守）
 
 **LayeredAPIの無効化防止 - 2層データ構造の核心機能**
