@@ -14,6 +14,23 @@ interface CharacterCheckResult {
   errors: CharacterCheckError[];
 }
 
+// 社員データの型定義
+interface EmployeeData {
+  empNo: string;
+  name: string;
+  dept?: string;        // 新形式
+  department?: string;  // 旧形式（後方互換性）
+  team: string;
+  email?: string;
+  mondayHours?: string;
+  tuesdayHours?: string;
+  wednesdayHours?: string;
+  thursdayHours?: string;
+  fridayHours?: string;
+  saturdayHours?: string;
+  sundayHours?: string;
+}
+
 @Injectable()
 export class StaffService {
   constructor(private prisma: PrismaService) {}
@@ -191,9 +208,62 @@ export class StaffService {
     });
   }
 
+  async previewSyncFromEmployeeData(jsonData: any) {
+    try {
+      console.log('=== 社員情報同期プレビュー開始 ===');
+      
+      if (!jsonData.employeeData || !Array.isArray(jsonData.employeeData)) {
+        throw new BadRequestException('Invalid JSON format: employeeData array not found');
+      }
+
+      const employeeData = jsonData.employeeData;
+      
+      // 既存のアクティブスタッフを取得
+      const existingStaff = await this.prisma.staff.findMany({
+        where: { isActive: true },
+        select: { empNo: true, name: true }
+      });
+
+      // インポートデータのempNoリスト
+      const importEmpNos = new Set(employeeData.map(emp => emp.empNo));
+      const existingEmpNos = new Set(existingStaff.filter(s => s.empNo).map(s => s.empNo));
+
+      // 分析結果
+      const toAdd = employeeData.filter(emp => !existingEmpNos.has(emp.empNo));
+      const toUpdate = employeeData.filter(emp => existingEmpNos.has(emp.empNo));
+      const toDelete = existingStaff.filter(staff => 
+        staff.empNo && !importEmpNos.has(staff.empNo)
+      );
+
+      return {
+        preview: true,
+        summary: {
+          totalImport: employeeData.length,
+          toAdd: toAdd.length,
+          toUpdate: toUpdate.length,
+          toDelete: toDelete.length
+        },
+        details: {
+          toAdd: toAdd.map(emp => ({ empNo: emp.empNo, name: emp.name })),
+          toUpdate: toUpdate.map(emp => ({ empNo: emp.empNo, name: emp.name })),
+          toDelete: toDelete.map(staff => ({ empNo: staff.empNo, name: staff.name }))
+        },
+        warnings: toDelete.length > 0 ? [
+          `${toDelete.length}名のスタッフが論理削除されます`,
+          '論理削除されても過去のスケジュールデータは保持されます',
+          '間違いがないか確認してから実行してください'
+        ] : []
+      };
+
+    } catch (error) {
+      console.error('プレビューエラー:', error);
+      throw new BadRequestException(`プレビュー処理でエラーが発生しました: ${error.message}`);
+    }
+  }
+
   async syncFromEmployeeData(jsonData: any) {
     try {
-      console.log('=== レイヤー2保持型社員情報同期開始 ===');
+      console.log('=== 完全同期型社員情報同期開始 ===');
       console.log('受信データ:', JSON.stringify(jsonData, null, 2));
       
       if (!jsonData.employeeData || !Array.isArray(jsonData.employeeData)) {
@@ -201,19 +271,61 @@ export class StaffService {
         throw new BadRequestException('Invalid JSON format: employeeData array not found');
       }
 
-      const employeeData = jsonData.employeeData;
+      const employeeData: EmployeeData[] = jsonData.employeeData;
       console.log(`対象データ: ${employeeData.length}件`);
+      
+      // 受信データの構造をデバッグ
+      console.log('最初のデータサンプル:', JSON.stringify(employeeData[0], null, 2));
+
+      // 既存のアクティブスタッフを取得
+      const existingStaff = await this.prisma.staff.findMany({
+        where: { isActive: true },
+        select: { empNo: true, name: true }
+      });
+
+      // インポートデータのempNoリスト
+      const importEmpNos = new Set(employeeData.map(emp => emp.empNo));
+
+      // 論理削除対象（インポートデータにない既存スタッフ）
+      const staffToDelete = existingStaff.filter(staff => 
+        staff.empNo && !importEmpNos.has(staff.empNo)
+      );
+
+      console.log(`削除予定スタッフ: ${staffToDelete.length}件`);
+      staffToDelete.forEach(staff => 
+        console.log(`- ${staff.name} (${staff.empNo})`)
+      );
 
       const result = {
         added: 0,
         updated: 0,
-        deleted: 0,
-        details: { added: [], updated: [], deleted: [] }
+        deleted: staffToDelete.length,
+        details: { 
+          added: [], 
+          updated: [], 
+          deleted: staffToDelete.map(s => s.name) 
+        }
       };
 
       // empNo基準でupsert処理（Prisma upsertを使用）
       for (const emp of employeeData) {
         console.log(`処理中: ${emp.name} (${emp.empNo})`);
+        console.log(`データ詳細: dept="${emp.dept}", department="${emp.department}", team="${emp.team}"`);
+        
+        // 必須フィールドの確認と変換（dept優先、department後方互換）
+        const empData = emp as any; // 型アサーション
+        let department: string = 'システム部署'; // デフォルト値
+        
+        if (empData.dept && typeof empData.dept === 'string' && empData.dept.trim()) {
+          department = empData.dept.trim();
+        } else if (empData.department && typeof empData.department === 'string' && empData.department.trim()) {
+          department = empData.department.trim();
+        }
+        
+        const team = empData.team || 'システムチーム';
+        
+        console.log(`フィールド確認: dept="${empData.dept}", department="${empData.department}"`);
+        console.log(`最終決定部署: "${department}" (type: ${typeof department})`);
         
         try {
           // スタッフをupsert（empNoが一致する場合は更新、しない場合は作成）
@@ -221,57 +333,57 @@ export class StaffService {
             where: { empNo: emp.empNo },
             update: {
               name: emp.name,
-              department: emp.department,
-              group: emp.team,
+              department: department,
+              group: team,
               isActive: true,
               deletedAt: null // 論理削除解除
             },
             create: {
               empNo: emp.empNo,
               name: emp.name,
-              department: emp.department,
-              group: emp.team,
+              department: department,
+              group: team,
               isActive: true
             },
-            include: { contracts: true, adjustments: true }
+            include: { Contract: true, Adjustment: true }
           });
 
-          const isUpdate = staff.contracts.length > 0;
+          const isUpdate = staff.Contract.length > 0;
           console.log(`スタッフ${isUpdate ? '更新' : '新規作成'}完了: ${staff.name} (ID: ${staff.id})`);
           if (isUpdate) {
-            console.log(`既存調整データ件数: ${staff.adjustments.length}件`);
+            console.log(`既存調整データ件数: ${staff.Adjustment.length}件`);
           }
 
-          // 契約をupsert
+          // 契約をupsert（曜日別勤務時間を含む）
           const contract = await this.prisma.contract.upsert({
             where: { empNo: emp.empNo },
             update: {
               name: emp.name,
-              department: emp.department,
-              team: emp.team,
-              email: emp.email || '',
-              mondayHours: emp.mondayHours || null,
-              tuesdayHours: emp.tuesdayHours || null,
-              wednesdayHours: emp.wednesdayHours || null,
-              thursdayHours: emp.thursdayHours || null,
-              fridayHours: emp.fridayHours || null,
-              saturdayHours: emp.saturdayHours || null,
-              sundayHours: emp.sundayHours || null,
+              dept: empData.dept || empData.department || 'システム部署',
+              team: empData.team || 'システムチーム',
+              email: empData.email || '',
+              mondayHours: empData.mondayHours || null,
+              tuesdayHours: empData.tuesdayHours || null,
+              wednesdayHours: empData.wednesdayHours || null,
+              thursdayHours: empData.thursdayHours || null,
+              fridayHours: empData.fridayHours || null,
+              saturdayHours: empData.saturdayHours || null,
+              sundayHours: empData.sundayHours || null,
               staffId: staff.id
             },
             create: {
               empNo: emp.empNo,
               name: emp.name,
-              department: emp.department,
-              team: emp.team,
-              email: emp.email || '',
-              mondayHours: emp.mondayHours || null,
-              tuesdayHours: emp.tuesdayHours || null,
-              wednesdayHours: emp.wednesdayHours || null,
-              thursdayHours: emp.thursdayHours || null,
-              fridayHours: emp.fridayHours || null,
-              saturdayHours: emp.saturdayHours || null,
-              sundayHours: emp.sundayHours || null,
+              dept: empData.dept || empData.department || 'システム部署',
+              team: empData.team || 'システムチーム',
+              email: empData.email || '',
+              mondayHours: empData.mondayHours || null,
+              tuesdayHours: empData.tuesdayHours || null,
+              wednesdayHours: empData.wednesdayHours || null,
+              thursdayHours: empData.thursdayHours || null,
+              fridayHours: empData.fridayHours || null,
+              saturdayHours: empData.saturdayHours || null,
+              sundayHours: empData.sundayHours || null,
               staffId: staff.id
             }
           });
@@ -290,9 +402,28 @@ export class StaffService {
         }
       }
 
-      console.log('=== 同期完了 ===');
-      console.log(`追加: ${result.added}件, 更新: ${result.updated}件`);
-      console.log('重要: レイヤー2データ（Adjustment）は保持されました');
+      // インポートファイルにない既存スタッフを論理削除
+      if (staffToDelete.length > 0) {
+        console.log('=== 論理削除実行開始 ===');
+        for (const staffToDeleteItem of staffToDelete) {
+          if (staffToDeleteItem.empNo) {
+            await this.prisma.staff.update({
+              where: { empNo: staffToDeleteItem.empNo },
+              data: {
+                isActive: false,
+                deletedAt: new Date()
+              }
+            });
+            console.log(`論理削除完了: ${staffToDeleteItem.name} (${staffToDeleteItem.empNo})`);
+          }
+        }
+        console.log(`=== 論理削除完了: ${staffToDelete.length}件 ===`);
+      }
+
+      console.log('=== 完全同期完了 ===');
+      console.log(`追加: ${result.added}件, 更新: ${result.updated}件, 論理削除: ${result.deleted}件`);
+      console.log('重要: 過去のスケジュールデータ（Adjustment）は完全保持されました');
+      console.log('論理削除されたスタッフは復元可能です（isActive: true で復活）');
       return result;
 
     } catch (error) {

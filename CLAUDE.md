@@ -6,6 +6,36 @@
 
 - 常に日本語で会話する
 
+## 🚨 LayeredAPI保護ルール（絶対遵守）
+
+**LayeredAPIの無効化防止 - 2層データ構造の核心機能**
+
+**⚠️ 重要**: `/api/schedules/layered` エンドポイントは契約データ（レイヤー1）表示の生命線
+
+**無効化される主な原因:**
+1. **依存関係エラー**: LayerManagerServiceの循環参照
+2. **メソッド名間違い**: `getCompatibleSchedules` → `getLayeredSchedules`（正）
+3. **コンパイルエラー**: 一つでもエラーがあると自動で無効化
+
+**必須確認コマンド（変更前後に実行）:**
+```bash
+# LayeredAPI動作確認
+curl -s "http://localhost:3002/api/schedules/layered?date=2025-06-23" | jq '.schedules | length'
+
+# 契約データ存在確認  
+curl -s "http://localhost:3002/api/schedules/test-contracts" | jq '.contractCount'
+```
+
+**絶対に変更してはいけないファイル:**
+- `/backend/src/layer-manager/layer-manager.service.ts`
+- `/backend/src/schedules/schedules.controller.ts` の layered エンドポイント
+- `/backend/src/schedules/schedules.module.ts` の LayerManagerModule
+
+**エラー時の即復旧手順:**
+1. `git add . && git commit -m "エラー前状態保存"`
+2. `git reset --hard HEAD~1` で前の動作状態に戻す
+3. 原因分析後、最小限の変更で修正
+
 ## 🚨 Git操作時の必須ルール（絶対遵守）
 
 **gitを使って過去の状態に戻る際は、以下の手順を必ず実行すること:**
@@ -160,7 +190,24 @@
 
 ## 開発コマンド
 
-### 🚀 推奨起動方法（確実）
+### 🚀 最重要：必須開発コマンド
+```bash
+# 1. 全サービス起動（最初に必ず実行）
+docker-compose up -d
+
+# 2. Prismaクライアント生成（必須・忘れがち）
+docker exec callstatus-app_backend_1 npx prisma generate
+
+# 3. バックエンド開発サーバー起動
+docker exec -it callstatus-app_backend_1 /bin/bash
+cd /app && npm run start:dev
+
+# 4. フロントエンド開発サーバー起動（別ターミナル）
+docker exec -it callstatus-app_frontend_1 /bin/bash
+cd /app && npm run dev
+```
+
+### 🚀 推奨起動方法（自動化スクリプト）
 ```bash
 # 新規起動・完全リセット時
 ./startup.sh
@@ -205,7 +252,7 @@ docker-compose logs -f backend
 4. ポート競合 → lsof -i :3000 -i :3002 で確認
 ```
 
-### バックエンド開発
+### バックエンド開発（コンテナ内で実行）
 ```bash
 # バックエンドコンテナ内またはbackend/ディレクトリ内で実行
 npm run start:dev      # ホットリロード付き開発モード
@@ -217,19 +264,19 @@ npm run test:watch     # ユニットテスト（ウォッチモード）
 npm run test:e2e       # E2Eテスト
 npm run test:cov       # テストカバレッジ
 
-# データベース操作
+# データベース操作（重要）
 npx prisma migrate dev     # マイグレーション実行
-npx prisma generate        # Prismaクライアント生成
+npx prisma generate        # Prismaクライアント生成（必須）
 npx prisma studio         # データベースブラウザUI
 ```
 
-### フロントエンド開発
+### フロントエンド開発（コンテナ内で実行）
 ```bash
 # フロントエンドコンテナ内またはfrontend/ディレクトリ内で実行
-npm run dev           # 開発サーバー
-npm run build         # プロダクションビルド
+npm run dev           # 開発サーバー（通常これを使用）
+npm run build         # プロダクションビルド（本番前確認）
 npm run start         # プロダクションビルド実行
-npm run lint          # Next.jsリンティング
+npm run lint          # Next.jsリンティング（修正前に実行推奨）
 ```
 
 ## アーキテクチャ概要
@@ -412,11 +459,18 @@ const isContract = scheduleLayer === 'contract';
 - 日本語ロケールを使用した日付フォーマット（年月日）
 - React DatePickerを日本語ロケールで設定
 
-### API設定
+### 環境設定・API設定
+- **重要**: 環境切り替えは `config.ini` と `frontend/public/config.js` の両方を変更
 - 開発環境でCORSを有効化（localhost + 10.99.129.21の両方に対応）
 - グローバルAPIプレフィックスなし（main.tsで無効化）
 - 開発用のSocket.IO CORS設定
 - 動的API URL判定機能（アクセス元ホストに基づく自動切り替え）
+
+**環境切り替え時の必須手順:**
+1. `config.ini` でバックエンドCORS設定を変更
+2. `frontend/public/config.js` でフロントエンドAPI接続先を変更  
+3. バックエンドコンテナを再起動（設定反映のため）
+4. ブラウザキャッシュクリア（Ctrl+F5）
 
 ## テストノート
 - ユニットテストとe2eテストの両方でJestを設定
@@ -695,10 +749,19 @@ enum TokenType {
    - CSP・HSTS・権限ポリシー
    - 本番環境対応厳格設定
 
-### 🧪 テストアカウント
-- **管理者**: admin@example.com / admin123
-- **一般ユーザー**: test-new-user@example.com / newpassword123
-- **レート制限**: 5回失敗でアカウントロック確認済み
+### 🧪 テストアカウント情報
+**⚠️ セキュリティ注意**: 認証システムは完全実装済み。テストアカウント情報は開発時のみ参考情報として記載。
+
+**認証システム状態**:
+- ✅ JWT認証完全実装済み
+- ✅ 権限管理システム稼働中  
+- ✅ セキュリティヘッダー設定済み
+- ⚠️ **認証機能を無効化・バイパスしてはならない**
+
+**本番環境注意事項:**
+- すべての認証機能は本番稼働状態を維持する
+- テストアカウントは本番環境では使用しない
+- セキュリティ監査ログを定期的に確認する
 
 ---
 
@@ -741,9 +804,10 @@ enum TokenType {
 
 #### フェーズ4: データ移行・統合 【未着手】
 - [ ] 既存データ移行（現在のスケジュール → 調整レイヤー）
-- [ ] 旧システム廃止（既存APIの段階的廃止）
-- **目標**: 完全な2層システムへの移行
+- [ ] 旧システムとの並行稼働（既存APIは保持）
+- **目標**: 完全な2層システムへの移行（後方互換性維持）
 - **リスク**: 高
+- **⚠️ 重要**: 既存APIやLayeredAPIは絶対に廃止・無効化してはならない
 
 ### 🔧 技術仕様詳細
 
@@ -815,10 +879,12 @@ archive/
 
 **アーカイブ対象ファイル例:**
 - デバッグ用スクリプト（`debug-*.js`、`test-*.js`）
-- 一時的なデータ変換スクリプト（`create_*.js`、`generate_*.js`）
+- 完了済みデータ変換スクリプト（`create_*.js`、`generate_*.js`）
 - テスト用サンプルデータ（`test-*.json`、`sample-*.csv`）
 - データベースエクスポート結果（`exported-*.csv`）
 - ログファイル（`*.log`）
+
+**⚠️ 重要**: アーカイブは完了済みファイルのみ。稼働中のAPIやサービスは移動・削除してはならない
 
 **ファイル整理コマンド例:**
 ```bash
