@@ -81,7 +81,8 @@ type Schedule = {
   start: number;
   end: number;
   memo?: string;
-  layer?: 'contract' | 'adjustment';
+  layer?: 'contract' | 'adjustment' | 'historical';
+  isHistorical?: boolean;
 };
 
 type DragInfo = {
@@ -2164,6 +2165,14 @@ export default function FullMainApp() {
     return 'normal';
   });
 
+  // 履歴データ関連のstate
+  const [isHistoricalMode, setIsHistoricalMode] = useState(false);
+  const [historicalInfo, setHistoricalInfo] = useState<{
+    snapshotDate?: string;
+    recordCount?: number;
+    message?: string;
+  }>({});
+
   // viewMode変更時にlocalStorageに保存
   const toggleViewMode = () => {
     const newMode = viewMode === 'normal' ? 'compact' : 'normal';
@@ -2260,14 +2269,29 @@ export default function FullMainApp() {
       console.log('Fetching data for date:', dateString);
       console.log('API URL:', currentApiUrl);
       
-      // スタッフとスケジュールデータを取得
-      const scheduleRes = await fetch(`${currentApiUrl}/api/schedules?date=${dateString}`);
+      // スタッフとスケジュールデータを統合API（履歴対応）で取得
+      const scheduleRes = await fetch(`${currentApiUrl}/api/schedules/unified?date=${dateString}`);
       
-      console.log('Schedule API response status:', scheduleRes.status);
+      console.log('Unified API response status:', scheduleRes.status);
       
-      if (!scheduleRes.ok) throw new Error(`Schedule API response was not ok`);
+      if (!scheduleRes.ok) throw new Error(`Unified API response was not ok`);
       
-      const scheduleData: { staff: Staff[], schedules: ScheduleFromDB[] } = await scheduleRes.json();
+      const scheduleData: { 
+        staff: Staff[], 
+        schedules: ScheduleFromDB[], 
+        isHistorical?: boolean,
+        snapshotDate?: string,
+        recordCount?: number,
+        message?: string
+      } = await scheduleRes.json();
+      
+      console.log('Unified API data:', {
+        isHistorical: scheduleData.isHistorical,
+        snapshotDate: scheduleData.snapshotDate,
+        recordCount: scheduleData.recordCount,
+        schedulesCount: scheduleData.schedules?.length || 0,
+        staffCount: scheduleData.staff?.length || 0
+      });
       // 支援データを取得
       let supportData = { assignments: [] };
       try {
@@ -2369,6 +2393,14 @@ export default function FullMainApp() {
       
       setStaffList(staffWithSupportAndResponsibility);
       
+      // 履歴データ状態を更新
+      setIsHistoricalMode(!!scheduleData.isHistorical);
+      setHistoricalInfo({
+        snapshotDate: scheduleData.snapshotDate,
+        recordCount: scheduleData.recordCount,
+        message: scheduleData.message
+      });
+
       // バックエンドからJST小数点時刻で返されるスケジュールをそのまま使用
       console.log('Raw schedules from backend:', scheduleData.schedules);
       const convertedSchedules: Schedule[] = scheduleData.schedules.map(s => ({
@@ -2378,7 +2410,8 @@ export default function FullMainApp() {
         start: typeof s.start === 'number' ? s.start : timeStringToHours(s.start),
         end: typeof s.end === 'number' ? s.end : timeStringToHours(s.end),
         memo: s.memo,
-        layer: s.layer  // layer情報を保持
+        layer: s.layer,  // layer情報を保持
+        isHistorical: !!scheduleData.isHistorical  // 履歴フラグを設定
       }));
       console.log('Converted schedules:', convertedSchedules);
       setSchedules(convertedSchedules);
@@ -3455,13 +3488,44 @@ export default function FullMainApp() {
                   popperClassName="!z-[10000]"
                   popperPlacement="bottom-start"
                 />
+                
+                {/* 履歴モード表示インジケーター */}
+                {isHistoricalMode && (
+                  <div className="flex items-center space-x-2 px-3 py-1 bg-amber-50 border border-amber-200 rounded-md">
+                    <span className="text-amber-600 text-xs">📊</span>
+                    <div className="text-xs text-amber-700">
+                      <div className="font-medium">履歴データ表示中</div>
+                      {historicalInfo.snapshotDate && (
+                        <div className="text-amber-600">
+                          {new Date(historicalInfo.snapshotDate).toLocaleDateString('ja-JP')} のスナップショット
+                        </div>
+                      )}
+                      {historicalInfo.recordCount && (
+                        <div className="text-amber-600">
+                          {historicalInfo.recordCount}件のデータ
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
             </div>
 
             <div className="flex items-center space-x-2">
-                <button onClick={() => {
-                  setSelectedSchedule(null);
-                  handleOpenModal();
-                }} className="px-3 py-1 text-xs font-medium text-white bg-indigo-600 border border-transparent rounded-md hover:bg-indigo-700 h-7">
+                <button 
+                  onClick={() => {
+                    if (!isHistoricalMode) {
+                      setSelectedSchedule(null);
+                      handleOpenModal();
+                    }
+                  }} 
+                  disabled={isHistoricalMode}
+                  className={`px-3 py-1 text-xs font-medium border border-transparent rounded-md h-7 ${
+                    isHistoricalMode 
+                      ? 'text-gray-400 bg-gray-300 cursor-not-allowed' 
+                      : 'text-white bg-indigo-600 hover:bg-indigo-700'
+                  }`}
+                  title={isHistoricalMode ? '履歴モードでは予定を追加できません' : ''}
+                >
                     予定を追加
                 </button>
                 {canManage() && (
@@ -3704,17 +3768,20 @@ export default function FullMainApp() {
                                   const barWidth = endPosition - startPosition;
                                   const scheduleLayer = schedule.layer || 'adjustment';
                                   const isContract = scheduleLayer === 'contract';
+                                  const isHistoricalData = schedule.isHistorical || scheduleLayer === 'historical';
                                   
                                   return (
                                     <div key={`${schedule.id}-${scheduleLayer}-${schedule.staffId}-${index}`} 
-                                         draggable={!isContract && canEdit(schedule.staffId)}
+                                         draggable={!isContract && !isHistoricalData && canEdit(schedule.staffId)}
                                          className={`schedule-block absolute h-6 rounded text-white text-xs flex items-center justify-between px-2 ${
-                                           isContract ? 'cursor-default' : 
+                                           isContract || isHistoricalData ? 'cursor-default' : 
                                            canEdit(schedule.staffId) ? 'cursor-ew-resize hover:opacity-80' : 'cursor-not-allowed'
                                          } ${
                                            selectedSchedule && selectedSchedule.schedule.id === schedule.id && selectedSchedule.layer === scheduleLayer
                                              ? 'ring-2 ring-yellow-400 ring-offset-1'
                                              : ''
+                                         } ${
+                                           isHistoricalData ? 'border-2 border-dashed border-gray-400' : ''
                                          }`}
                                          style={{ 
                                            left: `${startPosition}%`, 
@@ -3722,13 +3789,14 @@ export default function FullMainApp() {
                                            top: '50%', 
                                            transform: 'translateY(-50%)', 
                                            backgroundColor: statusColors[schedule.status] || '#9ca3af',
-                                           opacity: isContract ? 0.5 : canEdit(schedule.staffId) ? 1 : 0.7,
-                                           backgroundImage: isContract ? 'repeating-linear-gradient(45deg, transparent, transparent 2px, rgba(255,255,255,0.3) 2px, rgba(255,255,255,0.3) 4px)' : 'none',
-                                           zIndex: isContract ? 10 : 30
+                                           opacity: isContract ? 0.5 : isHistoricalData ? 0.8 : canEdit(schedule.staffId) ? 1 : 0.7,
+                                           backgroundImage: isContract ? 'repeating-linear-gradient(45deg, transparent, transparent 2px, rgba(255,255,255,0.3) 2px, rgba(255,255,255,0.3) 4px)' : 
+                                                          isHistoricalData ? 'repeating-linear-gradient(90deg, transparent, transparent 3px, rgba(255,255,255,0.4) 3px, rgba(255,255,255,0.4) 6px)' : 'none',
+                                           zIndex: isContract ? 10 : isHistoricalData ? 15 : 30
                                          }} 
                                          onClick={(e) => { 
                                            e.stopPropagation(); 
-                                           if (!isContract && canEdit(schedule.staffId)) {
+                                           if (!isContract && !isHistoricalData && canEdit(schedule.staffId)) {
                                              const currentSelection = selectedSchedule;
                                              if (currentSelection && 
                                                  currentSelection.schedule.id === schedule.id && 
