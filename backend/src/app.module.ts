@@ -7,6 +7,7 @@ import { CsvImportModule } from './csv-import/csv-import.module';
 import { DailyAssignmentsModule } from './daily-assignments/daily-assignments.module';
 import { ResponsibilitiesModule } from './responsibilities/responsibilities.module';
 import { DepartmentSettingsModule } from './department-settings/department-settings.module';
+import { SnapshotsModule } from './snapshots/snapshots.module';
 // 一時的に無効化（コンパイルエラー回避）
 // import { AssignmentsModule } from './assignments/assignments.module';
 // import { ContractModule } from './contract/contract.module';
@@ -22,6 +23,7 @@ import { DepartmentSettingsModule } from './department-settings/department-setti
     DailyAssignmentsModule,
     ResponsibilitiesModule,
     DepartmentSettingsModule,
+    SnapshotsModule,
     // 他のすべてのモジュールを一時的に無効化（コンパイルエラー回避）
     // AuthModule, 
     // AuditModule, 

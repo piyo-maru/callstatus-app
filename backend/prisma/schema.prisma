@@ -246,3 +246,61 @@ model DepartmentSettings {
   @@unique([type, name])
   @@map("DepartmentSettings")
 }
+
+model HistoricalSchedule {
+  id              Int      @id @default(autoincrement())
+  
+  // 基本情報
+  date            DateTime @db.Date
+  originalId      Int?     // 元のAdjustment ID
+  batchId         String   // バッチ実行ID（ロールバック用）
+  
+  // スナップショット時点の社員情報（完全保存）
+  staffId         Int
+  staffEmpNo      String?
+  staffName       String
+  staffDepartment String
+  staffGroup      String
+  staffIsActive   Boolean  @default(true)
+  
+  // 予定情報
+  status          String
+  start           DateTime
+  end             DateTime
+  memo            String?
+  reason          String?
+  
+  // メタデータ
+  snapshotAt      DateTime @default(now())
+  version         String   @default("1.0")
+  
+  // パフォーマンス最適化のインデックス
+  @@index([date])
+  @@index([date, staffDepartment])
+  @@index([date, staffId])
+  @@index([staffEmpNo])
+  @@index([batchId])
+  @@map("historical_schedules")
+}
+
+model SnapshotLog {
+  id          Int            @id @default(autoincrement())
+  batchId     String         @unique
+  targetDate  DateTime       @db.Date
+  recordCount Int
+  status      SnapshotStatus
+  startedAt   DateTime       @default(now())
+  completedAt DateTime?
+  errorMessage String?
+  
+  @@index([targetDate])
+  @@index([status])
+  @@map("snapshot_logs")
+}
+
+enum SnapshotStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+  ROLLED_BACK
+}
