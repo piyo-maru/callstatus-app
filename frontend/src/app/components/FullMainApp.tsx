@@ -30,6 +30,7 @@ type Holiday = {
 
 type Staff = {
   id: number;
+  empNo?: string;  // データベーススキーマに存在するフィールド
   name: string;
   department: string;
   group: string;
@@ -2760,6 +2761,10 @@ export default function FullMainApp() {
   };
 
   const handleOpenAssignmentModal = (staff: Staff) => {
+    // 履歴表示モードでは支援設定を無効化
+    if (isHistoricalMode) {
+      return;
+    }
     setSelectedStaffForAssignment(staff);
     setIsAssignmentModalOpen(true);
   };
@@ -2884,6 +2889,10 @@ export default function FullMainApp() {
   };
 
   const handleOpenResponsibilityModal = (staff: Staff) => {
+    // 履歴表示モードでは担当設定を無効化
+    if (isHistoricalMode) {
+      return;
+    }
     setSelectedStaffForResponsibility(staff);
     setIsResponsibilityModalOpen(true);
   };
@@ -3690,7 +3699,7 @@ export default function FullMainApp() {
                           const supportBorderColor = getSupportBorderColor(staff);
                           return (
                           <div key={staff.id} 
-                               className="staff-timeline-row px-2 pl-12 text-sm font-medium whitespace-nowrap h-[45px] hover:bg-gray-50 flex items-center cursor-pointer"
+                               className={`staff-timeline-row px-2 pl-12 text-sm font-medium whitespace-nowrap h-[45px] ${isHistoricalMode ? 'cursor-default' : 'hover:bg-gray-50 cursor-pointer'} flex items-center`}
                                style={{
                                  border: supportBorderColor ? `2px solid ${supportBorderColor}` : undefined
                                }}
@@ -3897,7 +3906,7 @@ export default function FullMainApp() {
                                            })(),
                                            opacity: isContract ? 0.5 : isHistoricalData ? 0.8 : canEdit(schedule.staffId) ? 1 : 0.7,
                                            backgroundImage: isContract ? 'repeating-linear-gradient(45deg, transparent, transparent 2px, rgba(255,255,255,0.3) 2px, rgba(255,255,255,0.3) 4px)' : 
-                                                          isHistoricalData ? 'repeating-linear-gradient(90deg, transparent, transparent 3px, rgba(255,255,255,0.4) 3px, rgba(255,255,255,0.4) 6px)' : 'none',
+                                                          isHistoricalData ? 'repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(255,255,255,0.15) 10px, rgba(255,255,255,0.15) 20px)' : 'none',
                                            zIndex: isContract ? 10 : isHistoricalData ? 15 : 30
                                          }} 
                                          onClick={(e) => { 
