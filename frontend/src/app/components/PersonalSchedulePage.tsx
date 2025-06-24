@@ -100,33 +100,63 @@ const PersonalSchedulePage: React.FC = () => {
 
   // 現在のユーザーの社員情報を取得
   const fetchCurrentStaff = useCallback(async () => {
-    if (!user?.email) return;
+    if (!user?.email) {
+      console.error('ユーザー情報が取得できません');
+      return;
+    }
 
     try {
+      console.log('API URL:', getApiUrl());
+      console.log('ユーザーメール:', user.email);
+      
       const response = await authenticatedFetch(`${getApiUrl()}/api/staff`);
+      console.log('スタッフAPI レスポンス状態:', response.status);
+      
       if (response.ok) {
         const staffList: Staff[] = await response.json();
-        const userStaff = staffList.find(staff => {
-          // TODO: 社員とユーザーの関連付けロジックを実装
-          // 現在は名前で仮マッチング（実際にはempNoやemailで関連付ける）
-          return staff.name === user.email.split('@')[0];
+        console.log('取得したスタッフリスト:', staffList);
+        
+        // ユーザーメールから社員を検索
+        let userStaff = staffList.find(staff => {
+          // Contract テーブルのemailとマッチング
+          return staff.name.includes(user.email.split('@')[0]) || 
+                 staff.empNo === user.email.split('@')[0];
         });
         
+        if (!userStaff && staffList.length > 0) {
+          console.log('ユーザーに対応する社員が見つからないため、最初の社員を使用');
+          userStaff = staffList[0];
+        }
+        
         if (userStaff) {
+          console.log('選択された社員:', userStaff);
           setCurrentStaff(userStaff);
         } else {
-          // 開発用：最初の社員を使用
-          setCurrentStaff(staffList[0] || null);
+          setError('対応する社員情報が見つかりません');
         }
+      } else {
+        const errorText = await response.text();
+        console.error('スタッフAPI エラー:', response.status, errorText);
+        setError(`社員情報の取得に失敗しました: ${response.status}`);
       }
     } catch (err) {
       console.error('社員情報の取得に失敗:', err);
+      setError('社員情報の取得中にエラーが発生しました');
     }
   }, [user, getApiUrl, authenticatedFetch]);
 
   // スケジュールデータを取得
   const fetchSchedules = useCallback(async () => {
-    if (!currentStaff) return;
+    if (!currentStaff) {
+      console.log('currentStaffが設定されていないため、スケジュール取得をスキップ');
+      return;
+    }
+
+    console.log('スケジュール取得開始:', {
+      currentStaff: currentStaff.name,
+      staffId: currentStaff.id,
+      monthDays: monthDays.length
+    });
 
     setLoading(true);
     setError(null);
@@ -134,21 +164,34 @@ const PersonalSchedulePage: React.FC = () => {
     try {
       const promises = monthDays.map(async (day) => {
         const dateStr = format(day, 'yyyy-MM-dd');
-        const response = await authenticatedFetch(
-          `${getApiUrl()}/api/schedules/unified?date=${dateStr}&includeMasking=false`
-        );
+        const url = `${getApiUrl()}/api/schedules/unified?date=${dateStr}&includeMasking=false`;
+        console.log(`API呼び出し: ${url}`);
+        
+        const response = await authenticatedFetch(url);
         
         if (response.ok) {
           const data = await response.json();
-          return data.schedules?.filter((schedule: Schedule) => 
+          console.log(`${dateStr}のレスポンス:`, data);
+          
+          const filteredSchedules = data.schedules?.filter((schedule: Schedule) => 
             schedule.staffId === currentStaff.id
           ) || [];
+          
+          console.log(`${dateStr}のフィルター後スケジュール:`, filteredSchedules);
+          return filteredSchedules;
+        } else {
+          console.error(`${dateStr}のAPI呼び出し失敗:`, response.status);
+          return [];
         }
-        return [];
       });
 
       const results = await Promise.all(promises);
       const allSchedules = results.flat();
+      console.log('全スケジュール取得完了:', {
+        総件数: allSchedules.length,
+        スケジュール: allSchedules
+      });
+      
       setSchedules(allSchedules);
     } catch (err) {
       console.error('スケジュールの取得に失敗:', err);
@@ -173,9 +216,18 @@ const PersonalSchedulePage: React.FC = () => {
 
   // プリセット予定を追加
   const addPresetSchedule = useCallback(async (preset: PresetSchedule, targetDate: Date) => {
-    if (!currentStaff) return;
+    if (!currentStaff) {
+      console.error('社員情報が設定されていません');
+      setError('社員情報が設定されていません');
+      return;
+    }
 
     const dateStr = format(targetDate, 'yyyy-MM-dd');
+    console.log('プリセット予定追加:', {
+      preset,
+      targetDate: dateStr,
+      currentStaff: currentStaff.name
+    });
     
     try {
       const newSchedule = {
@@ -187,16 +239,30 @@ const PersonalSchedulePage: React.FC = () => {
         date: dateStr,
       };
 
-      const response = await authenticatedFetch(`${getApiUrl()}/api/schedules`, {
+      console.log('送信データ:', newSchedule);
+      const url = `${getApiUrl()}/api/schedules`;
+      console.log('API URL:', url);
+
+      const response = await authenticatedFetch(url, {
         method: 'POST',
         body: JSON.stringify(newSchedule),
       });
 
+      console.log('追加レスポンス:', response.status);
+
       if (response.ok) {
+        const result = await response.json();
+        console.log('追加成功:', result);
+        
         // スケジュールを再取得
         await fetchSchedules();
+        
+        // 成功メッセージ（3秒後に自動で消す）
+        setError(null);
+        console.log('プリセット予定を追加しました');
       } else {
         const errorData = await response.json();
+        console.error('追加エラー:', errorData);
         setError(errorData.message || 'スケジュールの追加に失敗しました');
       }
     } catch (err) {
@@ -409,24 +475,55 @@ const PersonalSchedulePage: React.FC = () => {
 
                       {/* スケジュールバー */}
                       {daySchedules.map((schedule, index) => {
-                        const startHour = new Date(schedule.start).getHours() + new Date(schedule.start).getMinutes() / 60;
-                        const endHour = new Date(schedule.end).getHours() + new Date(schedule.end).getMinutes() / 60;
+                        // メイン画面と同じ時刻変換ロジックを使用
+                        let startHour: number;
+                        let endHour: number;
+                        
+                        if (typeof schedule.start === 'number') {
+                          // 既に小数点時刻の場合
+                          startHour = schedule.start;
+                          endHour = schedule.end as number;
+                        } else {
+                          // Date型の場合、小数点時刻に変換
+                          const startDate = new Date(schedule.start);
+                          const endDate = new Date(schedule.end);
+                          startHour = startDate.getHours() + startDate.getMinutes() / 60;
+                          endHour = endDate.getHours() + endDate.getMinutes() / 60;
+                        }
+                        
+                        console.log(`スケジュール${schedule.id}:`, {
+                          status: schedule.status,
+                          start: schedule.start,
+                          end: schedule.end,
+                          startHour,
+                          endHour,
+                          layer: schedule.layer
+                        });
+
                         const left = Math.max(0, (startHour - 8) * 64);
                         const width = Math.max(16, (endHour - Math.max(8, startHour)) * 64);
                         const isContract = schedule.layer === 'contract';
+                        const isHistorical = schedule.layer === 'historical' || schedule.isHistorical;
 
                         return (
                           <div
                             key={schedule.id}
                             className={`absolute h-8 rounded text-white text-xs flex items-center px-2 ${
                               isContract ? 'opacity-50' : ''
+                            } ${
+                              isHistorical ? 'border-2 border-dashed border-amber-400' : ''
                             }`}
                             style={{
                               left: `${left}px`,
                               width: `${width}px`,
                               top: `${4 + index * 20}px`,
                               backgroundColor: getStatusColor(schedule.status),
-                              backgroundImage: isContract ? 'repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(255,255,255,0.2) 4px, rgba(255,255,255,0.2) 8px)' : 'none',
+                              backgroundImage: isContract 
+                                ? 'repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(255,255,255,0.2) 4px, rgba(255,255,255,0.2) 8px)' 
+                                : isHistorical 
+                                ? 'repeating-linear-gradient(90deg, transparent, transparent 8px, rgba(255,255,255,0.3) 8px, rgba(255,255,255,0.3) 16px)'
+                                : 'none',
+                              zIndex: isContract ? 10 : isHistorical ? 15 : 30,
                             }}
                           >
                             <span className="truncate">
