@@ -2002,11 +2002,13 @@ const SettingsModal = ({ isOpen, onClose, viewMode, setViewMode, setIsCsvUploadM
 };
 
 // --- チャートコンポーネント ---
-const StatusChart = ({ data, staffList, selectedDepartment, selectedGroup }: { 
+const StatusChart = ({ data, staffList, selectedDepartment, selectedGroup, showChart, onToggleChart }: { 
   data: any[], 
   staffList: Staff[], 
   selectedDepartment: string, 
-  selectedGroup: string 
+  selectedGroup: string,
+  showChart: boolean,
+  onToggleChart: () => void
 }) => {
   // 左列のコンテンツを取得してガントチャートと同じ構造を作る
   const groupedStaff = useMemo(() => {
@@ -2027,77 +2029,97 @@ const StatusChart = ({ data, staffList, selectedDepartment, selectedGroup }: {
 
   return (
     <div className="mb-1 bg-white shadow rounded-lg">
-      <div className="flex">
-        {/* 左列 - 凡例エリア（2列構成） */}
-        <div className="w-48 border-r border-gray-200 bg-gray-50">
-          <div className="px-2 py-1 flex gap-x-4">
-            {/* 1列目 */}
-            <div className="flex flex-col gap-y-1">
-              {['online', 'remote', 'night duty'].map(status => (
-                <div key={status} className="flex items-center text-xs">
-                  <div 
-                    className="w-2 h-2 rounded mr-1 flex-shrink-0" 
-                    style={{ backgroundColor: statusColors[status] || '#8884d8' }}
-                  ></div>
-                  <span className="truncate" style={{ opacity: status === 'online' ? 1 : 0.7 }}>
-                    {capitalizeStatus(status)}
-                  </span>
-                </div>
-              ))}
-            </div>
-            {/* 2列目 */}
-            <div className="flex flex-col gap-y-1">
-              {['off', 'unplanned', 'break', 'meeting', 'training'].map(status => (
-                <div key={status} className="flex items-center text-xs">
-                  <div 
-                    className="w-2 h-2 rounded mr-1 flex-shrink-0" 
-                    style={{ backgroundColor: statusColors[status] || '#8884d8' }}
-                  ></div>
-                  <span className="truncate" style={{ opacity: status === 'online' ? 1 : 0.7 }}>
-                    {capitalizeStatus(status)}
-                  </span>
-                </div>
-              ))}
+      {/* トグルボタンエリア */}
+      <div className="px-3 py-0.5 border-b border-gray-200 bg-gray-50">
+        <button
+          onClick={onToggleChart}
+          className="flex items-center gap-1.5 text-xs text-gray-700 hover:text-gray-900 transition-colors py-0.5"
+        >
+          <span className="text-sm">📊</span>
+          <span className="font-bold">Line Chart</span>
+          <span className="text-xs text-gray-500">
+            {showChart ? '（表示中）' : '（非表示）'}
+          </span>
+          <span className="ml-1 transform transition-transform duration-200 text-xs" style={{ transform: showChart ? 'rotate(90deg)' : 'rotate(0deg)' }}>
+            ▶
+          </span>
+        </button>
+      </div>
+      
+      {/* グラフエリア（条件付き表示） */}
+      {showChart && (
+        <div className="flex">
+          {/* 左列 - 凡例エリア（2列構成） */}
+          <div className="w-48 border-r border-gray-200 bg-gray-50">
+            <div className="px-2 py-1 flex gap-x-4">
+              {/* 1列目 */}
+              <div className="flex flex-col gap-y-1">
+                {['online', 'remote', 'night duty'].map(status => (
+                  <div key={status} className="flex items-center text-xs">
+                    <div 
+                      className="w-2 h-2 rounded mr-1 flex-shrink-0" 
+                      style={{ backgroundColor: statusColors[status] || '#8884d8' }}
+                    ></div>
+                    <span className="truncate" style={{ opacity: status === 'online' ? 1 : 0.7 }}>
+                      {capitalizeStatus(status)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              {/* 2列目 */}
+              <div className="flex flex-col gap-y-1">
+                {['off', 'unplanned', 'break', 'meeting', 'training'].map(status => (
+                  <div key={status} className="flex items-center text-xs">
+                    <div 
+                      className="w-2 h-2 rounded mr-1 flex-shrink-0" 
+                      style={{ backgroundColor: statusColors[status] || '#8884d8' }}
+                    ></div>
+                    <span className="truncate" style={{ opacity: status === 'online' ? 1 : 0.7 }}>
+                      {capitalizeStatus(status)}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
-        </div>
-        {/* 右列 - チャート表示エリア */}
-        <div className="flex-1 p-1" style={{ height: '120px' }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={data} margin={{ top: 2, right: 10, left: 5, bottom: 2 }}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis 
-                dataKey="time" 
-                tick={{ fontSize: 11 }} 
-                interval={3}
-                angle={-45}
-                textAnchor="end"
-                height={40}
-              />
-              <YAxis allowDecimals={false} tick={{ fontSize: 10 }} width={25} />
-              <Tooltip 
-                wrapperStyle={{ zIndex: 100 }}
-                formatter={(value, name) => [value, capitalizeStatus(name)]}
-                labelFormatter={(label) => `時刻: ${label}`}
-              />
-              {/* Legendを非表示にする */}
-              {/* 凡例と同じ順序で描画 */}
-              {['online', 'remote', 'night duty', 'off', 'unplanned', 'break', 'meeting', 'training'].map(status => (
-                <Line 
-                  key={status} 
-                  type="monotone" 
-                  dataKey={status} 
-                  stroke={statusColors[status] || '#8884d8'} 
-                  strokeWidth={2} 
-                  connectNulls 
-                  dot={false}
-                  strokeOpacity={status === 'online' ? 1 : 0.3}
+          {/* 右列 - チャート表示エリア */}
+          <div className="flex-1 p-1" style={{ height: '120px' }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={data} margin={{ top: 2, right: 10, left: 5, bottom: 2 }}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis 
+                  dataKey="time" 
+                  tick={{ fontSize: 11 }} 
+                  interval={3}
+                  angle={-45}
+                  textAnchor="end"
+                  height={40}
                 />
-              ))}
-            </LineChart>
-          </ResponsiveContainer>
+                <YAxis allowDecimals={false} tick={{ fontSize: 10 }} width={25} />
+                <Tooltip 
+                  wrapperStyle={{ zIndex: 100 }}
+                  formatter={(value, name) => [value, capitalizeStatus(name)]}
+                  labelFormatter={(label) => `時刻: ${label}`}
+                />
+                {/* Legendを非表示にする */}
+                {/* 凡例と同じ順序で描画 */}
+                {['online', 'remote', 'night duty', 'off', 'unplanned', 'break', 'meeting', 'training'].map(status => (
+                  <Line 
+                    key={status} 
+                    type="monotone" 
+                    dataKey={status} 
+                    stroke={statusColors[status] || '#8884d8'} 
+                    strokeWidth={2} 
+                    connectNulls 
+                    dot={false}
+                    strokeOpacity={status === 'online' ? 1 : 0.3}
+                  />
+                ))}
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };
@@ -2192,6 +2214,14 @@ export default function FullMainApp() {
     departments: Array<{id: number, name: string, shortName?: string, backgroundColor?: string, displayOrder?: number}>,
     groups: Array<{id: number, name: string, shortName?: string, backgroundColor?: string, displayOrder?: number}>
   }>({ departments: [], groups: [] });
+  const [showLineChart, setShowLineChart] = useState(() => {
+    // localStorageから初期値を読み込み
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('showLineChart');
+      return saved !== null ? JSON.parse(saved) : true;
+    }
+    return true;
+  });
 
   // パフォーマンス最適化：部署グループマップ構築
   const groupToStaffMap = useMemo(() => {
@@ -2313,6 +2343,13 @@ export default function FullMainApp() {
     const timer = setInterval(() => setCurrentTime(new Date()), 60000);
     return () => clearInterval(timer);
   }, []);
+
+  // 折れ線グラフ表示設定をlocalStorageに保存
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('showLineChart', JSON.stringify(showLineChart));
+    }
+  }, [showLineChart]);
 
   // 祝日データを初期化
   useEffect(() => {
@@ -3679,7 +3716,14 @@ export default function FullMainApp() {
             )}
         </div>
 
-        <StatusChart data={chartData} staffList={staffList} selectedDepartment={selectedDepartment} selectedGroup={selectedGroup} />
+        <StatusChart 
+          data={chartData} 
+          staffList={staffList} 
+          selectedDepartment={selectedDepartment} 
+          selectedGroup={selectedGroup}
+          showChart={showLineChart}
+          onToggleChart={() => setShowLineChart(!showLineChart)}
+        />
         
         <div className="bg-white shadow rounded-lg relative">
           <div className="flex">
