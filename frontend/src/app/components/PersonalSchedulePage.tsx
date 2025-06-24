@@ -75,6 +75,14 @@ const PersonalSchedulePage: React.FC = () => {
   const [selectedDateForPreset, setSelectedDateForPreset] = useState<Date | null>(null);
   const [showPresetModal, setShowPresetModal] = useState(false);
   
+  // ドラッグ&ドロップ関連の状態（メイン画面と同じ）
+  const [dragInfo, setDragInfo] = useState<{
+    staff: Staff;
+    startX: number;
+    currentX: number;
+    rowRef: HTMLDivElement;
+  } | null>(null);
+  
   // モーダル関連の状態
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSchedule, setEditingSchedule] = useState<Schedule | null>(null);
@@ -98,6 +106,35 @@ const PersonalSchedulePage: React.FC = () => {
     const end = endOfMonth(selectedDate);
     return eachDayOfInterval({ start, end });
   }, [selectedDate]);
+
+  // 現在時刻
+  const [currentTime, setCurrentTime] = useState(new Date());
+  
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 60000); // 1分ごとに更新
+    
+    return () => clearInterval(timer);
+  }, []);
+
+  // メイン画面と同じ時間位置計算関数
+  const timeToPositionPercent = useCallback((time: number): number => {
+    const roundedTime = Math.round(time * 4) / 4; // 15分単位に丸める
+    const START_TIME = 8;
+    const END_TIME = 21;
+    const TOTAL_QUARTERS = (END_TIME - START_TIME) * 4; // 52マス
+    const quartersFromStart = (roundedTime - START_TIME) * 4;
+    return Math.max(0, Math.min(100, (quartersFromStart / TOTAL_QUARTERS) * 100));
+  }, []);
+
+  const positionPercentToTime = useCallback((percent: number): number => {
+    const START_TIME = 8;
+    const TOTAL_QUARTERS = (21 - START_TIME) * 4; // 52マス
+    const quartersFromStart = (percent / 100) * TOTAL_QUARTERS;
+    const time = START_TIME + quartersFromStart / 4;
+    return Math.round(time * 4) / 4; // 15分単位に丸める
+  }, []);
 
   // APIベースURLを取得
   const getApiUrl = useCallback((): string => {
@@ -520,38 +557,57 @@ const PersonalSchedulePage: React.FC = () => {
           )}
         </div>
 
-        {/* 月間ガントチャート */}
+        {/* 月間ガントチャート（メイン画面スタイル） */}
         <div className="bg-white rounded-lg shadow-sm overflow-hidden">
           <div className="p-6 border-b border-gray-200">
             <h3 className="text-lg font-semibold text-gray-900">月間スケジュール</h3>
           </div>
           
           <div className="overflow-x-auto">
-            <div className="min-w-full">
-              {/* ヘッダー：時間軸 */}
-              <div className="flex border-b border-gray-200 bg-gray-50">
-                <div className="w-24 p-3 text-sm font-medium text-gray-900 border-r border-gray-200">
-                  日付
-                </div>
-                {Array.from({ length: 13 }, (_, i) => i + 8).map((hour) => (
-                  <div key={hour} className="w-16 p-2 text-xs text-center text-gray-600 border-r border-gray-200">
-                    {hour}:00
+            <div className="min-w-[1300px]">
+              {/* 時間軸ヘッダー（メイン画面と同じ） */}
+              <div className="sticky top-0 z-10 bg-gray-100 border-b overflow-hidden">
+                <div className="flex font-bold text-sm">
+                  <div className="w-24 text-left pl-2 border-r py-2 bg-gray-50">
+                    日付
                   </div>
-                ))}
+                  {Array.from({ length: 13 }).map((_, i) => {
+                    const hour = 8 + i;
+                    const isEarlyOrNight = hour === 8 || hour >= 18;
+                    const width = `${(4 / 52) * 100}%`; // 4マス分 = 1時間分の幅
+                    return (
+                      <div 
+                        key={hour} 
+                        className={`text-left pl-2 border-r py-2 whitespace-nowrap ${isEarlyOrNight ? 'bg-blue-50' : ''}`}
+                        style={{ width }}
+                      >
+                        {hour}:00
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
 
-              {/* 日付行 */}
+              {/* 日付行（メイン画面スタイル） */}
               {monthDays.map((day) => {
                 const daySchedules = schedules.filter(schedule => 
                   isSameDay(new Date(schedule.start), day)
                 );
                 
+                const isCurrentDay = isToday(day);
+                const currentTimePosition = useMemo(() => {
+                  if (!isCurrentDay) return null;
+                  const currentDecimalHour = currentTime.getHours() + currentTime.getMinutes() / 60;
+                  if (currentDecimalHour < 8 || currentDecimalHour >= 21) return null;
+                  return timeToPositionPercent(currentDecimalHour);
+                }, [currentTime, isCurrentDay]);
+                
                 return (
-                  <div key={day.getTime()} className="flex border-b border-gray-100 hover:bg-gray-50">
+                  <div key={day.getTime()} className="flex border-b border-gray-100 hover:bg-gray-50 h-16 relative">
                     {/* 日付列 */}
                     <div 
-                      className={`w-24 p-3 border-r border-gray-200 cursor-pointer hover:bg-blue-50 transition-colors ${
-                        isToday(day) ? 'bg-blue-50 font-semibold text-blue-900' : ''
+                      className={`w-24 p-3 border-r border-gray-200 cursor-pointer hover:bg-blue-50 transition-colors flex flex-col justify-center ${
+                        isCurrentDay ? 'bg-blue-50 font-semibold text-blue-900' : ''
                       } ${
                         selectedDateForPreset && isSameDay(selectedDateForPreset, day) ? 'bg-blue-100 border-blue-300' : ''
                       }`}
@@ -574,94 +630,117 @@ const PersonalSchedulePage: React.FC = () => {
                       )}
                     </div>
 
-                    {/* タイムライン */}
-                    <div className="flex-1 relative h-16">
-                      {/* 時間グリッド */}
-                      {Array.from({ length: 13 }, (_, i) => i + 8).map((hour) => (
-                        <div
-                          key={hour}
-                          className="absolute top-0 bottom-0 w-16 border-r border-gray-200"
-                          style={{ left: `${(hour - 8) * 64}px` }}
-                        />
-                      ))}
+                    {/* タイムライン（メイン画面と同じスタイル） */}
+                    <div className="flex-1 relative">
+                      {/* 早朝エリア（8:00-9:00）の背景強調 */}
+                      <div className="absolute top-0 bottom-0 bg-blue-50 opacity-30 z-10" 
+                           style={{ left: `0%`, width: `${((9-8)*4)/52*100}%` }} 
+                           title="早朝時間帯（8:00-9:00）">
+                      </div>
 
-                      {/* スケジュールバー */}
+                      {/* 夜間エリア（18:00-21:00）の背景強調 */}
+                      <div className="absolute top-0 bottom-0 bg-blue-50 opacity-30 z-10" 
+                           style={{ left: `${((18-8)*4)/52*100}%`, width: `${((21-18)*4)/52*100}%` }} 
+                           title="夜間時間帯（18:00-21:00）">
+                      </div>
+
+                      {/* 15分単位の目盛り線 */}
+                      {(() => {
+                        const markers = [];
+                        for (let hour = 8; hour <= 21; hour++) {
+                          for (let minute = 0; minute < 60; minute += 15) {
+                            if (hour === 21 && minute > 0) break;
+                            const time = hour + minute / 60;
+                            const position = timeToPositionPercent(time);
+                            const timeString = `${hour}:${String(minute).padStart(2, '0')}`;
+                            
+                            markers.push(
+                              <div
+                                key={`${hour}-${minute}`}
+                                className="absolute top-0 bottom-0 w-0.5 border-l border-gray-300 z-5 opacity-50"
+                                style={{ left: `${position}%` }}
+                                title={timeString}
+                              />
+                            );
+                          }
+                        }
+                        return markers;
+                      })()}
+
+                      {/* 現在時刻インジケーター */}
+                      {currentTimePosition !== null && (
+                        <div className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-30" 
+                             style={{ left: `${currentTimePosition}%` }} 
+                             title={`現在時刻: ${currentTime.getHours()}:${String(currentTime.getMinutes()).padStart(2, '0')}`}>
+                        </div>
+                      )}
+
+                      {/* スケジュールバー（メイン画面と同じスタイル） */}
                       {daySchedules.map((schedule, index) => {
-                        // メイン画面と同じ時刻変換ロジックを使用
                         let startHour: number;
                         let endHour: number;
                         
                         if (typeof schedule.start === 'number') {
-                          // 既に小数点時刻の場合
                           startHour = schedule.start;
                           endHour = schedule.end as number;
                         } else {
-                          // Date型の場合、小数点時刻に変換
                           const startDate = new Date(schedule.start);
                           const endDate = new Date(schedule.end);
                           startHour = startDate.getHours() + startDate.getMinutes() / 60;
                           endHour = endDate.getHours() + endDate.getMinutes() / 60;
                         }
-                        
-                        console.log(`スケジュール${schedule.id}:`, {
-                          status: schedule.status,
-                          start: schedule.start,
-                          end: schedule.end,
-                          startHour,
-                          endHour,
-                          layer: schedule.layer
-                        });
 
-                        const left = Math.max(0, (startHour - 8) * 64);
-                        const width = Math.max(16, (endHour - Math.max(8, startHour)) * 64);
+                        const startPosition = timeToPositionPercent(startHour);
+                        const endPosition = timeToPositionPercent(endHour);
+                        const barWidth = endPosition - startPosition;
                         const isContract = schedule.layer === 'contract';
                         const isHistorical = schedule.layer === 'historical' || schedule.isHistorical;
 
                         return (
                           <div
-                            key={schedule.id}
-                            className={`absolute h-8 rounded text-white text-xs flex items-center px-2 cursor-pointer hover:opacity-80 transition-opacity group ${
-                              isContract ? 'opacity-50' : ''
+                            key={`${schedule.id}-${schedule.layer}-${index}`}
+                            className={`schedule-block absolute h-6 rounded text-white text-xs flex items-center justify-between px-2 group ${
+                              isContract || isHistorical ? 'cursor-default' : 'cursor-pointer hover:opacity-80'
                             } ${
-                              isHistorical ? 'border-2 border-dashed border-amber-400' : ''
+                              isHistorical ? 'border-2 border-dashed border-gray-400' : ''
                             }`}
                             style={{
-                              left: `${left}px`,
-                              width: `${width}px`,
-                              top: `${4 + index * 20}px`,
+                              left: `${startPosition}%`,
+                              width: `${barWidth}%`,
+                              top: '50%',
+                              transform: 'translateY(-50%)',
                               backgroundColor: getStatusColor(schedule.status),
+                              opacity: isContract ? 0.5 : isHistorical ? 0.8 : 1,
                               backgroundImage: isContract 
-                                ? 'repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(255,255,255,0.2) 4px, rgba(255,255,255,0.2) 8px)' 
+                                ? 'repeating-linear-gradient(45deg, transparent, transparent 2px, rgba(255,255,255,0.3) 2px, rgba(255,255,255,0.3) 4px)' 
                                 : isHistorical 
-                                ? 'repeating-linear-gradient(90deg, transparent, transparent 8px, rgba(255,255,255,0.3) 8px, rgba(255,255,255,0.3) 16px)'
+                                ? 'repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(255,255,255,0.15) 10px, rgba(255,255,255,0.15) 20px)'
                                 : 'none',
                               zIndex: isContract ? 10 : isHistorical ? 15 : 30,
                             }}
                             onClick={() => {
                               if (!isContract && !isHistorical) {
-                                console.log('スケジュール編集:', schedule);
                                 setEditingSchedule(schedule);
                                 setDraggedSchedule(null);
                                 setIsModalOpen(true);
                               }
                             }}
                           >
-                            <span className="truncate flex-1">
-                              {schedule.status} {schedule.memo && `(${schedule.memo})`}
+                            <span className="truncate">
+                              {capitalizeStatus(schedule.status)}
+                              {schedule.memo && (
+                                <span className="ml-1 text-yellow-200">📝</span>
+                              )}
                             </span>
-                            
-                            {/* 削除ボタン（契約・履歴レイヤー以外で表示） */}
                             {!isContract && !isHistorical && (
-                              <button
-                                className="ml-1 w-4 h-4 rounded-full bg-red-500 hover:bg-red-600 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  console.log('スケジュール削除確認:', schedule.id);
-                                  setDeletingScheduleId(schedule.id);
-                                }}
-                                title="削除"
+                              <button 
+                                onClick={(e) => { 
+                                  e.stopPropagation(); 
+                                  setDeletingScheduleId(schedule.id); 
+                                }} 
+                                className="text-white hover:text-red-200 ml-2 opacity-0 group-hover:opacity-100 transition-opacity"
                               >
-                                <span className="text-white text-xs">×</span>
+                                ×
                               </button>
                             )}
                           </div>
