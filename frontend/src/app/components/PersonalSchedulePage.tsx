@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, Fragment } from 'react';
 import { format, addDays, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday } from 'date-fns';
 import { ja } from 'date-fns/locale';
+import { createPortal } from 'react-dom';
 import { useAuth } from './AuthProvider';
 
 interface Schedule {
@@ -44,6 +45,26 @@ interface PresetButtonProps {
   disabled?: boolean;
 }
 
+// ユーティリティ関数
+const availableStatuses = ['online', 'remote', 'meeting', 'training', 'break', 'off', 'unplanned', 'night duty'];
+
+const capitalizeStatus = (status: string): string => {
+  return status.charAt(0).toUpperCase() + status.slice(1);
+};
+
+const generateTimeOptions = (startHour: number, endHour: number) => {
+  const options = [];
+  for (let h = startHour; h < endHour; h++) {
+    for (let m = 0; m < 60; m += 15) {
+      const timeValue = h + m / 60;
+      const timeLabel = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+      options.push({ value: timeValue, label: timeLabel });
+    }
+  }
+  options.push({ value: endHour, label: `${endHour}:00`});
+  return options;
+};
+
 const PersonalSchedulePage: React.FC = () => {
   const { user, loading: authLoading } = useAuth();
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -53,6 +74,12 @@ const PersonalSchedulePage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [selectedDateForPreset, setSelectedDateForPreset] = useState<Date | null>(null);
   const [showPresetModal, setShowPresetModal] = useState(false);
+  
+  // モーダル関連の状態
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingSchedule, setEditingSchedule] = useState<Schedule | null>(null);
+  const [draggedSchedule, setDraggedSchedule] = useState<Partial<Schedule> | null>(null);
+  const [deletingScheduleId, setDeletingScheduleId] = useState<number | null>(null);
 
   // プリセット予定（後で管理画面から設定可能にする）
   const presetSchedules: PresetSchedule[] = [
@@ -270,6 +297,91 @@ const PersonalSchedulePage: React.FC = () => {
       setError('スケジュールの追加に失敗しました');
     }
   }, [currentStaff, getApiUrl, authenticatedFetch, fetchSchedules]);
+
+  // スケジュール保存ハンドラー（メイン画面と同じ）
+  const handleSaveSchedule = useCallback(async (scheduleData: Schedule & { id?: number; date?: string }) => {
+    console.log('スケジュール保存:', scheduleData);
+    
+    try {
+      const isEditing = scheduleData.id !== undefined;
+      
+      if (isEditing) {
+        // 編集の場合
+        const updateData = {
+          status: scheduleData.status,
+          start: scheduleData.start,
+          end: scheduleData.end,
+          memo: scheduleData.memo || '',
+        };
+        
+        const response = await authenticatedFetch(`${getApiUrl()}/api/schedules/${scheduleData.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify(updateData),
+        });
+        
+        if (response.ok) {
+          console.log('スケジュール更新成功');
+          await fetchSchedules();
+          setIsModalOpen(false);
+          setEditingSchedule(null);
+        } else {
+          const errorData = await response.json();
+          setError(errorData.message || 'スケジュールの更新に失敗しました');
+        }
+      } else {
+        // 新規作成の場合
+        const createData = {
+          staffId: scheduleData.staffId || currentStaff?.id,
+          status: scheduleData.status,
+          start: scheduleData.start,
+          end: scheduleData.end,
+          memo: scheduleData.memo || '',
+          date: scheduleData.date || format(new Date(), 'yyyy-MM-dd'),
+        };
+        
+        const response = await authenticatedFetch(`${getApiUrl()}/api/schedules`, {
+          method: 'POST',
+          body: JSON.stringify(createData),
+        });
+        
+        if (response.ok) {
+          console.log('スケジュール作成成功');
+          await fetchSchedules();
+          setIsModalOpen(false);
+          setDraggedSchedule(null);
+        } else {
+          const errorData = await response.json();
+          setError(errorData.message || 'スケジュールの作成に失敗しました');
+        }
+      }
+    } catch (err) {
+      console.error('スケジュール保存エラー:', err);
+      setError('スケジュールの保存中にエラーが発生しました');
+    }
+  }, [currentStaff, getApiUrl, authenticatedFetch, fetchSchedules]);
+
+  // スケジュール削除ハンドラー
+  const handleDeleteSchedule = useCallback(async (scheduleId: number) => {
+    console.log('スケジュール削除:', scheduleId);
+    
+    try {
+      const response = await authenticatedFetch(`${getApiUrl()}/api/schedules/${scheduleId}`, {
+        method: 'DELETE',
+      });
+      
+      if (response.ok) {
+        console.log('スケジュール削除成功');
+        await fetchSchedules();
+        setDeletingScheduleId(null);
+      } else {
+        const errorData = await response.json();
+        setError(errorData.message || 'スケジュールの削除に失敗しました');
+      }
+    } catch (err) {
+      console.error('スケジュール削除エラー:', err);
+      setError('スケジュールの削除中にエラーが発生しました');
+    }
+  }, [getApiUrl, authenticatedFetch, fetchSchedules]);
 
   // 月変更ハンドラー
   const handleMonthChange = useCallback((direction: 'prev' | 'next') => {
@@ -508,7 +620,7 @@ const PersonalSchedulePage: React.FC = () => {
                         return (
                           <div
                             key={schedule.id}
-                            className={`absolute h-8 rounded text-white text-xs flex items-center px-2 ${
+                            className={`absolute h-8 rounded text-white text-xs flex items-center px-2 cursor-pointer hover:opacity-80 transition-opacity group ${
                               isContract ? 'opacity-50' : ''
                             } ${
                               isHistorical ? 'border-2 border-dashed border-amber-400' : ''
@@ -525,10 +637,33 @@ const PersonalSchedulePage: React.FC = () => {
                                 : 'none',
                               zIndex: isContract ? 10 : isHistorical ? 15 : 30,
                             }}
+                            onClick={() => {
+                              if (!isContract && !isHistorical) {
+                                console.log('スケジュール編集:', schedule);
+                                setEditingSchedule(schedule);
+                                setDraggedSchedule(null);
+                                setIsModalOpen(true);
+                              }
+                            }}
                           >
-                            <span className="truncate">
+                            <span className="truncate flex-1">
                               {schedule.status} {schedule.memo && `(${schedule.memo})`}
                             </span>
+                            
+                            {/* 削除ボタン（契約・履歴レイヤー以外で表示） */}
+                            {!isContract && !isHistorical && (
+                              <button
+                                className="ml-1 w-4 h-4 rounded-full bg-red-500 hover:bg-red-600 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  console.log('スケジュール削除確認:', schedule.id);
+                                  setDeletingScheduleId(schedule.id);
+                                }}
+                                title="削除"
+                              >
+                                <span className="text-white text-xs">×</span>
+                              </button>
+                            )}
                           </div>
                         );
                       })}
@@ -550,7 +685,264 @@ const PersonalSchedulePage: React.FC = () => {
           </a>
         </div>
       </div>
+
+      {/* モーダル */}
+      <ScheduleModal 
+        isOpen={isModalOpen} 
+        onClose={() => setIsModalOpen(false)} 
+        staffList={currentStaff ? [currentStaff] : []} 
+        onSave={handleSaveSchedule} 
+        scheduleToEdit={editingSchedule} 
+        initialData={draggedSchedule || undefined} 
+      />
+      <ConfirmationModal 
+        isOpen={deletingScheduleId !== null} 
+        onClose={() => setDeletingScheduleId(null)} 
+        onConfirm={() => { if (deletingScheduleId) handleDeleteSchedule(deletingScheduleId); }} 
+        message="この予定を削除しますか？" 
+      />
     </div>
+  );
+};
+
+// ScheduleModal コンポーネント
+const ScheduleModal = ({ isOpen, onClose, staffList, onSave, scheduleToEdit, initialData }: { 
+  isOpen: boolean; 
+  onClose: () => void; 
+  staffList: Staff[]; 
+  onSave: (data: any) => void;
+  scheduleToEdit: Schedule | null;
+  initialData?: Partial<Schedule>;
+}) => {
+  const [selectedStaff, setSelectedStaff] = useState<number | ''>('');
+  const [selectedStatus, setSelectedStatus] = useState<string>('');
+  const [startTime, setStartTime] = useState<number>(9);
+  const [endTime, setEndTime] = useState<number>(18);
+  const [memo, setMemo] = useState<string>('');
+
+  const timeOptions = useMemo(() => generateTimeOptions(8, 21), []);
+
+  useEffect(() => {
+    if (isOpen) {
+      if (scheduleToEdit) {
+        // 編集モード
+        setSelectedStaff(scheduleToEdit.staffId);
+        setSelectedStatus(scheduleToEdit.status);
+        setStartTime(typeof scheduleToEdit.start === 'number' ? scheduleToEdit.start : 9);
+        setEndTime(typeof scheduleToEdit.end === 'number' ? scheduleToEdit.end : 18);
+        setMemo(scheduleToEdit.memo || '');
+      } else if (initialData) {
+        // ドラッグ&ドロップまたはプリセットからの新規作成
+        setSelectedStaff(initialData.staffId || (staffList.length > 0 ? staffList[0].id : ''));
+        setSelectedStatus(initialData.status || 'online');
+        setStartTime(typeof initialData.start === 'number' ? initialData.start : 9);
+        setEndTime(typeof initialData.end === 'number' ? initialData.end : 18);
+        setMemo(initialData.memo || '');
+      } else {
+        // 空の新規作成
+        setSelectedStaff(staffList.length > 0 ? staffList[0].id : '');
+        setSelectedStatus('online');
+        setStartTime(9);
+        setEndTime(18);
+        setMemo('');
+      }
+    }
+  }, [isOpen, scheduleToEdit, initialData, staffList]);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!selectedStaff || !selectedStatus) {
+      alert('スタッフとステータスを選択してください');
+      return;
+    }
+    
+    if (startTime >= endTime) {
+      alert('開始時刻は終了時刻より前に設定してください');
+      return;
+    }
+
+    const scheduleData = {
+      id: scheduleToEdit?.id,
+      staffId: Number(selectedStaff),
+      status: selectedStatus,
+      start: startTime,
+      end: endTime,
+      memo: memo,
+    };
+
+    onSave(scheduleData);
+  };
+
+  if (!isOpen) return null;
+
+  return createPortal(
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 w-full max-w-md">
+        <h2 className="text-lg font-bold mb-4">
+          {scheduleToEdit ? 'スケジュール編集' : 'スケジュール追加'}
+        </h2>
+        
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* スタッフ選択 */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              スタッフ
+            </label>
+            <select
+              value={selectedStaff}
+              onChange={(e) => setSelectedStaff(e.target.value === '' ? '' : Number(e.target.value))}
+              className="w-full border border-gray-300 rounded-md px-3 py-2"
+              required
+              disabled={staffList.length <= 1}
+            >
+              <option value="">選択してください</option>
+              {staffList.map((staff) => (
+                <option key={staff.id} value={staff.id}>
+                  {staff.name} ({staff.department} - {staff.group})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* ステータス選択 */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              ステータス
+            </label>
+            <select
+              value={selectedStatus}
+              onChange={(e) => setSelectedStatus(e.target.value)}
+              className="w-full border border-gray-300 rounded-md px-3 py-2"
+              required
+            >
+              <option value="">選択してください</option>
+              {availableStatuses.map((status) => (
+                <option key={status} value={status}>
+                  {capitalizeStatus(status)}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* 開始時刻 */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              開始時刻
+            </label>
+            <select
+              value={startTime}
+              onChange={(e) => {
+                const newStartTime = Number(e.target.value);
+                setStartTime(newStartTime);
+                if (newStartTime >= endTime) {
+                  setEndTime(Math.min(newStartTime + 1, 21));
+                }
+              }}
+              className="w-full border border-gray-300 rounded-md px-3 py-2"
+            >
+              {timeOptions.slice(0, -1).map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* 終了時刻 */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              終了時刻
+            </label>
+            <select
+              value={endTime}
+              onChange={(e) => setEndTime(Number(e.target.value))}
+              className="w-full border border-gray-300 rounded-md px-3 py-2"
+            >
+              {timeOptions.filter(option => option.value > startTime).map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* メモ */}
+          {(selectedStatus === 'meeting' || selectedStatus === 'training') && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                メモ
+              </label>
+              <input
+                type="text"
+                value={memo}
+                onChange={(e) => setMemo(e.target.value)}
+                className="w-full border border-gray-300 rounded-md px-3 py-2"
+                placeholder="詳細を入力..."
+              />
+            </div>
+          )}
+
+          {/* ボタン */}
+          <div className="flex space-x-3 pt-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+            >
+              キャンセル
+            </button>
+            <button
+              type="submit"
+              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+            >
+              {scheduleToEdit ? '更新' : '追加'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>,
+    document.body
+  );
+};
+
+// ConfirmationModal コンポーネント
+const ConfirmationModal = ({ isOpen, onClose, onConfirm, message }: { 
+  isOpen: boolean; 
+  onClose: () => void; 
+  onConfirm: () => void; 
+  message: string; 
+}) => {
+  if (!isOpen) return null;
+
+  return createPortal(
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 w-full max-w-sm">
+        <h3 className="text-lg font-medium text-gray-900 mb-4">
+          確認
+        </h3>
+        <p className="text-sm text-gray-500 mb-6">
+          {message}
+        </p>
+        <div className="flex space-x-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+          >
+            キャンセル
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            className="flex-1 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+          >
+            削除
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
   );
 };
 
