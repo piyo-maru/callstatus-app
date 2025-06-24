@@ -48,6 +48,39 @@ export class SchedulesController {
     return jstDate.getHours() + jstDate.getMinutes() / 60;
   }
 
+  /**
+   * 日付文字列をUTC基準の Date オブジェクトに厳密変換
+   * @param dateString "2025-06-24" 形式の日付文字列
+   * @returns UTC基準の日付（00:00:00.000Z）
+   */
+  private parseTargetDateUtc(dateString: string): Date {
+    // ISO-8601形式でUTC時刻として厳密に解釈
+    return new Date(`${dateString}T00:00:00.000Z`);
+  }
+
+  /**
+   * 業務日基準での「今日」をUTC形式で取得
+   * 日本時間（JST）での日付判定を行い、UTC形式で返す
+   * @returns 業務日基準での今日の開始時刻（UTC）
+   */
+  private getBusinessTodayUtc(): Date {
+    // 現在のUTC時刻を取得
+    const now_utc = new Date();
+    
+    // JST時刻に変換して日付を取得
+    const now_jst = new Date(now_utc.getTime() + 9 * 60 * 60 * 1000);
+    const jst_year = now_jst.getUTCFullYear();
+    const jst_month = now_jst.getUTCMonth();
+    const jst_date = now_jst.getUTCDate();
+    
+    // JST基準での「今日」の開始時刻をUTC形式で構築
+    // JST 2025-06-25 00:00:00 → UTC 2025-06-24 15:00:00
+    const businessToday_jst = new Date(Date.UTC(jst_year, jst_month, jst_date, 0, 0, 0, 0));
+    const businessToday_utc = new Date(businessToday_jst.getTime() - 9 * 60 * 60 * 1000);
+    
+    return businessToday_utc;
+  }
+
   // 2層統合API (契約レイヤー + 調整レイヤー)
   @Get('layered')
   async findLayered(@Query('date') date: string) {
@@ -89,15 +122,18 @@ export class SchedulesController {
 
     console.log(`統合スケジュールAPI呼び出し: date=${date}, includeMasking=${includeMasking}`);
 
-    const targetDate = new Date(date);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const targetDate_utc = this.parseTargetDateUtc(date);
+    const businessToday_utc = this.getBusinessTodayUtc();
 
-    // 今日より前の日付は履歴データから取得
-    if (targetDate < today) {
+    console.log(`日付判定: target=${targetDate_utc.toISOString()}, businessToday=${businessToday_utc.toISOString()}`);
+
+    // 業務日基準で過去の日付は履歴データから取得
+    if (targetDate_utc < businessToday_utc) {
+      console.log('過去日付として履歴データを取得');
       return this.getHistoricalSchedules(date, includeMasking === 'true');
     } else {
-      // 今日以降は現在のデータから取得
+      // 業務日基準で今日以降は現在のデータから取得
+      console.log('現在日付として現在データを取得');
       return this.getCurrentSchedules(date);
     }
   }
