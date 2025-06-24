@@ -3850,6 +3850,12 @@ export default function FullMainApp() {
         <span className="text-sm text-gray-600">
           {user?.staff?.name || user?.email} ({user?.role === 'ADMIN' ? '管理者' : '一般ユーザー'})
         </span>
+        <a
+          href="/personal"
+          className="text-sm bg-blue-100 hover:bg-blue-200 text-blue-800 px-3 py-1 rounded border border-blue-300 transition-colors"
+        >
+          📅 個人ページ
+        </a>
         <button
           onClick={logout}
           className="text-sm bg-gray-100 hover:bg-gray-200 px-3 py-1 rounded border"
