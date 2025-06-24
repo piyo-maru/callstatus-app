@@ -292,7 +292,7 @@ export class SchedulesController {
   }
 
   /**
-   * 退職済み社員名をマスキング
+   * 非在籍社員名をマスキング
    */
   private async maskStaffName(originalName: string, staffId: number): Promise<string> {
     try {
@@ -307,7 +307,7 @@ export class SchedulesController {
       }
 
       // 退職済みまたは存在しない場合はマスキング
-      return '退職済み社員';
+      return '非在籍社員';
     } catch (error) {
       console.error('Staff masking error:', error);
       return '不明な社員';

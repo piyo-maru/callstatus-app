@@ -103,12 +103,35 @@ type ImportHistory = {
   canRollback: boolean;
 };
 
+type SnapshotHistory = {
+  id: number;
+  targetDate: string;
+  status: 'COMPLETED' | 'FAILED' | 'PENDING';
+  recordCount: number;
+  batchId: string;
+  startedAt: string;
+  completedAt?: string;
+  errorMessage?: string;
+};
+
 // --- 定数定義 ---
 const statusColors: { [key: string]: string } = {
   'online': '#22c55e', 'Online': '#22c55e', 'remote': '#10b981', 'Remote': '#10b981', 
   'meeting': '#f59e0b', 'Meeting': '#f59e0b', 'training': '#3b82f6', 'Training': '#3b82f6',
   'break': '#f97316', 'Break': '#f97316', 'off': '#ef4444', 'Off': '#ef4444', 
   'unplanned': '#dc2626', 'Unplanned': '#dc2626', 'night duty': '#4f46e5', 'Night duty': '#4f46e5',
+};
+
+// 表示用ステータスカラー（重複除去済み）
+const displayStatusColors: { [key: string]: string } = {
+  'online': '#22c55e',
+  'remote': '#10b981', 
+  'meeting': '#f59e0b',
+  'training': '#3b82f6',
+  'break': '#f97316',
+  'off': '#ef4444',
+  'unplanned': '#dc2626',
+  'night duty': '#4f46e5',
 };
 
 // UI表示用の文字列変換関数
@@ -1291,7 +1314,7 @@ const ImportHistoryModal = ({ isOpen, onClose, onRollback, authenticatedFetch }:
   if (!isOpen) return null;
 
   return createPortal(
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4">
       <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[80vh] overflow-hidden">
         <div className="flex justify-between items-center p-6 border-b border-gray-200">
           <h2 className="text-xl font-bold text-gray-800">CSVインポート履歴</h2>
@@ -1480,7 +1503,7 @@ const DepartmentGroupSettings = ({ authenticatedFetch, staffList }: {
     });
   }, []);
 
-  // 自動生成
+  // 部署・グループの取得
   const handleAutoGenerate = async () => {
     setLoading(true);
     try {
@@ -1493,7 +1516,7 @@ const DepartmentGroupSettings = ({ authenticatedFetch, staffList }: {
       }
     } catch (error) {
       console.error('Failed to auto-generate settings:', error);
-      alert('自動生成に失敗しました');
+      alert('部署・グループの取得に失敗しました');
     } finally {
       setLoading(false);
     }
@@ -1572,7 +1595,7 @@ const DepartmentGroupSettings = ({ authenticatedFetch, staffList }: {
             disabled={loading}
             className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
           >
-            🔄 自動生成
+            🔄 部署・グループの取得
           </button>
           <button
             onClick={handleSave}
@@ -1716,11 +1739,100 @@ const SettingsModal = ({ isOpen, onClose, viewMode, setViewMode, setIsCsvUploadM
   toggleMasking: () => void;
 }) => {
   const [activeTab, setActiveTab] = useState(canManage ? 'import' : 'display');
+  const [snapshotHistory, setSnapshotHistory] = useState<SnapshotHistory[]>([]);
+  const [isLoadingSnapshots, setIsLoadingSnapshots] = useState(false);
+  const [snapshotError, setSnapshotError] = useState<string>('');
+
+  // スナップショット履歴を取得する関数
+  const fetchSnapshotHistory = useCallback(async () => {
+    if (!canManage) return;
+    
+    setIsLoadingSnapshots(true);
+    setSnapshotError('');
+    
+    try {
+      const currentApiUrl = getApiUrl();
+      const response = await authenticatedFetch(`${currentApiUrl}/api/admin/snapshots/history?days=30`);
+      
+      if (!response.ok) {
+        throw new Error(`スナップショット履歴の取得に失敗: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      setSnapshotHistory(data || []);
+    } catch (error) {
+      console.error('スナップショット履歴取得エラー:', error);
+      setSnapshotError(error instanceof Error ? error.message : 'スナップショット履歴の取得に失敗しました');
+    } finally {
+      setIsLoadingSnapshots(false);
+    }
+  }, [canManage, authenticatedFetch]);
+
+  // 手動スナップショット作成
+  const createManualSnapshot = async (date: string) => {
+    if (!canManage) return;
+    
+    try {
+      const currentApiUrl = getApiUrl();
+      const response = await authenticatedFetch(`${currentApiUrl}/api/admin/snapshots/manual/${date}`, {
+        method: 'POST'
+      });
+      
+      if (!response.ok) {
+        throw new Error(`手動スナップショット作成に失敗: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      alert(`スナップショット作成完了\n日付: ${date}\n件数: ${result.recordCount}件`);
+      
+      // 履歴を再取得
+      await fetchSnapshotHistory();
+    } catch (error) {
+      console.error('手動スナップショット作成エラー:', error);
+      alert('手動スナップショット作成に失敗しました: ' + (error instanceof Error ? error.message : String(error)));
+    }
+  };
+
+  // スナップショットロールバック
+  const rollbackSnapshot = async (batchId: string, targetDate: string) => {
+    if (!canManage) return;
+    
+    if (!confirm(`${targetDate}のスナップショットデータを削除します。\nこの操作は取り消せません。実行しますか？`)) {
+      return;
+    }
+    
+    try {
+      const currentApiUrl = getApiUrl();
+      const response = await authenticatedFetch(`${currentApiUrl}/api/admin/snapshots/rollback/${batchId}`, {
+        method: 'DELETE'
+      });
+      
+      if (!response.ok) {
+        throw new Error(`スナップショット削除に失敗: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      alert(`スナップショット削除完了\n削除件数: ${result.deletedCount}件`);
+      
+      // 履歴を再取得
+      await fetchSnapshotHistory();
+    } catch (error) {
+      console.error('スナップショット削除エラー:', error);
+      alert('スナップショット削除に失敗しました: ' + (error instanceof Error ? error.message : String(error)));
+    }
+  };
+
+  // タブが過去表示設定に切り替わった時にスナップショット履歴を取得
+  useEffect(() => {
+    if (activeTab === 'historical' && canManage) {
+      fetchSnapshotHistory();
+    }
+  }, [activeTab, canManage, fetchSnapshotHistory]);
 
   if (!isOpen) return null;
 
   return createPortal(
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-center z-50 p-4 pt-16">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-center z-[9999] p-4 pt-16">
       <div className="bg-white rounded-lg shadow-xl max-w-5xl w-full max-h-[85vh] overflow-hidden">
         <div className="flex justify-between items-center p-6 border-b border-gray-200">
           <h2 className="text-xl font-bold text-gray-800">⚙️ 設定</h2>
@@ -1748,16 +1860,6 @@ const SettingsModal = ({ isOpen, onClose, viewMode, setViewMode, setIsCsvUploadM
               </button>
             )}
             <button 
-              onClick={() => setActiveTab('display')} 
-              className={`py-3 px-1 border-b-2 font-medium text-sm ${
-                activeTab === 'display' 
-                  ? 'border-blue-500 text-blue-600' 
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              🎨 表示設定
-            </button>
-            <button 
               onClick={() => setActiveTab('export')} 
               className={`py-3 px-1 border-b-2 font-medium text-sm ${
                 activeTab === 'export' 
@@ -1766,6 +1868,16 @@ const SettingsModal = ({ isOpen, onClose, viewMode, setViewMode, setIsCsvUploadM
               }`}
             >
               📤 エクスポート
+            </button>
+            <button 
+              onClick={() => setActiveTab('display')} 
+              className={`py-3 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'display' 
+                  ? 'border-blue-500 text-blue-600' 
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              🎨 表示設定
             </button>
             {canManage && (
               <button 
@@ -1777,6 +1889,18 @@ const SettingsModal = ({ isOpen, onClose, viewMode, setViewMode, setIsCsvUploadM
                 }`}
               >
                 🏢 部署・グループ設定
+              </button>
+            )}
+            {canManage && (
+              <button 
+                onClick={() => setActiveTab('historical')} 
+                className={`py-3 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === 'historical' 
+                    ? 'border-blue-500 text-blue-600' 
+                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                📜 過去表示設定
               </button>
             )}
           </nav>
@@ -1905,26 +2029,6 @@ const SettingsModal = ({ isOpen, onClose, viewMode, setViewMode, setIsCsvUploadM
                 </div>
               </div>
 
-              {/* マスキング設定 */}
-              <div className="border border-gray-200 rounded-lg p-4">
-                <h4 className="font-medium text-gray-900 mb-3">🔒 プライバシー設定</h4>
-                <div className="space-y-3">
-                  <label className="flex items-center">
-                    <input 
-                      type="checkbox" 
-                      className="mr-3" 
-                      checked={maskingEnabled}
-                      onChange={toggleMasking}
-                    />
-                    <div>
-                      <span className="font-medium">退職済み社員の名前をマスキング</span>
-                      <p className="text-sm text-gray-600 mt-1">
-                        過去データ閲覧時に退職済み社員の名前を「退職済み社員」として表示します
-                      </p>
-                    </div>
-                  </label>
-                </div>
-              </div>
 
               {/* 時間軸設定 */}
               <div className="border border-gray-200 rounded-lg p-4">
@@ -1945,7 +2049,7 @@ const SettingsModal = ({ isOpen, onClose, viewMode, setViewMode, setIsCsvUploadM
               <div className="border border-gray-200 rounded-lg p-4">
                 <h4 className="font-medium text-gray-900 mb-3">🎨 ステータス色設定</h4>
                 <div className="grid grid-cols-2 gap-4">
-                  {Object.entries(statusColors).map(([status, color]) => (
+                  {Object.entries(displayStatusColors).map(([status, color]) => (
                     <div key={status} className="flex items-center space-x-2">
                       <div className="w-4 h-4 rounded" style={{ backgroundColor: color }}></div>
                       <span className="text-sm">{capitalizeStatus(status)}</span>
@@ -1993,6 +2097,199 @@ const SettingsModal = ({ isOpen, onClose, viewMode, setViewMode, setIsCsvUploadM
 
           {activeTab === 'departments' && canManage && (
             <DepartmentGroupSettings authenticatedFetch={authenticatedFetch} staffList={staffList} />
+          )}
+
+          {activeTab === 'historical' && canManage && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-medium text-gray-900">📜 過去表示設定・スナップショット管理</h3>
+                <button 
+                  onClick={fetchSnapshotHistory}
+                  disabled={isLoadingSnapshots}
+                  className="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
+                >
+                  {isLoadingSnapshots ? '更新中...' : '🔄 履歴更新'}
+                </button>
+              </div>
+              
+              {/* スナップショット管理説明 */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <h4 className="font-medium text-blue-900 mb-2">📋 スナップショット機能について</h4>
+                <div className="text-sm text-blue-700 space-y-1">
+                  <p>• 毎日深夜0:05に前日分のスナップショットが自動作成されます</p>
+                  <p>• 過去データ閲覧時は、スナップショット作成済みの日付のみ表示可能です</p>
+                  <p>• 手動でスナップショットを作成することも可能です</p>
+                  <p>• 不要なスナップショットデータは削除できます（復旧不可）</p>
+                </div>
+              </div>
+
+              {/* マスキング設定 */}
+              <div className="border border-gray-200 rounded-lg p-4">
+                <h4 className="font-medium text-gray-900 mb-3">🔒 プライバシー設定</h4>
+                <div className="space-y-3">
+                  <label className="flex items-center">
+                    <input 
+                      type="checkbox" 
+                      className="mr-3" 
+                      checked={maskingEnabled}
+                      onChange={toggleMasking}
+                    />
+                    <div>
+                      <span className="font-medium">非在籍社員の名前をマスキング</span>
+                      <p className="text-sm text-gray-600 mt-1">
+                        過去データ閲覧時に非在籍社員の名前を「非在籍社員」として表示します
+                      </p>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              {/* 手動スナップショット作成 */}
+              <div className="border border-gray-200 rounded-lg p-4">
+                <h4 className="font-medium text-gray-900 mb-3">🔧 手動スナップショット作成</h4>
+                <div className="space-y-3">
+                  <p className="text-sm text-gray-600">
+                    指定した日付のスナップショットを手動で作成できます。既存のスナップショットがある場合は上書きされます。
+                  </p>
+                  <div className="flex gap-2">
+                    <input 
+                      type="date" 
+                      id="manualSnapshotDate"
+                      className="border border-gray-300 rounded px-3 py-2 text-sm"
+                      max={new Date().toISOString().split('T')[0]}
+                    />
+                    <button 
+                      onClick={() => {
+                        const dateInput = document.getElementById('manualSnapshotDate') as HTMLInputElement;
+                        if (dateInput.value) {
+                          createManualSnapshot(dateInput.value);
+                        } else {
+                          alert('日付を選択してください');
+                        }
+                      }}
+                      className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 text-sm"
+                    >
+                      📸 スナップショット作成
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* エラー表示 */}
+              {snapshotError && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                  <div className="flex">
+                    <div className="flex-shrink-0">
+                      <span className="text-red-600">❌</span>
+                    </div>
+                    <div className="ml-3">
+                      <h4 className="text-sm font-medium text-red-800">エラーが発生しました</h4>
+                      <p className="mt-1 text-sm text-red-700">{snapshotError}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* スナップショット履歴一覧 */}
+              <div className="border border-gray-200 rounded-lg">
+                <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
+                  <h4 className="font-medium text-gray-900">📊 スナップショット実行履歴（過去30日）</h4>
+                </div>
+                
+                <div className="overflow-x-auto">
+                  {isLoadingSnapshots ? (
+                    <div className="p-8 text-center text-gray-500">
+                      <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500 mr-2"></div>
+                      スナップショット履歴を読み込み中...
+                    </div>
+                  ) : snapshotHistory.length === 0 ? (
+                    <div className="p-8 text-center text-gray-500">
+                      📝 スナップショット履歴がありません
+                    </div>
+                  ) : (
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">対象日</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ステータス</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">件数</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">作成日時</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">完了日時</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {snapshotHistory.map((snapshot) => (
+                          <tr key={snapshot.id} className="hover:bg-gray-50">
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                              {new Date(snapshot.targetDate).toLocaleDateString('ja-JP')}
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap">
+                              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                snapshot.status === 'COMPLETED' ? 'bg-green-100 text-green-800' :
+                                snapshot.status === 'FAILED' ? 'bg-red-100 text-red-800' :
+                                'bg-yellow-100 text-yellow-800'
+                              }`}>
+                                {snapshot.status === 'COMPLETED' ? '✅ 完了' :
+                                 snapshot.status === 'FAILED' ? '❌ 失敗' :
+                                 '⏳ 実行中'}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                              {snapshot.recordCount.toLocaleString()}件
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                              {new Date(snapshot.startedAt).toLocaleString('ja-JP')}
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                              {snapshot.completedAt ? new Date(snapshot.completedAt).toLocaleString('ja-JP') : '-'}
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap text-sm">
+                              {snapshot.status === 'COMPLETED' && (
+                                <button 
+                                  onClick={() => rollbackSnapshot(snapshot.batchId, new Date(snapshot.targetDate).toLocaleDateString('ja-JP'))}
+                                  className="text-red-600 hover:text-red-800 text-xs font-medium"
+                                >
+                                  🗑️ 削除
+                                </button>
+                              )}
+                              {snapshot.status === 'FAILED' && snapshot.errorMessage && (
+                                <button 
+                                  onClick={() => alert(`エラー詳細:\n${snapshot.errorMessage}`)}
+                                  className="text-orange-600 hover:text-orange-800 text-xs font-medium"
+                                >
+                                  ⚠️ 詳細
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              </div>
+
+              {/* 注意事項 */}
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                <div className="flex">
+                  <div className="flex-shrink-0">
+                    <span className="text-yellow-600">⚠️</span>
+                  </div>
+                  <div className="ml-3">
+                    <h4 className="text-sm font-medium text-yellow-800">スナップショット管理の注意事項</h4>
+                    <div className="mt-2 text-sm text-yellow-700">
+                      <ul className="list-disc pl-5 space-y-1">
+                        <li>スナップショットデータの削除は復旧できません</li>
+                        <li>手動作成時は既存のスナップショットが上書きされます</li>
+                        <li>大量データのスナップショット作成には時間がかかる場合があります</li>
+                        <li>失敗したスナップショットは自動でリトライされます（最大3回）</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           )}
         </div>
       </div>
@@ -3780,7 +4077,7 @@ export default function FullMainApp() {
                 <div className="min-w-[1300px] h-[17px]"></div>
               </div>
               {/* ヘッダー行 */}
-              <div className="sticky top-0 z-50 bg-gray-100 border-b overflow-hidden">
+              <div className="sticky top-0 z-10 bg-gray-100 border-b overflow-hidden">
                 <div className="min-w-[1300px]">
                   <div className="flex font-bold text-sm">
                     {Array.from({ length: 13 }).map((_, i) => {

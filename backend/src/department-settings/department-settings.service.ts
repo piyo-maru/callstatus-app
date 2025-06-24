@@ -6,7 +6,37 @@ export class DepartmentSettingsService {
   constructor(private prisma: PrismaService) {}
 
   async getAllSettings() {
+    // 現在在籍中の社員が使用している部署・グループを取得
+    const activeStaff = await this.prisma.staff.findMany({
+      where: { isActive: true },
+      select: { department: true, group: true }
+    });
+
+    const activeContracts = await this.prisma.contract.findMany({
+      include: { staff: true }
+    });
+
+    const activeContractsFiltered = activeContracts.filter(c => c.staff?.isActive === true);
+
+    // 現在使用中の部署・グループ名を取得
+    const activeDepartments = new Set([
+      ...activeStaff.map(s => s.department),
+      ...activeContractsFiltered.map(c => c.dept)
+    ].filter(Boolean));
+
+    const activeGroups = new Set([
+      ...activeStaff.map(s => s.group),
+      ...activeContractsFiltered.map(c => c.team)
+    ].filter(Boolean));
+
+    // 現在使用中の部署・グループの設定のみを取得
     const settings = await this.prisma.departmentSettings.findMany({
+      where: {
+        OR: [
+          { type: 'department', name: { in: Array.from(activeDepartments) } },
+          { type: 'group', name: { in: Array.from(activeGroups) } }
+        ]
+      },
       orderBy: [
         { type: 'asc' },
         { displayOrder: 'asc' },
@@ -21,17 +51,41 @@ export class DepartmentSettingsService {
   }
 
   async autoGenerateFromStaff() {
-    // スタッフデータから部署・グループを抽出
+    // 現在在籍中のスタッフデータのみから部署・グループを抽出
     const staff = await this.prisma.staff.findMany({
+      where: {
+        isActive: true  // 在籍中の社員のみ
+      },
       select: {
         department: true,
         group: true
       }
     });
 
+    // 現在有効な契約からも部署・グループを取得
+    const contracts = await this.prisma.contract.findMany({
+      include: {
+        staff: true
+      }
+    });
+
+    // 在籍中の社員の契約のみをフィルタリング
+    const activeContracts = contracts.filter(c => c.staff?.isActive === true);
+
+    // 全ての部署・グループを統合してユニークにする
+    const allDepartments = [
+      ...staff.map(s => s.department),
+      ...activeContracts.map(c => c.dept)
+    ].filter(Boolean); // null/undefinedを除外
+
+    const allGroups = [
+      ...staff.map(s => s.group),
+      ...activeContracts.map(c => c.team)
+    ].filter(Boolean); // null/undefinedを除外
+
     // ユニークな部署・グループを抽出
-    const departments = [...new Set(staff.map(s => s.department))];
-    const groups = [...new Set(staff.map(s => s.group))];
+    const departments = [...new Set(allDepartments)];
+    const groups = [...new Set(allGroups)];
 
     // 既存設定を取得
     const existingSettings = await this.prisma.departmentSettings.findMany();
