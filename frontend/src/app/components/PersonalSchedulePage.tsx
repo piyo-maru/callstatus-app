@@ -595,12 +595,14 @@ const PersonalSchedulePage: React.FC = () => {
                 );
                 
                 const isCurrentDay = isToday(day);
-                const currentTimePosition = useMemo(() => {
+                // useMemoをループ外に移動し、ここでは直接計算
+                const getCurrentTimePosition = () => {
                   if (!isCurrentDay) return null;
                   const currentDecimalHour = currentTime.getHours() + currentTime.getMinutes() / 60;
                   if (currentDecimalHour < 8 || currentDecimalHour >= 21) return null;
                   return timeToPositionPercent(currentDecimalHour);
-                }, [currentTime, isCurrentDay]);
+                };
+                const currentTimePosition = getCurrentTimePosition();
                 
                 return (
                   <div key={day.getTime()} className="flex border-b border-gray-100 hover:bg-gray-50 h-16 relative">
