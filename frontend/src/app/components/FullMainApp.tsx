@@ -104,8 +104,15 @@ type ImportHistory = {
 
 // --- 定数定義 ---
 const statusColors: { [key: string]: string } = {
-  'Online': '#22c55e', 'Remote': '#10b981', 'Meeting': '#f59e0b', 'Training': '#3b82f6',
-  'Break': '#f97316', 'Off': '#ef4444', 'Unplanned': '#dc2626', 'Night Duty': '#4f46e5',
+  'online': '#22c55e', 'Online': '#22c55e', 'remote': '#10b981', 'Remote': '#10b981', 
+  'meeting': '#f59e0b', 'Meeting': '#f59e0b', 'training': '#3b82f6', 'Training': '#3b82f6',
+  'break': '#f97316', 'Break': '#f97316', 'off': '#ef4444', 'Off': '#ef4444', 
+  'unplanned': '#dc2626', 'Unplanned': '#dc2626', 'night duty': '#4f46e5', 'Night duty': '#4f46e5',
+};
+
+// UI表示用の文字列変換関数
+const capitalizeStatus = (status: string): string => {
+  return status.charAt(0).toUpperCase() + status.slice(1);
 };
 
 // 部署の色設定（より薄く調整）
@@ -162,31 +169,16 @@ const getApiUrl = (): string => {
   // 相対パスを使用してCORSを回避
   return '';
 };
-const availableStatuses = ['Online', 'Remote', 'Meeting', 'Training', 'Break', 'Off', 'Unplanned', 'Night Duty'];
-const AVAILABLE_STATUSES = ['Online', 'Remote', 'Night Duty'];
+const availableStatuses = ['online', 'remote', 'meeting', 'training', 'break', 'off', 'unplanned', 'night duty'];
+const AVAILABLE_STATUSES = ['online', 'remote', 'night duty'];
 
 // --- 祝日関連の関数 ---
 const fetchHolidays = async (): Promise<Holiday[]> => {
-  try {
-    // CORS制限があるため、プロキシ経由またはローカル祝日データを使用する場合
-    const response = await fetch('https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv');
-    const csvText = await response.text();
-    const lines = csvText.split('\n').slice(1); // ヘッダー行をスキップ
-    
-    return lines
-      .filter(line => line.trim())
-      .map(line => {
-        const [dateStr, name] = line.split(',');
-        return {
-          date: dateStr.trim().replace(/\"/g, ''), // クォートを除去
-          name: name?.trim().replace(/\"/g, '') || ''
-        };
-      });
-  } catch (error) {
-    console.error('祝日データの取得に失敗しました。ローカル祝日データを使用します:', error);
-    
-    // フォールバック: 2025年の主要祝日
-    return [
+  // CORS制限により外部祝日データは取得不可のため、内蔵データを使用
+  console.log('内蔵祝日データを使用します');
+  
+  // 2025年の祝日データ
+  return [
       { date: '2025-01-01', name: '元日' },
       { date: '2025-01-13', name: '成人の日' },
       { date: '2025-02-11', name: '建国記念の日' },
@@ -204,7 +196,6 @@ const fetchHolidays = async (): Promise<Holiday[]> => {
       { date: '2025-11-03', name: '文化の日' },
       { date: '2025-11-23', name: '勤労感謝の日' },
     ];
-  }
 };
 
 const isWeekend = (date: Date): 'saturday' | 'sunday' | null => {
@@ -451,7 +442,7 @@ const ScheduleModal = ({ isOpen, onClose, staffList, onSave, scheduleToEdit, ini
       status, 
       start: parseFloat(startTime), 
       end: parseFloat(endTime),
-      memo: (status === 'Meeting' || status === 'Training') ? memo : undefined
+      memo: (status === 'meeting' || status === 'training') ? memo : undefined
     };
     console.log('Schedule data prepared:', scheduleData);
     onSave(isEditMode ? { ...scheduleData, id: scheduleToEdit.id } : scheduleData);
@@ -473,7 +464,7 @@ const ScheduleModal = ({ isOpen, onClose, staffList, onSave, scheduleToEdit, ini
           <div>
             <label htmlFor="status" className="block text-sm font-medium text-gray-700">ステータス</label>
             <select id="status" value={status} onChange={e => setStatus(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
-              {availableStatuses.map(s => <option key={s} value={s}>{s}</option>)}
+              {availableStatuses.map(s => <option key={s} value={s}>{capitalizeStatus(s)}</option>)}
             </select>
           </div>
           <div className="grid grid-cols-2 gap-4">
@@ -486,10 +477,10 @@ const ScheduleModal = ({ isOpen, onClose, staffList, onSave, scheduleToEdit, ini
               <select id="end" value={endTime} onChange={e => setEndTime(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm">{timeOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}</select>
             </div>
           </div>
-          {(status === 'Meeting' || status === 'Training') && (
+          {(status === 'meeting' || status === 'training') && (
             <div>
               <label htmlFor="memo" className="block text-sm font-medium text-gray-700">
-                メモ ({status === 'Meeting' ? '会議' : '研修'}内容)
+                メモ ({capitalizeStatus(status) === 'Meeting' ? '会議' : '研修'}内容)
               </label>
               <textarea
                 id="memo"
@@ -497,7 +488,7 @@ const ScheduleModal = ({ isOpen, onClose, staffList, onSave, scheduleToEdit, ini
                 onChange={e => setMemo(e.target.value)}
                 className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                 rows={3}
-                placeholder={status === 'Meeting' ? '会議の内容を入力...' : '研修の内容を入力...'}
+                placeholder={capitalizeStatus(status) === 'Meeting' ? '会議の内容を入力...' : '研修の内容を入力...'}
               />
             </div>
           )}
@@ -1433,6 +1424,61 @@ const DepartmentGroupSettings = ({ authenticatedFetch, staffList }: {
     }
   }, [authenticatedFetch]);
 
+  // グループを部署順→グループ順でソートする関数
+  const sortGroupsByDepartment = useCallback((groups: any[]) => {
+    return groups.sort((a, b) => {
+      // スタッフデータからグループが属する部署を特定
+      const staffA = staffList.find(staff => staff.group === a.name);
+      const staffB = staffList.find(staff => staff.group === b.name);
+      
+      const deptA = staffA?.department || '';
+      const deptB = staffB?.department || '';
+      
+      // 部署の表示順序を取得
+      const deptSettingA = departments.find(d => d.name === deptA);
+      const deptSettingB = departments.find(d => d.name === deptB);
+      
+      const deptOrderA = deptSettingA?.displayOrder || 0;
+      const deptOrderB = deptSettingB?.displayOrder || 0;
+      
+      // まず部署順で比較
+      if (deptOrderA !== deptOrderB) {
+        return deptOrderA - deptOrderB;
+      }
+      
+      // 同じ部署なら部署名で比較
+      if (deptA !== deptB) {
+        return deptA.localeCompare(deptB);
+      }
+      
+      // 同じ部署内ならグループの表示順序で比較
+      const groupOrderA = a.displayOrder || 0;
+      const groupOrderB = b.displayOrder || 0;
+      
+      if (groupOrderA !== groupOrderB) {
+        return groupOrderA - groupOrderB;
+      }
+      
+      // 最後にグループ名で比較
+      return a.name.localeCompare(b.name);
+    });
+  }, [staffList, departments]);
+
+  // 部署を表示順でソートする関数
+  const sortDepartmentsByOrder = useCallback((departments: any[]) => {
+    return departments.sort((a, b) => {
+      const orderA = a.displayOrder || 0;
+      const orderB = b.displayOrder || 0;
+      
+      if (orderA !== orderB) {
+        return orderA - orderB;
+      }
+      
+      // 同じ表示順なら部署名で比較
+      return a.name.localeCompare(b.name);
+    });
+  }, []);
+
   // 自動生成
   const handleAutoGenerate = async () => {
     setLoading(true);
@@ -1510,45 +1556,6 @@ const DepartmentGroupSettings = ({ authenticatedFetch, staffList }: {
     }
   };
 
-  // グループを部署順→グループ順でソートする関数
-  const sortGroupsByDepartment = useCallback((groups: any[]) => {
-    return groups.sort((a, b) => {
-      // スタッフデータからグループが属する部署を特定
-      const staffA = staffList.find(staff => staff.group === a.name);
-      const staffB = staffList.find(staff => staff.group === b.name);
-      
-      const deptA = staffA?.department || '';
-      const deptB = staffB?.department || '';
-      
-      // 部署の表示順序を取得
-      const deptSettingA = departments.find(d => d.name === deptA);
-      const deptSettingB = departments.find(d => d.name === deptB);
-      
-      const deptOrderA = deptSettingA?.displayOrder || 0;
-      const deptOrderB = deptSettingB?.displayOrder || 0;
-      
-      // まず部署順で比較
-      if (deptOrderA !== deptOrderB) {
-        return deptOrderA - deptOrderB;
-      }
-      
-      // 同じ部署なら部署名で比較
-      if (deptA !== deptB) {
-        return deptA.localeCompare(deptB);
-      }
-      
-      // 同じ部署内ならグループの表示順序で比較
-      const groupOrderA = a.displayOrder || 0;
-      const groupOrderB = b.displayOrder || 0;
-      
-      if (groupOrderA !== groupOrderB) {
-        return groupOrderA - groupOrderB;
-      }
-      
-      // 最後にグループ名で比較
-      return a.name.localeCompare(b.name);
-    });
-  }, [staffList, departments]);
 
   useEffect(() => {
     fetchSettings();
@@ -1594,7 +1601,7 @@ const DepartmentGroupSettings = ({ authenticatedFetch, staffList }: {
                   </tr>
                 </thead>
                 <tbody>
-                  {departments.map((dept) => (
+                  {sortDepartmentsByOrder([...departments]).map((dept) => (
                     <tr key={dept.id} className="border-t border-gray-200">
                       <td className="px-3 py-2 text-xs">{dept.name}</td>
                       <td className="px-3 py-2">
@@ -1693,7 +1700,7 @@ const DepartmentGroupSettings = ({ authenticatedFetch, staffList }: {
 };
 
 // --- 設定モーダルコンポーネント ---
-const SettingsModal = ({ isOpen, onClose, viewMode, setViewMode, setIsCsvUploadModalOpen, setIsJsonUploadModalOpen, setIsImportHistoryModalOpen, canManage, authenticatedFetch, staffList }: {
+const SettingsModal = ({ isOpen, onClose, viewMode, setViewMode, setIsCsvUploadModalOpen, setIsJsonUploadModalOpen, setIsImportHistoryModalOpen, canManage, authenticatedFetch, staffList, maskingEnabled, toggleMasking }: {
   isOpen: boolean;
   onClose: () => void;
   viewMode: 'normal' | 'compact';
@@ -1704,6 +1711,8 @@ const SettingsModal = ({ isOpen, onClose, viewMode, setViewMode, setIsCsvUploadM
   canManage: boolean;
   authenticatedFetch: (url: string, options?: RequestInit) => Promise<Response>;
   staffList: Staff[];
+  maskingEnabled: boolean;
+  toggleMasking: () => void;
 }) => {
   const [activeTab, setActiveTab] = useState(canManage ? 'import' : 'display');
 
@@ -1938,7 +1947,7 @@ const SettingsModal = ({ isOpen, onClose, viewMode, setViewMode, setIsCsvUploadM
                   {Object.entries(statusColors).map(([status, color]) => (
                     <div key={status} className="flex items-center space-x-2">
                       <div className="w-4 h-4 rounded" style={{ backgroundColor: color }}></div>
-                      <span className="text-sm">{status}</span>
+                      <span className="text-sm">{capitalizeStatus(status)}</span>
                     </div>
                   ))}
                 </div>
@@ -2023,28 +2032,28 @@ const StatusChart = ({ data, staffList, selectedDepartment, selectedGroup }: {
           <div className="px-2 py-1 flex gap-x-4">
             {/* 1列目 */}
             <div className="flex flex-col gap-y-1">
-              {['Online', 'Remote', 'Night Duty'].map(status => (
+              {['online', 'remote', 'night duty'].map(status => (
                 <div key={status} className="flex items-center text-xs">
                   <div 
                     className="w-2 h-2 rounded mr-1 flex-shrink-0" 
                     style={{ backgroundColor: statusColors[status] || '#8884d8' }}
                   ></div>
-                  <span className="truncate" style={{ opacity: status === 'Online' ? 1 : 0.7 }}>
-                    {status}
+                  <span className="truncate" style={{ opacity: status === 'online' ? 1 : 0.7 }}>
+                    {capitalizeStatus(status)}
                   </span>
                 </div>
               ))}
             </div>
             {/* 2列目 */}
             <div className="flex flex-col gap-y-1">
-              {['Off', 'Unplanned', 'Break', 'Meeting', 'Training'].map(status => (
+              {['off', 'unplanned', 'break', 'meeting', 'training'].map(status => (
                 <div key={status} className="flex items-center text-xs">
                   <div 
                     className="w-2 h-2 rounded mr-1 flex-shrink-0" 
                     style={{ backgroundColor: statusColors[status] || '#8884d8' }}
                   ></div>
-                  <span className="truncate" style={{ opacity: status === 'Online' ? 1 : 0.7 }}>
-                    {status}
+                  <span className="truncate" style={{ opacity: status === 'online' ? 1 : 0.7 }}>
+                    {capitalizeStatus(status)}
                   </span>
                 </div>
               ))}
@@ -2065,10 +2074,14 @@ const StatusChart = ({ data, staffList, selectedDepartment, selectedGroup }: {
                 height={40}
               />
               <YAxis allowDecimals={false} tick={{ fontSize: 10 }} width={25} />
-              <Tooltip wrapperStyle={{ zIndex: 100 }} />
+              <Tooltip 
+                wrapperStyle={{ zIndex: 100 }}
+                formatter={(value, name) => [value, capitalizeStatus(name)]}
+                labelFormatter={(label) => `時刻: ${label}`}
+              />
               {/* Legendを非表示にする */}
               {/* 凡例と同じ順序で描画 */}
-              {['Online', 'Remote', 'Night Duty', 'Off', 'Unplanned', 'Break', 'Meeting', 'Training'].map(status => (
+              {['online', 'remote', 'night duty', 'off', 'unplanned', 'break', 'meeting', 'training'].map(status => (
                 <Line 
                   key={status} 
                   type="monotone" 
@@ -2077,7 +2090,7 @@ const StatusChart = ({ data, staffList, selectedDepartment, selectedGroup }: {
                   strokeWidth={2} 
                   connectNulls 
                   dot={false}
-                  strokeOpacity={status === 'Online' ? 1 : 0.3}
+                  strokeOpacity={status === 'online' ? 1 : 0.3}
                 />
               ))}
             </LineChart>
@@ -2178,6 +2191,65 @@ export default function FullMainApp() {
     departments: Array<{id: number, name: string, shortName?: string, backgroundColor?: string, displayOrder?: number}>,
     groups: Array<{id: number, name: string, shortName?: string, backgroundColor?: string, displayOrder?: number}>
   }>({ departments: [], groups: [] });
+
+  // パフォーマンス最適化：部署グループマップ構築
+  const groupToStaffMap = useMemo(() => {
+    const perfStart = performance.now();
+    const map = new Map<string, Staff>();
+    staffList.forEach(staff => {
+      if (!map.has(staff.group)) {
+        map.set(staff.group, staff);
+      }
+    });
+    const perfEnd = performance.now();
+    if (perfEnd - perfStart > 100) {
+      console.warn('グループマップ構築時間:', perfEnd - perfStart, 'ms');
+    }
+    return map;
+  }, [staffList]);
+
+  const departmentMap = useMemo(() => {
+    const perfStart = performance.now();
+    const map = new Map<string, any>();
+    departmentSettings.departments.forEach(dept => map.set(dept.name, dept));
+    const perfEnd = performance.now();
+    if (perfEnd - perfStart > 50) {
+      console.warn('部署マップ構築時間:', perfEnd - perfStart, 'ms');
+    }
+    return map;
+  }, [departmentSettings.departments]);
+
+  // パフォーマンス最適化：部署別グループソート
+  const sortGroupsByDepartment = useCallback((groups: string[]) => {
+    const perfStart = performance.now();
+    
+    // O(1)でのグループ→部署情報取得
+    const result = groups.sort((a, b) => {
+      const staffA = groupToStaffMap.get(a);
+      const staffB = groupToStaffMap.get(b);
+      
+      if (!staffA || !staffB) return 0;
+      
+      const deptA = departmentMap.get(staffA.department);
+      const deptB = departmentMap.get(staffB.department);
+      
+      const orderA = deptA?.displayOrder ?? 999;
+      const orderB = deptB?.displayOrder ?? 999;
+      
+      if (orderA !== orderB) {
+        return orderA - orderB;
+      }
+      return a.localeCompare(b, 'ja', { numeric: true });
+    });
+    
+    const perfEnd = performance.now();
+    if (perfEnd - perfStart > 200) {
+      console.warn('グループソート処理時間:', perfEnd - perfStart, 'ms', '対象:', groups.length, '件');
+    }
+    
+    return result;
+  }, [groupToStaffMap, departmentMap]);
+
   // viewMode設定をlocalStorageで永続化
   const [viewMode, setViewMode] = useState<'normal' | 'compact'>(() => {
     if (typeof window !== 'undefined') {
@@ -2615,8 +2687,8 @@ export default function FullMainApp() {
     let processedScheduleData = { ...scheduleData };
     
     // 新規作成 かつ 当日 かつ Offステータスの場合、自動でUnplannedに変換
-    if (!scheduleData.id && date === today && scheduleData.status === 'Off') {
-      processedScheduleData.status = 'Unplanned';
+    if (!scheduleData.id && date === today && scheduleData.status === 'off') {
+      processedScheduleData.status = 'unplanned';
       console.log('当日作成のOffをUnplannedに自動変換しました');
     }
     
@@ -3161,7 +3233,7 @@ export default function FullMainApp() {
     return staffList.map(staff => {
       const applicableSchedules = schedules.filter(s => s.staffId === staff.id && currentDecimalHour >= s.start && currentDecimalHour < s.end);
       const currentSchedule = applicableSchedules.length > 0 ? applicableSchedules.reduce((latest, current) => latest.id > current.id ? latest : current) : null;
-      return { ...staff, currentStatus: currentSchedule ? currentSchedule.status : 'Off' };
+      return { ...staff, currentStatus: currentSchedule ? currentSchedule.status : 'off' };
     });
   }, [staffList, schedules, currentTime]);
   
@@ -3178,12 +3250,14 @@ export default function FullMainApp() {
 
   const availableStaffCount = useMemo(() => departmentGroupFilteredStaff.filter(staff => AVAILABLE_STATUSES.includes(staff.currentStatus)).length, [departmentGroupFilteredStaff]);
 
-  // フィルター用のソート済み部署リスト
+  // フィルター用のソート済み部署リスト（最適化済み）
   const sortedDepartmentsForFilter = useMemo(() => {
+    const perfStart = performance.now();
     const uniqueDepts = [...new Set(staffList.map(s => s.isSupporting ? (s.currentDept || s.department) : s.department))];
-    return uniqueDepts.sort((a, b) => {
-      const settingA = departmentSettings.departments.find(d => d.name === a);
-      const settingB = departmentSettings.departments.find(d => d.name === b);
+    const sorted = uniqueDepts.sort((a, b) => {
+      // 部署設定を取得（O(1)でマップから取得）
+      const settingA = departmentMap.get(a);
+      const settingB = departmentMap.get(b);
       const orderA = settingA?.displayOrder || 0;
       const orderB = settingB?.displayOrder || 0;
       if (orderA !== orderB) {
@@ -3191,56 +3265,35 @@ export default function FullMainApp() {
       }
       return a.localeCompare(b);
     });
-  }, [staffList, departmentSettings.departments]);
+    
+    const perfEnd = performance.now();
+    if (perfEnd - perfStart > 200) {
+      console.warn('部署フィルター処理時間:', perfEnd - perfStart, 'ms');
+    }
+    
+    return sorted;
+  }, [staffList, departmentMap]);
 
-  // フィルター用のソート済みグループリスト（部署順→グループ順）
+  // フィルター用のソート済みグループリスト（部署順→グループ順・最適化済み）
   const sortedGroupsForFilter = useMemo(() => {
+    const perfStart = performance.now();
+    
     const filteredStaff = staffList.filter(s => {
       const currentDept = s.isSupporting ? (s.currentDept || s.department) : s.department;
       return selectedDepartment === 'all' || currentDept === selectedDepartment;
     });
     const uniqueGroups = [...new Set(filteredStaff.map(s => s.isSupporting ? (s.currentGroup || s.group) : s.group))];
     
-    return uniqueGroups.sort((a, b) => {
-      // スタッフデータからグループが属する部署を特定
-      const staffA = staffList.find(staff => staff.group === a);
-      const staffB = staffList.find(staff => staff.group === b);
-      
-      const deptA = staffA?.department || '';
-      const deptB = staffB?.department || '';
-      
-      // 部署の表示順序を取得
-      const deptSettingA = departmentSettings.departments.find(d => d.name === deptA);
-      const deptSettingB = departmentSettings.departments.find(d => d.name === deptB);
-      
-      const deptOrderA = deptSettingA?.displayOrder || 0;
-      const deptOrderB = deptSettingB?.displayOrder || 0;
-      
-      // まず部署順で比較
-      if (deptOrderA !== deptOrderB) {
-        return deptOrderA - deptOrderB;
-      }
-      
-      // 同じ部署なら部署名で比較
-      if (deptA !== deptB) {
-        return deptA.localeCompare(deptB);
-      }
-      
-      // 同じ部署内ならグループの表示順序で比較
-      const groupSettingA = departmentSettings.groups.find(g => g.name === a);
-      const groupSettingB = departmentSettings.groups.find(g => g.name === b);
-      
-      const groupOrderA = groupSettingA?.displayOrder || 0;
-      const groupOrderB = groupSettingB?.displayOrder || 0;
-      
-      if (groupOrderA !== groupOrderB) {
-        return groupOrderA - groupOrderB;
-      }
-      
-      // 最後にグループ名で比較
-      return a.localeCompare(b);
-    });
-  }, [staffList, selectedDepartment, departmentSettings.departments, departmentSettings.groups]);
+    // 最適化されたsortGroupsByDepartment関数を使用
+    const sorted = sortGroupsByDepartment(uniqueGroups);
+
+    const perfEnd = performance.now();
+    if (perfEnd - perfStart > 300) {
+      console.warn('グループフィルター処理時間:', perfEnd - perfStart, 'ms (グループ数:', uniqueGroups.length, ')');
+    }
+    
+    return sorted;
+  }, [staffList, selectedDepartment, sortGroupsByDepartment]);
 
   // 今日かどうかを判定
   const isToday = useMemo(() => {
@@ -3337,7 +3390,7 @@ export default function FullMainApp() {
             // 同じレイヤーなら新しいIDを優先
             return current.id > best.id ? current : best;
           }) : null;
-        const status = topSchedule ? topSchedule.status : 'Off';
+        const status = topSchedule ? topSchedule.status : 'off';
         if (statusesToDisplay.includes(status)) { counts[status]++; }
       });
       data.push(counts);
@@ -3508,6 +3561,8 @@ export default function FullMainApp() {
         canManage={canManage()}
         authenticatedFetch={authenticatedFetch}
         staffList={staffList}
+        maskingEnabled={maskingEnabled}
+        toggleMasking={toggleMasking}
       />
       
       <main className={`container mx-auto p-2 font-sans ${viewMode === 'compact' ? 'compact-mode' : ''}`}>
@@ -3814,6 +3869,7 @@ export default function FullMainApp() {
                                   const isContract = scheduleLayer === 'contract';
                                   const isHistoricalData = schedule.isHistorical || scheduleLayer === 'historical';
                                   
+                                  
                                   return (
                                     <div key={`${schedule.id}-${scheduleLayer}-${schedule.staffId}-${index}`} 
                                          draggable={!isContract && !isHistoricalData && canEdit(schedule.staffId)}
@@ -3832,7 +3888,13 @@ export default function FullMainApp() {
                                            width: `${barWidth}%`, 
                                            top: '50%', 
                                            transform: 'translateY(-50%)', 
-                                           backgroundColor: statusColors[schedule.status] || '#9ca3af',
+                                           backgroundColor: (() => {
+                                             const color = statusColors[schedule.status] || '#9ca3af';
+                                             if (schedule.layer === 'adjustment' && !statusColors[schedule.status]) {
+                                               console.log(`Status color debug: status="${schedule.status}", color="${color}", layer="${schedule.layer}"`);
+                                             }
+                                             return color;
+                                           })(),
                                            opacity: isContract ? 0.5 : isHistoricalData ? 0.8 : canEdit(schedule.staffId) ? 1 : 0.7,
                                            backgroundImage: isContract ? 'repeating-linear-gradient(45deg, transparent, transparent 2px, rgba(255,255,255,0.3) 2px, rgba(255,255,255,0.3) 4px)' : 
                                                           isHistoricalData ? 'repeating-linear-gradient(90deg, transparent, transparent 3px, rgba(255,255,255,0.4) 3px, rgba(255,255,255,0.4) 6px)' : 'none',
@@ -3877,9 +3939,9 @@ export default function FullMainApp() {
                                            setDraggedSchedule(null);
                                            setDragOffset(0);
                                          }}
-                                         title={`${schedule.status}${schedule.memo ? ': ' + schedule.memo : ''} (${isContract ? 'レイヤー1:契約' : 'レイヤー2:調整'})`}>
+                                         title={`${capitalizeStatus(schedule.status)}${schedule.memo ? ': ' + schedule.memo : ''} (${isContract ? 'レイヤー1:契約' : 'レイヤー2:調整'})`}>
                                       <span className="truncate">
-                                        {schedule.status}
+                                        {capitalizeStatus(schedule.status)}
                                         {schedule.memo && (
                                           <span className="ml-1 text-yellow-200">📝</span>
                                         )}

@@ -123,7 +123,7 @@ export class LayerManagerService {
     return {
       id: `contract_${empNo}_${dateString}`,
       staffId,
-      status: 'Online', // 契約による基本勤務時間はOnlineとして表示
+      status: 'online', // 契約による基本勤務時間はonlineとして表示
       start: startUtc,
       end: endUtc,
       memo: '契約による基本勤務時間',
@@ -148,16 +148,20 @@ export class LayerManagerService {
       }
     });
 
-    return adjustments.map(adj => ({
-      id: `adj_${adj.id}`,
-      staffId: adj.staffId,
-      status: adj.status,
-      start: adj.start,
-      end: adj.end,
-      memo: adj.memo || undefined,
-      layer: 'adjustment',
-      priority: 3 // 個別調整は最高優先度
-    }));
+    return adjustments.map(adj => {
+      const adjustmentSchedule: LayeredSchedule = {
+        id: `adj_${adj.id}`,
+        staffId: adj.staffId,
+        status: adj.status,
+        start: adj.start,
+        end: adj.end,
+        memo: adj.memo || undefined,
+        layer: 'adjustment' as const,
+        priority: 3 // 個別調整は最高優先度
+      };
+      console.log(`Adjustment schedule created: ID ${adjustmentSchedule.id}, staffId ${adj.staffId}`);
+      return adjustmentSchedule;
+    });
   }
 
   /**
@@ -176,15 +180,19 @@ export class LayerManagerService {
       }
     });
 
-    return schedules.map(sch => ({
-      id: `sch_${sch.id}`,
-      staffId: sch.staffId,
-      status: sch.status,
-      start: sch.start,
-      end: sch.end,
-      memo: sch.memo || undefined,
-      layer: 'adjustment',
-      priority: 2 // 従来データは中間優先度
-    }));
+    return schedules.map(sch => {
+      const legacySchedule: LayeredSchedule = {
+        id: `sch_${sch.id}`,
+        staffId: sch.staffId,
+        status: sch.status,
+        start: sch.start,
+        end: sch.end,
+        memo: sch.memo || undefined,
+        layer: 'adjustment' as const,
+        priority: 2 // 従来データは中間優先度
+      };
+      console.log(`Legacy schedule created: ID ${legacySchedule.id}, staffId ${sch.staffId}`);
+      return legacySchedule;
+    });
   }
 }

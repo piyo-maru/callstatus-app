@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, Inject, forwardRef } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Inject, forwardRef } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { SchedulesGateway } from './schedules.gateway';
 import { LayerManagerService } from '../layer-manager/layer-manager.service';
@@ -45,7 +45,7 @@ export class SchedulesService {
       const schedules = layeredSchedules.map((ls, index) => ({
         id: this.generateLayerBasedId(ls.layer, ls.id, index),
         staffId: ls.staffId,
-        status: this.convertStatusFormat(ls.status),
+        status: ls.status,
         start: this.utcToJstDecimal(ls.start),
         end: this.utcToJstDecimal(ls.end),
         memo: ls.memo || null,
@@ -98,7 +98,7 @@ export class SchedulesService {
     const convertedSchedules = schedules.map(s => ({
       id: s.id,
       staffId: s.staffId,
-      status: this.convertStatusFormat(s.status),
+      status: s.status,
       start: this.utcToJstDecimal(s.start),
       end: this.utcToJstDecimal(s.end),
       memo: s.memo || null,
@@ -128,18 +128,18 @@ export class SchedulesService {
     console.log(`JST時刻 ${createScheduleDto.start} → UTC時刻 ${startUtc.toISOString()}`);
     console.log(`JST時刻 ${createScheduleDto.end} → UTC時刻 ${endUtc.toISOString()}`);
     
-    // 一時的にScheduleテーブルを使用（本来はAdjustmentテーブルに保存すべき）
+    // 一時的にScheduleテーブルを使用（Adjustmentのスキーマ設定に問題があるため）
     const newSchedule = await this.prisma.schedule.create({
       data: {
         staffId: createScheduleDto.staffId,
-        status: createScheduleDto.status.toLowerCase(), // 小文字で保存
+        status: createScheduleDto.status,
         start: startUtc,
         end: endUtc,
         memo: createScheduleDto.memo || null
       },
     });
     
-    console.log('Schedule created with UTC times:', {
+    console.log('Adjustment created with UTC times:', {
       id: newSchedule.id,
       start: newSchedule.start.toISOString(),
       end: newSchedule.end.toISOString()
@@ -159,25 +159,66 @@ export class SchedulesService {
   }
 
   async update(id: number, updateScheduleDto: { status?: string; start?: number; end?: number; date: string; memo?: string; }) {
+    console.log(`SchedulesService.update called with ID: ${id}, type: ${typeof id}`);
+    console.log('UpdateDto:', JSON.stringify(updateScheduleDto));
+    
+    // IDの妥当性チェック
+    if (!id || isNaN(id)) {
+      throw new BadRequestException(`無効なID: ${id}`);
+    }
+    
     // Contractレイヤー（ID範囲: 1000000-1999999）は編集不可
     if (id >= 1000000 && id < 2000000) {
       throw new NotFoundException(`契約レイヤーのスケジュールは編集不可能です (ID: ${id})`);
     }
 
-    // 調整レイヤー（Adjustment）の更新のみ対応
-    return this.updateAdjustmentSchedule(id, updateScheduleDto);
+    try {
+      // 一時的にScheduleテーブルを使用（createと整合性保持）
+      console.log(`Calling updateScheduleTable with ID: ${id}`);
+      const result = await this.updateScheduleTable(id, updateScheduleDto);
+      console.log('Update successful:', result);
+      return result;
+    } catch (error) {
+      console.error('Update error in service:', error.message);
+      throw error;
+    }
   }
 
-
-  private async updateAdjustmentSchedule(id: number, updateScheduleDto: { status?: string; start?: number; end?: number; date: string; memo?: string; }) {
+  private async updateScheduleTable(id: number, updateScheduleDto: { status?: string; start?: number; end?: number; date: string; memo?: string; }) {
     const data: { status?: string; start?: Date; end?: Date; memo?: string | null } = {};
-    if (updateScheduleDto.status) data.status = updateScheduleDto.status.toLowerCase(); // 小文字で保存
+    if (updateScheduleDto.status) data.status = updateScheduleDto.status;
     if (updateScheduleDto.start) data.start = this.jstToUtc(updateScheduleDto.start, updateScheduleDto.date);
     if (updateScheduleDto.end) data.end = this.jstToUtc(updateScheduleDto.end, updateScheduleDto.date);
     if (updateScheduleDto.memo !== undefined) data.memo = updateScheduleDto.memo || null;
 
-    // 一時的にScheduleテーブルを使用（LayerManagerService無効化のため）
+    // Scheduleテーブルを使用（createと整合性保持）
     const updatedSchedule = await this.prisma.schedule.update({
+      where: { id },
+      data,
+    });
+    
+    // フロントエンド互換性のためJST小数点時刻に変換してレスポンス
+    const response = {
+      ...updatedSchedule,
+      start: this.utcToJstDecimal(updatedSchedule.start),
+      end: this.utcToJstDecimal(updatedSchedule.end),
+      editable: true,
+      layer: 'adjustment'
+    };
+    
+    this.gateway.sendScheduleUpdated(updatedSchedule);
+    return response;
+  }
+
+  private async updateAdjustmentSchedule(id: number, updateScheduleDto: { status?: string; start?: number; end?: number; date: string; memo?: string; }) {
+    const data: { status?: string; start?: Date; end?: Date; memo?: string | null } = {};
+    if (updateScheduleDto.status) data.status = updateScheduleDto.status;
+    if (updateScheduleDto.start) data.start = this.jstToUtc(updateScheduleDto.start, updateScheduleDto.date);
+    if (updateScheduleDto.end) data.end = this.jstToUtc(updateScheduleDto.end, updateScheduleDto.date);
+    if (updateScheduleDto.memo !== undefined) data.memo = updateScheduleDto.memo || null;
+
+    // Adjustmentテーブルを使用
+    const updatedSchedule = await this.prisma.adjustment.update({
       where: { id },
       data,
     });
@@ -201,36 +242,29 @@ export class SchedulesService {
       throw new NotFoundException(`契約レイヤーのスケジュールは削除不可能です (ID: ${id})`);
     }
 
-    // 調整レイヤー（Adjustment）の削除のみ対応
-    return this.removeAdjustmentSchedule(id);
+    // 一時的にScheduleテーブルを使用（createと整合性保持）
+    return this.removeScheduleTable(id);
   }
 
+  private async removeScheduleTable(id: number) {
+    // Scheduleテーブルを使用（createと整合性保持）
+    const deletedSchedule = await this.prisma.schedule.delete({
+      where: { id },
+    });
+    
+    this.gateway.sendScheduleDeleted(deletedSchedule.id);
+    return deletedSchedule;
+  }
 
   private async removeAdjustmentSchedule(id: number) {
-    // 一時的にScheduleテーブルを使用（LayerManagerService無効化のため）
-    const deletedSchedule = await this.prisma.schedule.delete({
+    // Adjustmentテーブルを使用
+    const deletedSchedule = await this.prisma.adjustment.delete({
       where: { id },
     });
     this.gateway.sendScheduleDeleted(id);
     return deletedSchedule;
   }
 
-  /**
-   * ステータス形式をフロントエンド向けに変換
-   */
-  private convertStatusFormat(status: string): string {
-    const statusMap = {
-      'online': 'Online',
-      'remote': 'Remote', 
-      'meeting': 'Meeting',
-      'training': 'Training',
-      'break': 'Break',
-      'off': 'Off',
-      'unplanned': 'Unplanned',
-      'night_duty': 'Night Duty'
-    };
-    return statusMap[status] || status;
-  }
 
   /**
    * レイヤーに基づいてIDを生成

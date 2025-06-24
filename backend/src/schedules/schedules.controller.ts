@@ -242,12 +242,64 @@ export class SchedulesController {
   ) {
     // 権限チェックを一時的にスキップ（認証システム修正まで）
     
-    return this.schedulesService.update(+id, updateScheduleDto);
+    // 文字列IDを数値IDに変換
+    let numericId: number;
+    console.log(`Parsing ID: ${id}`);
+    
+    if (id.startsWith('adjustment_adj_')) {
+      // "adjustment_adj_123_0" 形式から数値IDを抽出
+      const parts = id.split('_');
+      numericId = parseInt(parts[2]) || 0; // adj_の後の数値を取得
+    } else if (id.startsWith('adj_')) {
+      // "adj_123" 形式から数値IDを抽出
+      const parts = id.split('_');
+      numericId = parseInt(parts[1]) || 0;
+    } else if (id.startsWith('adjustment_sch_')) {
+      // "adjustment_sch_2_240" 形式から数値IDを抽出（sch_の後の数値を取得）
+      const parts = id.split('_');
+      numericId = parseInt(parts[2]) || 0; // sch_の後の数値を取得
+    } else {
+      // 通常の数値ID
+      numericId = +id;
+    }
+    
+    console.log(`Update schedule: ${id} -> ${numericId}`);
+    try {
+      const result = await this.schedulesService.update(numericId, updateScheduleDto);
+      console.log('Update successful:', result);
+      return result;
+    } catch (error) {
+      console.error('Update failed:', error.message);
+      throw error;
+    }
   }
 
   @Delete(':id')
   async remove(@Param('id') id: string) {
     // 一時的に権限チェックをスキップ（認証システム修正まで）
-    return this.schedulesService.remove(+id);
+    
+    // 文字列IDを数値IDに変換
+    let numericId: number;
+    console.log(`Parsing delete ID: ${id}`);
+    
+    if (id.startsWith('adjustment_adj_')) {
+      // "adjustment_adj_123_0" 形式から数値IDを抽出
+      const parts = id.split('_');
+      numericId = parseInt(parts[2]) || 0; // adj_の後の数値を取得
+    } else if (id.startsWith('adj_')) {
+      // "adj_123" 形式から数値IDを抽出
+      const parts = id.split('_');
+      numericId = parseInt(parts[1]) || 0;
+    } else if (id.startsWith('adjustment_sch_')) {
+      // "adjustment_sch_2_240" 形式から数値IDを抽出（sch_の後の数値を取得）
+      const parts = id.split('_');
+      numericId = parseInt(parts[2]) || 0; // sch_の後の数値を取得
+    } else {
+      // 通常の数値ID
+      numericId = +id;
+    }
+    
+    console.log(`Delete schedule: ${id} -> ${numericId}`);
+    return this.schedulesService.remove(numericId);
   }
 }

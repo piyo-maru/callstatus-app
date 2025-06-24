@@ -528,7 +528,7 @@ model Contract {
 model Adjustment {
   id        Int      @id @default(autoincrement())
   date      DateTime @db.Date
-  status    String   # 'Online', 'Remote', 'Meeting', 'Training', 'Break', 'Off', 'Unplanned', 'Night Duty'
+  status    String   # 'online', 'remote', 'meeting', 'training', 'break', 'off', 'unplanned', 'night duty'
   start     DateTime
   end       DateTime
   reason    String?  # 調整理由
@@ -1308,6 +1308,45 @@ git checkout -b feature/historical-snapshots
 #### バッチ処理タイミング
 - 毎日深夜0時に前日分のスナップショット作成
 - 失敗時は1時間後に自動リトライ（最大3回）
+
+#### データ保持・削除仕様
+**現在の実装状況（2025-06-23時点）:**
+- **データ保持期間**: 無制限（自動削除機能なし）
+- **削除方法**: 手動ロールバック機能のみ（`rollbackSnapshot(batchId)`）
+- **データ蓄積**: HistoricalSchedule・SnapshotLogテーブルに永続保存
+- **容量管理**: 運用者による手動管理が必要
+
+**自動削除機能（将来実装検討）:**
+```typescript
+// 実装例: 古いスナップショットの自動削除
+@Cron('0 2 * * *') // 毎日深夜2時実行
+async cleanupOldSnapshots() {
+  const retentionDays = this.configService.get('SNAPSHOT_RETENTION_DAYS', 90);
+  const cutoffDate = new Date();
+  cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
+  
+  await this.prisma.historicalSchedule.deleteMany({
+    where: { snapshotAt: { lt: cutoffDate } }
+  });
+}
+```
+
+**運用ガイドライン:**
+- **推奨保持期間**: 30-90日間（業務要件に応じて調整）
+- **容量監視**: 定期的なデータベースサイズ確認
+- **手動削除**: 必要に応じて古いbatchIdのロールバック実行
+- **長期運用**: 自動削除機能の実装を推奨
+
+**データ容量目安:**
+- 1日平均10-20件のスケジュール → 約1-2KB/日
+- 30日間保持 → 約30-60KB
+- 90日間保持 → 約90-180KB  
+- 365日間保持 → 約365-730KB
+
+**注意事項:**
+- スナップショットデータ削除は復旧不可能
+- 削除前に必要に応じてバックアップ取得
+- 監査・コンプライアンス要件を考慮した保持期間設定
 
 #### データ取得ロジック
 ```typescript
