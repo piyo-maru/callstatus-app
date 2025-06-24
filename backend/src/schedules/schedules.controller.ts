@@ -103,12 +103,27 @@ export class SchedulesController {
   }
 
   /**
-   * 履歴データを取得して返す
+   * 履歴データを取得して返す（契約レイヤーも含む）
    */
   private async getHistoricalSchedules(date: string, includeMasking: boolean = false) {
-    const historicalData = await this.snapshotsService.getHistoricalSchedules(date);
+    console.log(`履歴データ取得開始: ${date}, マスキング: ${includeMasking}`);
     
-    if (!historicalData || historicalData.length === 0) {
+    // 1. 履歴データ（調整レイヤー）を取得
+    const historicalData = await this.snapshotsService.getHistoricalSchedules(date);
+    console.log(`履歴データ取得完了: ${historicalData ? historicalData.length : 0}件`);
+    
+    // 2. 契約レイヤーを動的生成（退職者含む）
+    let contractSchedules = [];
+    try {
+      contractSchedules = await this.layerManagerService.generateHistoricalContractSchedules(date);
+      console.log(`契約レイヤー生成完了: ${contractSchedules.length}件`);
+    } catch (error) {
+      console.error(`契約レイヤー生成エラー: ${error.message}`);
+      // 契約レイヤー生成に失敗しても履歴データは返す
+    }
+
+    // データが何もない場合
+    if ((!historicalData || historicalData.length === 0) && contractSchedules.length === 0) {
       return {
         schedules: [],
         staff: [],
@@ -117,44 +132,98 @@ export class SchedulesController {
       };
     }
 
-    // スタッフ情報を履歴データから構築
+    // 3. スタッフ情報を履歴データと契約データから構築
     const staffMap = new Map();
-    for (const item of historicalData) {
-      if (!staffMap.has(item.staffId)) {
-        const maskedName = includeMasking 
-          ? await this.maskStaffName(item.staffName, item.staffId)
-          : item.staffName;
-        
-        staffMap.set(item.staffId, {
-          id: item.staffId,
-          empNo: item.staffEmpNo,
-          name: maskedName,
-          department: item.staffDepartment,
-          group: item.staffGroup,
-          isActive: item.staffIsActive
-        });
+    
+    // 履歴データからスタッフ情報を構築
+    if (historicalData) {
+      for (const item of historicalData) {
+        if (!staffMap.has(item.staffId)) {
+          const maskedName = includeMasking 
+            ? await this.maskStaffName(item.staffName, item.staffId)
+            : item.staffName;
+          
+          staffMap.set(item.staffId, {
+            id: item.staffId,
+            empNo: item.staffEmpNo,
+            name: maskedName,
+            department: item.staffDepartment,
+            group: item.staffGroup,
+            isActive: item.staffIsActive
+          });
+        }
+      }
+    }
+
+    // 契約データからもスタッフ情報を補完（退職者も含む）
+    for (const contractSchedule of contractSchedules) {
+      if (!staffMap.has(contractSchedule.staffId)) {
+        // 契約レイヤーのスタッフ情報を取得
+        try {
+          const staff = await this.schedulesService['prisma'].staff.findUnique({
+            where: { id: contractSchedule.staffId }
+          });
+          if (staff) {
+            const maskedName = includeMasking 
+              ? await this.maskStaffName(staff.name, staff.id)
+              : staff.name;
+            
+            staffMap.set(staff.id, {
+              id: staff.id,
+              empNo: staff.empNo,
+              name: maskedName,
+              department: staff.department,
+              group: staff.group,
+              isActive: staff.isActive
+            });
+          }
+        } catch (error) {
+          console.error(`スタッフ情報取得エラー (ID: ${contractSchedule.staffId}): ${error.message}`);
+        }
       }
     }
 
     const staff = Array.from(staffMap.values());
 
-    // スケジュールデータを変換
-    const schedules = historicalData.map((item, index) => ({
-      id: `hist_${item.id}_${index}`,
-      staffId: item.staffId,
-      status: item.status,
-      start: this.convertUtcToJstDecimal(item.start),
-      end: this.convertUtcToJstDecimal(item.end),
-      memo: item.memo,
-      layer: 'historical'
+    // 4. スケジュールデータを変換
+    const schedules = [];
+    
+    // 履歴データ（調整レイヤー）を追加
+    if (historicalData) {
+      const historicalSchedules = historicalData.map((item, index) => ({
+        id: `hist_${item.id}_${index}`,
+        staffId: item.staffId,
+        status: item.status,
+        start: this.convertUtcToJstDecimal(item.start),
+        end: this.convertUtcToJstDecimal(item.end),
+        memo: item.memo,
+        layer: 'historical' // 履歴データは 'historical' レイヤー
+      }));
+      schedules.push(...historicalSchedules);
+    }
+    
+    // 契約レイヤーを追加
+    const contractSchedulesConverted = contractSchedules.map((cs, index) => ({
+      id: `contract_hist_${cs.id}_${index}`,
+      staffId: cs.staffId,
+      status: cs.status,
+      start: this.convertUtcToJstDecimal(cs.start),
+      end: this.convertUtcToJstDecimal(cs.end),
+      memo: cs.memo,
+      layer: 'contract' // 契約データは 'contract' レイヤー
     }));
+    schedules.push(...contractSchedulesConverted);
+
+    console.log(`履歴データ統合完了: 履歴${historicalData ? historicalData.length : 0}件 + 契約${contractSchedules.length}件 = 合計${schedules.length}件`);
 
     return {
       schedules,
       staff,
       isHistorical: true,
-      snapshotDate: historicalData[0]?.snapshotAt,
-      recordCount: historicalData.length
+      snapshotDate: historicalData && historicalData.length > 0 ? historicalData[0]?.snapshotAt : null,
+      recordCount: schedules.length,
+      historicalRecords: historicalData ? historicalData.length : 0,
+      contractRecords: contractSchedules.length
     };
   }
 

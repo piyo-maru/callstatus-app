@@ -165,6 +165,65 @@ export class LayerManagerService {
   }
 
   /**
+   * 過去日付用: 契約による基本勤務時間を生成（退職者含む）
+   */
+  async generateHistoricalContractSchedules(dateString: string): Promise<LayeredSchedule[]> {
+    const schedules: LayeredSchedule[] = [];
+    
+    // 指定日付の曜日を取得
+    const date = new Date(dateString);
+    const dayOfWeek = date.getDay(); // 0=日曜, 1=月曜, ..., 6=土曜
+    console.log(`LayerManager: [Historical] Date ${dateString} is day ${dayOfWeek} (0=Sunday)`);
+    
+    // 曜日名をContractテーブルのカラム名にマッピング
+    const dayColumns = [
+      'sundayHours',    // 0: 日曜
+      'mondayHours',    // 1: 月曜
+      'tuesdayHours',   // 2: 火曜
+      'wednesdayHours', // 3: 水曜
+      'thursdayHours',  // 4: 木曜
+      'fridayHours',    // 5: 金曜
+      'saturdayHours'   // 6: 土曜
+    ];
+    
+    const dayColumn = dayColumns[dayOfWeek];
+    console.log(`LayerManager: [Historical] Looking for ${dayColumn} in contracts`);
+    
+    // 退職者を含む全ての契約データを取得
+    const allContracts = await this.prisma.contract.findMany({
+      include: {
+        Staff: true // スタッフ情報も取得（退職者判定用）
+      }
+    });
+    console.log(`LayerManager: [Historical] Found ${allContracts.length} total contracts (including retired staff)`);
+    
+    // 該当曜日に勤務時間が設定されている契約をフィルタ
+    const contracts = allContracts.filter(contract => {
+      const workHours = contract[dayColumn as keyof typeof contract];
+      console.log(`LayerManager: [Historical] Contract ${contract.empNo} (${contract.name}) - ${dayColumn}: ${workHours}, Staff Active: ${contract.Staff?.isActive}`);
+      return workHours !== null && workHours !== undefined && workHours !== '';
+    });
+    console.log(`LayerManager: [Historical] Found ${contracts.length} contracts with ${dayColumn} set`);
+
+    // 各契約から勤務時間スケジュールを生成
+    for (const contract of contracts) {
+      const workHours = contract[dayColumn] as string;
+      if (!workHours) continue;
+
+      console.log(`LayerManager: [Historical] Processing contract ${contract.empNo} with hours: ${workHours}`);
+      // "09:00-18:00" 形式をパース
+      const schedule = this.parseWorkHours(workHours, dateString, contract.staffId, contract.empNo);
+      if (schedule) {
+        console.log(`LayerManager: [Historical] Generated schedule for ${contract.empNo}: ${schedule.start.toISOString()} - ${schedule.end.toISOString()}`);
+        schedules.push(schedule);
+      }
+    }
+
+    console.log(`LayerManager: [Historical] Generated ${schedules.length} historical contract schedules`);
+    return schedules;
+  }
+
+  /**
    * 従来のScheduleテーブルから取得（後方互換性のため）
    */
   private async getLegacySchedules(dateString: string): Promise<LayeredSchedule[]> {
