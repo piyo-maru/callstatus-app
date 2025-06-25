@@ -1,16 +1,25 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useCallback, Fragment } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, Fragment, useRef } from 'react';
 import { format, addDays, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import { createPortal } from 'react-dom';
 import { useAuth } from './AuthProvider';
+// TimelineUtilsをインポート
+import {
+  timeToPositionPercent,
+  positionPercentToTime,
+  generateTimeOptions,
+  STATUS_COLORS,
+  TIMELINE_CONFIG,
+  capitalizeStatus
+} from './timeline/TimelineUtils';
 
 interface Schedule {
-  id: number;
+  id: number | string;
   status: string;
-  start: Date;
-  end: Date;
+  start: Date | number;
+  end: Date | number;
   memo?: string;
   layer?: 'contract' | 'adjustment';
   staffId: number;
@@ -18,6 +27,7 @@ interface Schedule {
   staffDepartment: string;
   staffGroup: string;
   empNo?: string;
+  date?: string; // 日付情報追加
 }
 
 interface Staff {
@@ -32,10 +42,14 @@ interface Staff {
 interface PresetSchedule {
   id: string;
   name: string;
-  status: string;
-  startTime: number; // 小数点時刻（例: 9.5 = 9:30）
-  endTime: number;
-  memo?: string;
+  displayName: string; // 表示用の名前
+  timeDisplay: string; // 表示用の時間
+  schedules: Array<{
+    status: string;
+    startTime: number;
+    endTime: number;
+    memo?: string;
+  }>;
 }
 
 interface PresetButtonProps {
@@ -45,25 +59,8 @@ interface PresetButtonProps {
   disabled?: boolean;
 }
 
-// ユーティリティ関数
+// ユーティリティ関数（TimelineUtilsから使用）
 const availableStatuses = ['online', 'remote', 'meeting', 'training', 'break', 'off', 'unplanned', 'night duty'];
-
-const capitalizeStatus = (status: string): string => {
-  return status.charAt(0).toUpperCase() + status.slice(1);
-};
-
-const generateTimeOptions = (startHour: number, endHour: number) => {
-  const options = [];
-  for (let h = startHour; h < endHour; h++) {
-    for (let m = 0; m < 60; m += 15) {
-      const timeValue = h + m / 60;
-      const timeLabel = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-      options.push({ value: timeValue, label: timeLabel });
-    }
-  }
-  options.push({ value: endHour, label: `${endHour}:00`});
-  return options;
-};
 
 const PersonalSchedulePage: React.FC = () => {
   const { user, loading: authLoading } = useAuth();
@@ -75,29 +72,71 @@ const PersonalSchedulePage: React.FC = () => {
   const [selectedDateForPreset, setSelectedDateForPreset] = useState<Date | null>(null);
   const [showPresetModal, setShowPresetModal] = useState(false);
   
-  // ドラッグ&ドロップ関連の状態（メイン画面と同じ）
-  const [dragInfo, setDragInfo] = useState<{
-    staff: Staff;
-    startX: number;
-    currentX: number;
-    rowRef: HTMLDivElement;
-  } | null>(null);
   
   // モーダル関連の状態
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSchedule, setEditingSchedule] = useState<Schedule | null>(null);
   const [draggedSchedule, setDraggedSchedule] = useState<Partial<Schedule> | null>(null);
-  const [deletingScheduleId, setDeletingScheduleId] = useState<number | null>(null);
+  const [deletingScheduleId, setDeletingScheduleId] = useState<number | string | null>(null);
+  
+  // メイン画面と同じ選択・ドラッグ状態管理
+  const [selectedSchedule, setSelectedSchedule] = useState<{ schedule: Schedule; layer: string } | null>(null);
+  const [dragInfo, setDragInfo] = useState<{
+    staff: Staff;
+    startX: number;
+    currentX: number;
+    rowRef: HTMLDivElement;
+    day: Date;
+  } | null>(null);
 
-  // プリセット予定（後で管理画面から設定可能にする）
+  // プリセット予定（指定された内容）
   const presetSchedules: PresetSchedule[] = [
-    { id: 'online-full', name: '通常勤務(9:00-18:00)', status: 'online', startTime: 9, endTime: 18 },
-    { id: 'online-morning', name: '午前勤務(9:00-13:00)', status: 'online', startTime: 9, endTime: 13 },
-    { id: 'online-afternoon', name: '午後勤務(13:00-18:00)', status: 'online', startTime: 13, endTime: 18 },
-    { id: 'remote-full', name: 'リモート勤務(9:00-18:00)', status: 'remote', startTime: 9, endTime: 18 },
-    { id: 'meeting-2h', name: '会議(2時間)', status: 'meeting', startTime: 10, endTime: 12 },
-    { id: 'training-4h', name: '研修(4時間)', status: 'training', startTime: 9, endTime: 13 },
-    { id: 'off-day', name: '休暇', status: 'off', startTime: 0, endTime: 24 },
+    { 
+      id: 'remote-work', 
+      name: '在宅勤務', 
+      displayName: '在宅勤務',
+      timeDisplay: '09:00-18:00',
+      schedules: [{ status: 'remote', startTime: 9, endTime: 18 }]
+    },
+    { 
+      id: 'night-duty', 
+      name: '夜間', 
+      displayName: '夜間',
+      timeDisplay: '18:00-21:00 + 調整',
+      schedules: [
+        { status: 'night duty', startTime: 18, endTime: 21 },
+        { status: 'off', startTime: 9, endTime: 13 },
+        { status: 'break', startTime: 17, endTime: 18 }
+      ]
+    },
+    { 
+      id: 'vacation', 
+      name: '休暇', 
+      displayName: '休暇',
+      timeDisplay: '09:00-18:00',
+      schedules: [{ status: 'off', startTime: 9, endTime: 18 }]
+    },
+    { 
+      id: 'morning-off', 
+      name: '午前休', 
+      displayName: '午前休',
+      timeDisplay: '09:00-13:00',
+      schedules: [{ status: 'off', startTime: 9, endTime: 13 }]
+    },
+    { 
+      id: 'afternoon-off', 
+      name: '午後休', 
+      displayName: '午後休',
+      timeDisplay: '12:00-18:00',
+      schedules: [{ status: 'off', startTime: 12, endTime: 18 }]
+    },
+    { 
+      id: 'early-leave', 
+      name: '早退', 
+      displayName: '早退',
+      timeDisplay: '12:00-18:00',
+      schedules: [{ status: 'unplanned', startTime: 12, endTime: 18 }]
+    }
   ];
 
   // 月間の日付リストを生成
@@ -107,34 +146,7 @@ const PersonalSchedulePage: React.FC = () => {
     return eachDayOfInterval({ start, end });
   }, [selectedDate]);
 
-  // 現在時刻
-  const [currentTime, setCurrentTime] = useState(new Date());
-  
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 60000); // 1分ごとに更新
-    
-    return () => clearInterval(timer);
-  }, []);
-
-  // メイン画面と同じ時間位置計算関数
-  const timeToPositionPercent = useCallback((time: number): number => {
-    const roundedTime = Math.round(time * 4) / 4; // 15分単位に丸める
-    const START_TIME = 8;
-    const END_TIME = 21;
-    const TOTAL_QUARTERS = (END_TIME - START_TIME) * 4; // 52マス
-    const quartersFromStart = (roundedTime - START_TIME) * 4;
-    return Math.max(0, Math.min(100, (quartersFromStart / TOTAL_QUARTERS) * 100));
-  }, []);
-
-  const positionPercentToTime = useCallback((percent: number): number => {
-    const START_TIME = 8;
-    const TOTAL_QUARTERS = (21 - START_TIME) * 4; // 52マス
-    const quartersFromStart = (percent / 100) * TOTAL_QUARTERS;
-    const time = START_TIME + quartersFromStart / 4;
-    return Math.round(time * 4) / 4; // 15分単位に丸める
-  }, []);
+  // TimelineUtilsの関数を使用（既にインポート済み）
 
   // APIベースURLを取得
   const getApiUrl = useCallback((): string => {
@@ -241,8 +253,15 @@ const PersonalSchedulePage: React.FC = () => {
             schedule.staffId === currentStaff.id
           ) || [];
           
-          console.log(`${dateStr}のフィルター後スケジュール:`, filteredSchedules);
-          return filteredSchedules;
+          // 取得したスケジュールに日付情報を追加
+          const schedulesWithDate = filteredSchedules.map(schedule => ({
+            ...schedule,
+            date: dateStr, // 取得日付を明示的に設定
+            start: typeof schedule.start === 'number' ? schedule.start : new Date(schedule.start),
+            end: typeof schedule.end === 'number' ? schedule.end : new Date(schedule.end)
+          }));
+          
+          return schedulesWithDate;
         } else {
           console.error(`${dateStr}のAPI呼び出し失敗:`, response.status);
           return [];
@@ -251,10 +270,9 @@ const PersonalSchedulePage: React.FC = () => {
 
       const results = await Promise.all(promises);
       const allSchedules = results.flat();
-      console.log('全スケジュール取得完了:', {
-        総件数: allSchedules.length,
-        スケジュール: allSchedules
-      });
+      console.log('全スケジュール取得完了:', allSchedules.length, '件');
+      
+      // デバッグログ削除（無限ループ防止）
       
       setSchedules(allSchedules);
     } catch (err) {
@@ -278,7 +296,7 @@ const PersonalSchedulePage: React.FC = () => {
     }
   }, [currentStaff, fetchSchedules]);
 
-  // プリセット予定を追加
+  // プリセット予定を追加（複数スケジュール対応）
   const addPresetSchedule = useCallback(async (preset: PresetSchedule, targetDate: Date) => {
     if (!currentStaff) {
       console.error('社員情報が設定されていません');
@@ -288,82 +306,114 @@ const PersonalSchedulePage: React.FC = () => {
 
     const dateStr = format(targetDate, 'yyyy-MM-dd');
     console.log('プリセット予定追加:', {
-      preset,
+      preset: preset.name,
       targetDate: dateStr,
-      currentStaff: currentStaff.name
+      currentStaff: currentStaff.name,
+      schedulesCount: preset.schedules.length
     });
     
     try {
-      const newSchedule = {
-        staffId: currentStaff.id,
-        status: preset.status,
-        start: preset.startTime,
-        end: preset.endTime,
-        memo: preset.memo || '',
-        date: dateStr,
-      };
-
-      console.log('送信データ:', newSchedule);
       const url = `${getApiUrl()}/api/schedules`;
-      console.log('API URL:', url);
+      
+      // 複数のスケジュールを順次作成
+      for (const schedule of preset.schedules) {
+        const newSchedule = {
+          staffId: currentStaff.id,
+          status: schedule.status,
+          start: schedule.startTime,
+          end: schedule.endTime,
+          memo: schedule.memo || '',
+          date: dateStr,
+        };
 
-      const response = await authenticatedFetch(url, {
-        method: 'POST',
-        body: JSON.stringify(newSchedule),
-      });
+        console.log('送信データ:', newSchedule);
 
-      console.log('追加レスポンス:', response.status);
+        const response = await authenticatedFetch(url, {
+          method: 'POST',
+          body: JSON.stringify(newSchedule),
+        });
 
-      if (response.ok) {
+        if (!response.ok) {
+          const errorData = await response.json();
+          console.error('追加エラー:', errorData);
+          setError(`${preset.name}の追加に失敗しました: ${errorData.message || ''}`);
+          return;
+        }
+
         const result = await response.json();
         console.log('追加成功:', result);
-        
-        // スケジュールを再取得
-        await fetchSchedules();
-        
-        // 成功メッセージ（3秒後に自動で消す）
-        setError(null);
-        console.log('プリセット予定を追加しました');
-      } else {
-        const errorData = await response.json();
-        console.error('追加エラー:', errorData);
-        setError(errorData.message || 'スケジュールの追加に失敗しました');
       }
+      
+      // 全スケジュール追加後にデータを再取得
+      await fetchSchedules();
+      
+      // 成功メッセージ
+      setError(null);
+      console.log(`${preset.name}を追加しました（${preset.schedules.length}件）`);
+      
     } catch (err) {
       console.error('スケジュール追加エラー:', err);
-      setError('スケジュールの追加に失敗しました');
+      setError(`${preset.name}の追加に失敗しました`);
     }
   }, [currentStaff, getApiUrl, authenticatedFetch, fetchSchedules]);
 
   // スケジュール保存ハンドラー（メイン画面と同じ）
-  const handleSaveSchedule = useCallback(async (scheduleData: Schedule & { id?: number; date?: string }) => {
+  const handleSaveSchedule = useCallback(async (scheduleData: Schedule & { id?: number | string; date?: string }) => {
     console.log('スケジュール保存:', scheduleData);
     
     try {
       const isEditing = scheduleData.id !== undefined;
       
       if (isEditing) {
-        // 編集の場合
-        const updateData = {
-          status: scheduleData.status,
-          start: scheduleData.start,
-          end: scheduleData.end,
-          memo: scheduleData.memo || '',
-        };
-        
-        const response = await authenticatedFetch(`${getApiUrl()}/api/schedules/${scheduleData.id}`, {
-          method: 'PATCH',
-          body: JSON.stringify(updateData),
-        });
-        
-        if (response.ok) {
-          console.log('スケジュール更新成功');
-          await fetchSchedules();
-          setIsModalOpen(false);
-          setEditingSchedule(null);
+        // 編集の場合 - string IDの場合は新規作成として処理
+        if (typeof scheduleData.id === 'string') {
+          // 統合APIから来たstring IDは編集不可なので新規作成
+          const createData = {
+            staffId: scheduleData.staffId || currentStaff?.id,
+            status: scheduleData.status,
+            start: scheduleData.start,
+            end: scheduleData.end,
+            memo: scheduleData.memo || '',
+            date: scheduleData.date || format(new Date(), 'yyyy-MM-dd'),
+          };
+          
+          const response = await authenticatedFetch(`${getApiUrl()}/api/schedules`, {
+            method: 'POST',
+            body: JSON.stringify(createData),
+          });
+          
+          if (response.ok) {
+            console.log('スケジュール作成成功');
+            await fetchSchedules();
+            setIsModalOpen(false);
+            setEditingSchedule(null);
+          } else {
+            const errorData = await response.json();
+            setError(errorData.message || 'スケジュールの作成に失敗しました');
+          }
         } else {
-          const errorData = await response.json();
-          setError(errorData.message || 'スケジュールの更新に失敗しました');
+          // 数値IDの場合は通常の編集
+          const updateData = {
+            status: scheduleData.status,
+            start: scheduleData.start,
+            end: scheduleData.end,
+            memo: scheduleData.memo || '',
+          };
+          
+          const response = await authenticatedFetch(`${getApiUrl()}/api/schedules/${scheduleData.id}`, {
+            method: 'PATCH',
+            body: JSON.stringify(updateData),
+          });
+          
+          if (response.ok) {
+            console.log('スケジュール更新成功');
+            await fetchSchedules();
+            setIsModalOpen(false);
+            setEditingSchedule(null);
+          } else {
+            const errorData = await response.json();
+            setError(errorData.message || 'スケジュールの更新に失敗しました');
+          }
         }
       } else {
         // 新規作成の場合
@@ -398,11 +448,29 @@ const PersonalSchedulePage: React.FC = () => {
   }, [currentStaff, getApiUrl, authenticatedFetch, fetchSchedules]);
 
   // スケジュール削除ハンドラー
-  const handleDeleteSchedule = useCallback(async (scheduleId: number) => {
-    console.log('スケジュール削除:', scheduleId);
+  const handleDeleteSchedule = useCallback(async (scheduleId: number | string) => {
+    console.log('スケジュール削除:', scheduleId, typeof scheduleId);
     
     try {
-      const response = await authenticatedFetch(`${getApiUrl()}/api/schedules/${scheduleId}`, {
+      let actualId: number;
+      
+      if (typeof scheduleId === 'string') {
+        // 統合API形式のIDから実際のIDを抽出
+        // 形式: adjustment_{adj|sch}_{実際のID}_{配列インデックス}
+        const parts = scheduleId.split('_');
+        if (parts.length >= 3) {
+          actualId = parseInt(parts[2], 10);
+          console.log('統合ID形式から数値ID抽出:', scheduleId, '->', actualId);
+        } else {
+          console.error('統合ID形式から数値IDを抽出できません:', scheduleId);
+          setError('削除対象の予定IDが不正です');
+          return;
+        }
+      } else {
+        actualId = scheduleId;
+      }
+      
+      const response = await authenticatedFetch(`${getApiUrl()}/api/schedules/${actualId}`, {
         method: 'DELETE',
       });
       
@@ -410,6 +478,7 @@ const PersonalSchedulePage: React.FC = () => {
         console.log('スケジュール削除成功');
         await fetchSchedules();
         setDeletingScheduleId(null);
+        setSelectedSchedule(null); // 選択解除
       } else {
         const errorData = await response.json();
         setError(errorData.message || 'スケジュールの削除に失敗しました');
@@ -454,6 +523,126 @@ const PersonalSchedulePage: React.FC = () => {
     const minutes = Math.round((decimalTime - hours) * 60);
     return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
   }, []);
+
+  // タイムライン上でのドラッグ開始処理
+  const handleTimelineMouseDown = useCallback((e: React.MouseEvent, day: Date) => {
+    if (!currentStaff) return;
+    
+    // スケジュール要素のonMouseDownで既にstopPropagation()されているので
+    // ここに到達するのは空の領域または契約レイヤーの背景をクリックした場合のみ
+    const rect = e.currentTarget.getBoundingClientRect();
+    const startX = e.clientX - rect.left;
+    
+    console.log('タイムラインドラッグ開始:', { day: format(day, 'yyyy-MM-dd'), startX });
+    
+    setDragInfo({ 
+      staff: currentStaff, 
+      startX, 
+      currentX: startX, 
+      rowRef: e.currentTarget as HTMLDivElement,
+      day 
+    });
+  }, [currentStaff]);
+
+  // ドラッグ処理（メイン画面と同じ）
+  useEffect(() => {
+    if (!dragInfo) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const rect = dragInfo.rowRef.getBoundingClientRect();
+      const currentX = e.clientX - rect.left;
+      setDragInfo(prev => prev ? { ...prev, currentX } : null);
+    };
+
+    const handleMouseUp = () => {
+      if (!dragInfo) {
+        return;
+      }
+
+      const dragDistance = Math.abs(dragInfo.startX - dragInfo.currentX);
+      console.log('ドラッグ終了:', { dragDistance });
+
+      if (dragDistance < 10) {
+        console.log('ドラッグ距離不足、キャンセル');
+        setDragInfo(null);
+        return; // 10px未満の移動は無効化
+      }
+
+      // ドラッグ範囲を時刻に変換（15分単位にスナップ）
+      const rowWidth = dragInfo.rowRef.offsetWidth;
+      const startPercent = (Math.min(dragInfo.startX, dragInfo.currentX) / rowWidth) * 100;
+      const endPercent = (Math.max(dragInfo.startX, dragInfo.currentX) / rowWidth) * 100;
+      const start = positionPercentToTime(startPercent);
+      const end = positionPercentToTime(endPercent);
+      const snappedStart = Math.round(start * 4) / 4; // 15分単位
+      const snappedEnd = Math.round(end * 4) / 4;
+
+      console.log('時刻変換:', { start, end, snappedStart, snappedEnd });
+
+      if (snappedStart < snappedEnd && snappedStart >= 8 && snappedEnd <= 21) {
+        console.log('予定作成モーダルを開く');
+        // 予定作成モーダルを開く
+        setDraggedSchedule({
+          staffId: dragInfo.staff.id,
+          status: 'online',
+          start: snappedStart,
+          end: snappedEnd,
+          date: format(dragInfo.day, 'yyyy-MM-dd')
+        });
+        setIsModalOpen(true);
+      } else {
+        console.log('時刻範囲が無効:', { snappedStart, snappedEnd });
+      }
+      setDragInfo(null);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [dragInfo]);
+
+  // メイン画面と同じスケジュールクリック処理
+  const handleScheduleClick = useCallback((schedule: Schedule, scheduleLayer: string) => {
+    if (schedule.layer === 'contract') return; // 契約レイヤーは編集不可
+    
+    const currentSelection = selectedSchedule;
+    if (currentSelection && 
+        currentSelection.schedule.id === schedule.id && 
+        currentSelection.layer === scheduleLayer) {
+      // 同じ予定を再クリック → 編集モーダルを開く
+      setEditingSchedule(schedule);
+      setDraggedSchedule(null);
+      setIsModalOpen(true);
+      setSelectedSchedule(null);
+    } else {
+      // 異なる予定をクリック → 選択状態にする
+      setSelectedSchedule({ schedule, layer: scheduleLayer });
+    }
+  }, [selectedSchedule]);
+
+  // キーボード操作（削除）
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Delete' && selectedSchedule) {
+        const schedule = selectedSchedule.schedule;
+        if (schedule.layer !== 'contract') {
+          console.log('Deleteキー削除:', { id: schedule.id, type: typeof schedule.id });
+          setDeletingScheduleId(schedule.id);
+        }
+      }
+      if (e.key === 'Escape') {
+        setSelectedSchedule(null);
+        setDraggedSchedule(null);
+      }
+    };
+    
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [selectedSchedule]);
 
   if (authLoading || loading) {
     return (
@@ -532,12 +721,11 @@ const PersonalSchedulePage: React.FC = () => {
                   const targetDate = selectedDateForPreset || new Date();
                   addPresetSchedule(preset, targetDate);
                 }}
-                className="p-3 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-                style={{ borderLeftColor: getStatusColor(preset.status), borderLeftWidth: '4px' }}
+                className="p-3 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-left"
               >
-                <div className="font-medium text-gray-900">{preset.name}</div>
+                <div className="font-medium text-gray-900">{preset.displayName}</div>
                 <div className="text-gray-500 text-xs mt-1">
-                  {preset.status === 'off' ? '終日' : `${formatTime(preset.startTime)}-${formatTime(preset.endTime)}`}
+                  {preset.timeDisplay}
                 </div>
               </button>
             ))}
@@ -590,22 +778,31 @@ const PersonalSchedulePage: React.FC = () => {
 
               {/* 日付行（メイン画面スタイル） */}
               {monthDays.map((day) => {
-                const daySchedules = schedules.filter(schedule => 
-                  isSameDay(new Date(schedule.start), day)
-                );
+                // デバッグ：日付フィルタリングの詳細
+                const dayStr = format(day, 'yyyy-MM-dd');
+                const daySchedules = schedules.filter(schedule => {
+                  // スケジュールにdateフィールドがある場合はそれを使用
+                  if (schedule.date) {
+                    return schedule.date === dayStr;
+                  }
+                  // startがDateオブジェクトの場合
+                  if (schedule.start instanceof Date) {
+                    return isSameDay(schedule.start, day);
+                  }
+                  // startが文字列の場合
+                  if (typeof schedule.start === 'string') {
+                    return isSameDay(new Date(schedule.start), day);
+                  }
+                  // その他の場合（数値など）- この場合は日付が不明なのでfalse
+                  return false;
+                });
+                
+                // デバッグログ削除（無限ループ防止）
                 
                 const isCurrentDay = isToday(day);
-                // useMemoをループ外に移動し、ここでは直接計算
-                const getCurrentTimePosition = () => {
-                  if (!isCurrentDay) return null;
-                  const currentDecimalHour = currentTime.getHours() + currentTime.getMinutes() / 60;
-                  if (currentDecimalHour < 8 || currentDecimalHour >= 21) return null;
-                  return timeToPositionPercent(currentDecimalHour);
-                };
-                const currentTimePosition = getCurrentTimePosition();
                 
                 return (
-                  <div key={day.getTime()} className="flex border-b border-gray-100 hover:bg-gray-50 h-16 relative">
+                  <div key={day.getTime()} className="flex border-b border-gray-100 hover:bg-gray-50 h-[45px] relative">
                     {/* 日付列 */}
                     <div 
                       className={`w-24 p-3 border-r border-gray-200 cursor-pointer hover:bg-blue-50 transition-colors flex flex-col justify-center ${
@@ -622,10 +819,7 @@ const PersonalSchedulePage: React.FC = () => {
                       }}
                     >
                       <div className="text-sm">
-                        {format(day, 'M/d', { locale: ja })}
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        {format(day, 'E', { locale: ja })}
+                        {format(day, 'M/d E', { locale: ja })}
                       </div>
                       {selectedDateForPreset && isSameDay(selectedDateForPreset, day) && (
                         <div className="text-xs text-blue-600 mt-1">📌 選択中</div>
@@ -633,7 +827,11 @@ const PersonalSchedulePage: React.FC = () => {
                     </div>
 
                     {/* タイムライン（メイン画面と同じスタイル） */}
-                    <div className="flex-1 relative">
+                    <div 
+                      className="flex-1 relative hover:bg-gray-50"
+                      onMouseDown={(e) => handleTimelineMouseDown(e, day)}
+                      style={{ cursor: dragInfo ? 'grabbing' : 'crosshair' }}
+                    >
                       {/* 早朝エリア（8:00-9:00）の背景強調 */}
                       <div className="absolute top-0 bottom-0 bg-blue-50 opacity-30 z-10" 
                            style={{ left: `0%`, width: `${((9-8)*4)/52*100}%` }} 
@@ -669,13 +867,6 @@ const PersonalSchedulePage: React.FC = () => {
                         return markers;
                       })()}
 
-                      {/* 現在時刻インジケーター */}
-                      {currentTimePosition !== null && (
-                        <div className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-30" 
-                             style={{ left: `${currentTimePosition}%` }} 
-                             title={`現在時刻: ${currentTime.getHours()}:${String(currentTime.getMinutes()).padStart(2, '0')}`}>
-                        </div>
-                      )}
 
                       {/* スケジュールバー（メイン画面と同じスタイル） */}
                       {daySchedules.map((schedule, index) => {
@@ -697,21 +888,28 @@ const PersonalSchedulePage: React.FC = () => {
                         const barWidth = endPosition - startPosition;
                         const isContract = schedule.layer === 'contract';
                         const isHistorical = schedule.layer === 'historical' || schedule.isHistorical;
+                        const scheduleLayer = schedule.layer || 'adjustment';
+                        const isSelected = selectedSchedule && 
+                          selectedSchedule.schedule.id === schedule.id && 
+                          selectedSchedule.layer === scheduleLayer;
 
                         return (
                           <div
                             key={`${schedule.id}-${schedule.layer}-${index}`}
-                            className={`schedule-block absolute h-6 rounded text-white text-xs flex items-center justify-between px-2 group ${
-                              isContract || isHistorical ? 'cursor-default' : 'cursor-pointer hover:opacity-80'
+                            data-layer={scheduleLayer}
+                            className={`schedule-block absolute h-6 rounded text-white text-xs flex items-center justify-between px-2 group transition-all duration-200 ${
+                              isContract || isHistorical ? 'cursor-default' : 'cursor-ew-resize hover:opacity-80'
                             } ${
                               isHistorical ? 'border-2 border-dashed border-gray-400' : ''
+                            } ${
+                              isSelected ? 'ring-2 ring-yellow-400 ring-offset-1' : ''
                             }`}
                             style={{
                               left: `${startPosition}%`,
                               width: `${barWidth}%`,
                               top: '50%',
                               transform: 'translateY(-50%)',
-                              backgroundColor: getStatusColor(schedule.status),
+                              backgroundColor: STATUS_COLORS[schedule.status] || STATUS_COLORS.online,
                               opacity: isContract ? 0.5 : isHistorical ? 0.8 : 1,
                               backgroundImage: isContract 
                                 ? 'repeating-linear-gradient(45deg, transparent, transparent 2px, rgba(255,255,255,0.3) 2px, rgba(255,255,255,0.3) 4px)' 
@@ -720,11 +918,21 @@ const PersonalSchedulePage: React.FC = () => {
                                 : 'none',
                               zIndex: isContract ? 10 : isHistorical ? 15 : 30,
                             }}
-                            onClick={() => {
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              console.log('スケジュールクリック:', { id: schedule.id, layer: scheduleLayer, isContract, isHistorical });
                               if (!isContract && !isHistorical) {
-                                setEditingSchedule(schedule);
-                                setDraggedSchedule(null);
-                                setIsModalOpen(true);
+                                handleScheduleClick(schedule, scheduleLayer);
+                              }
+                            }}
+                            onMouseDown={(e) => {
+                              // 調整レイヤーのみイベント伝播を停止（編集可能な予定）
+                              // 契約レイヤーは背景扱いなのでドラッグを許可
+                              if (!isContract && !isHistorical) {
+                                e.stopPropagation();
+                                console.log('調整レイヤー要素マウスダウン - ドラッグ処理回避');
+                              } else {
+                                console.log('契約レイヤー要素マウスダウン - ドラッグ許可');
                               }
                             }}
                           >
@@ -738,6 +946,7 @@ const PersonalSchedulePage: React.FC = () => {
                               <button 
                                 onClick={(e) => { 
                                   e.stopPropagation(); 
+                                  console.log('削除ボタンクリック:', { id: schedule.id, type: typeof schedule.id });
                                   setDeletingScheduleId(schedule.id); 
                                 }} 
                                 className="text-white hover:text-red-200 ml-2 opacity-0 group-hover:opacity-100 transition-opacity"
@@ -748,6 +957,19 @@ const PersonalSchedulePage: React.FC = () => {
                           </div>
                         );
                       })}
+
+                      {/* メイン画面と同じドラッグプレビュー */}
+                      {dragInfo && format(dragInfo.day, 'yyyy-MM-dd') === dayStr && (
+                        <div 
+                          className="absolute bg-indigo-200 bg-opacity-50 border-2 border-dashed border-indigo-500 rounded pointer-events-none z-30"
+                          style={{ 
+                            left: `${Math.min(dragInfo.startX, dragInfo.currentX)}px`, 
+                            top: '25%', 
+                            width: `${Math.abs(dragInfo.currentX - dragInfo.startX)}px`, 
+                            height: '50%' 
+                          }} 
+                        />
+                      )}
                     </div>
                   </div>
                 );

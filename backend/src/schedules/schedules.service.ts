@@ -242,8 +242,22 @@ export class SchedulesService {
       throw new NotFoundException(`契約レイヤーのスケジュールは削除不可能です (ID: ${id})`);
     }
 
-    // 一時的にScheduleテーブルを使用（createと整合性保持）
-    return this.removeScheduleTable(id);
+    console.log(`Attempting to remove schedule with ID: ${id}`);
+    
+    try {
+      // まずAdjustmentテーブルで試す（調整レイヤー）
+      return await this.removeAdjustmentSchedule(id);
+    } catch (adjustmentError) {
+      console.log(`Not found in Adjustment table, trying Schedule table: ${adjustmentError.message}`);
+      
+      try {
+        // AdjustmentテーブルになければScheduleテーブルで試す（旧データ）
+        return await this.removeScheduleTable(id);
+      } catch (scheduleError) {
+        console.error(`Schedule not found in both tables: ${scheduleError.message}`);
+        throw new NotFoundException(`指定されたスケジュールが見つかりません (ID: ${id})`);
+      }
+    }
   }
 
   private async removeScheduleTable(id: number) {
