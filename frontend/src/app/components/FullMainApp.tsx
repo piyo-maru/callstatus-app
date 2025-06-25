@@ -9,6 +9,15 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 import DatePicker, { registerLocale } from 'react-datepicker';
 import { ja } from 'date-fns/locale/ja';
 import "react-datepicker/dist/react-datepicker.css";
+// ★★★ タイムライン共通ユーティリティをインポート ★★★
+import { 
+  timeToPositionPercent, 
+  positionPercentToTime, 
+  generateTimeOptions,
+  STATUS_COLORS,
+  TIMELINE_CONFIG,
+  capitalizeStatus
+} from './timeline/TimelineUtils';
 
 // ★★★ カレンダーの表示言語を日本語に設定 ★★★
 registerLocale('ja', ja);
@@ -115,11 +124,19 @@ type SnapshotHistory = {
 };
 
 // --- 定数定義 ---
+// ステータス色は TimelineUtils.STATUS_COLORS を使用
+// 大文字小文字両対応のための拡張マップ
 const statusColors: { [key: string]: string } = {
-  'online': '#22c55e', 'Online': '#22c55e', 'remote': '#10b981', 'Remote': '#10b981', 
-  'meeting': '#f59e0b', 'Meeting': '#f59e0b', 'training': '#3b82f6', 'Training': '#3b82f6',
-  'break': '#f97316', 'Break': '#f97316', 'off': '#ef4444', 'Off': '#ef4444', 
-  'unplanned': '#dc2626', 'Unplanned': '#dc2626', 'night duty': '#4f46e5', 'Night duty': '#4f46e5',
+  ...STATUS_COLORS,
+  // 大文字バリエーション（後方互換性）
+  'Online': STATUS_COLORS.online,
+  'Remote': STATUS_COLORS.remote,
+  'Meeting': STATUS_COLORS.meeting,
+  'Training': STATUS_COLORS.training,
+  'Break': STATUS_COLORS.break,
+  'Off': STATUS_COLORS.off,
+  'Unplanned': STATUS_COLORS.unplanned,
+  'Night duty': STATUS_COLORS['night duty'],
 };
 
 // 表示用ステータスカラー（重複除去済み）
@@ -134,10 +151,7 @@ const displayStatusColors: { [key: string]: string } = {
   'night duty': '#4f46e5',
 };
 
-// UI表示用の文字列変換関数
-const capitalizeStatus = (status: string): string => {
-  return status.charAt(0).toUpperCase() + status.slice(1);
-};
+// capitalizeStatus は TimelineUtils から使用
 
 // 部署の色設定（より薄く調整）
 const departmentColors: { [key: string]: string } = {
@@ -323,36 +337,8 @@ const checkSupportedCharacters = (data: Array<{name: string; dept: string; team:
   };
 };
 
-// --- 15分単位の正確な時間位置計算（4マス=1時間） ---
-const timeToPositionPercent = (time: number): number => {
-    // 15分単位に丸める
-    const roundedTime = Math.round(time * 4) / 4;
-    
-    const START_TIME = 8; // 8:00
-    const END_TIME = 21; // 21:00
-    const TOTAL_QUARTERS = (END_TIME - START_TIME) * 4; // 13時間 × 4 = 52マス
-    
-    // 8:00からの15分単位数を計算
-    const quartersFromStart = (roundedTime - START_TIME) * 4;
-    
-    // 0%-100%に変換
-    return Math.max(0, Math.min(100, (quartersFromStart / TOTAL_QUARTERS) * 100));
-};
-
-const positionPercentToTime = (percent: number): number => {
-    const START_TIME = 8; // 8:00
-    const END_TIME = 21; // 21:00
-    const TOTAL_QUARTERS = (END_TIME - START_TIME) * 4; // 52マス
-    
-    // 0%-100%を15分単位数に変換
-    const quartersFromStart = (percent / 100) * TOTAL_QUARTERS;
-    
-    // 15分単位数を時間に変換
-    const time = START_TIME + quartersFromStart / 4;
-    
-    // 15分単位に丸める
-    return Math.round(time * 4) / 4;
-}
+// タイムライン関数は TimelineUtils から使用
+// timeToPositionPercent, positionPercentToTime は共通化済み
 
 // --- 時刻変換ヘルパー関数 ---
 const timeStringToHours = (timeString: string): number => {
@@ -383,21 +369,7 @@ const hoursToTimeString = (hours: number): string => {
     return new Date(jstIsoString).toISOString();
 };
 
-// --- 時間選択肢を生成するヘルパー関数 ---
-const generateTimeOptions = (startHour: number, endHour: number) => {
-    const options = [];
-    
-    // 指定された開始時刻から15分刻みで追加
-    for (let h = startHour; h < endHour; h++) {
-        for (let m = 0; m < 60; m += 15) {
-            const timeValue = h + m / 60;
-            const timeLabel = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-            options.push({ value: timeValue, label: timeLabel });
-        }
-    }
-    options.push({ value: endHour, label: `${endHour}:00`});
-    return options;
-};
+// generateTimeOptions は TimelineUtils から使用
 
 // --- 登録・編集モーダル ---
 const ScheduleModal = ({ isOpen, onClose, staffList, onSave, scheduleToEdit, initialData }: { 
@@ -4080,7 +4052,7 @@ export default function FullMainApp() {
             <div className="flex-1 flex flex-col">
               {/* 上部スクロールバー */}
               <div className="overflow-x-auto border-b" ref={topScrollRef} onScroll={handleTopScroll}>
-                <div className="min-w-[1300px] h-[17px]"></div>
+                <div className="min-w-fit h-[17px]"></div>
               </div>
               {/* ヘッダー行 */}
               <div className="sticky top-0 z-10 bg-gray-100 border-b overflow-hidden">

@@ -65,7 +65,7 @@ export class CsvImportService {
               data: {
                 staffId: staff.id,
                 date: new Date(schedule.date),
-                status: schedule.status.toLowerCase(),
+                status: schedule.status,
                 start: startUtc,
                 end: endUtc,
                 memo: schedule.memo || null,

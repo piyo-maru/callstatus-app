@@ -747,10 +747,6 @@ const PersonalSchedulePage: React.FC = () => {
 
         {/* 月間ガントチャート（メイン画面スタイル） */}
         <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-          <div className="p-6 border-b border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-900">月間スケジュール</h3>
-          </div>
-          
           <div className="overflow-x-auto">
             <div className="min-w-[1300px]">
               {/* 時間軸ヘッダー（メイン画面と同じ） */}
@@ -809,6 +805,10 @@ const PersonalSchedulePage: React.FC = () => {
                         isCurrentDay ? 'bg-blue-50 font-semibold text-blue-900' : ''
                       } ${
                         selectedDateForPreset && isSameDay(selectedDateForPreset, day) ? 'bg-blue-100 border-blue-300' : ''
+                      } ${
+                        day.getDay() === 0 ? 'bg-red-50 text-red-600' : ''  // 日曜日
+                      } ${
+                        day.getDay() === 6 ? 'bg-blue-50 text-blue-600' : ''  // 土曜日
                       }`}
                       onClick={() => {
                         if (selectedDateForPreset && isSameDay(selectedDateForPreset, day)) {
@@ -828,7 +828,11 @@ const PersonalSchedulePage: React.FC = () => {
 
                     {/* タイムライン（メイン画面と同じスタイル） */}
                     <div 
-                      className="flex-1 relative hover:bg-gray-50"
+                      className={`flex-1 relative hover:bg-gray-50 ${
+                        day.getDay() === 0 ? 'bg-red-50/30' : ''  // 日曜日の背景
+                      } ${
+                        day.getDay() === 6 ? 'bg-blue-50/30' : ''  // 土曜日の背景
+                      }`}
                       onMouseDown={(e) => handleTimelineMouseDown(e, day)}
                       style={{ cursor: dragInfo ? 'grabbing' : 'crosshair' }}
                     >
@@ -847,6 +851,9 @@ const PersonalSchedulePage: React.FC = () => {
                       {/* 15分単位の目盛り線 */}
                       {(() => {
                         const markers = [];
+                        // 日曜日の場合のみ時刻表示を追加
+                        const isSunday = day.getDay() === 0;
+                        
                         for (let hour = 8; hour <= 21; hour++) {
                           for (let minute = 0; minute < 60; minute += 15) {
                             if (hour === 21 && minute > 0) break;
@@ -854,14 +861,37 @@ const PersonalSchedulePage: React.FC = () => {
                             const position = timeToPositionPercent(time);
                             const timeString = `${hour}:${String(minute).padStart(2, '0')}`;
                             
+                            // 1時間ごとの線は少し濃く、15分ごとの線は薄く
+                            const isHourMark = minute === 0;
                             markers.push(
                               <div
                                 key={`${hour}-${minute}`}
-                                className="absolute top-0 bottom-0 w-0.5 border-l border-gray-300 z-5 opacity-50"
+                                className={`absolute top-0 bottom-0 z-5 ${
+                                  isHourMark 
+                                    ? 'w-0.5 border-l border-gray-300 opacity-50' 
+                                    : 'w-0.5 border-l border-gray-200 opacity-30'
+                                }`}
                                 style={{ left: `${position}%` }}
                                 title={timeString}
                               />
                             );
+                            
+                            // 日曜日かつ1時間ごとに時刻を表示
+                            if (isSunday && minute === 0) {
+                              markers.push(
+                                <div
+                                  key={`time-${hour}`}
+                                  className="absolute top-0 flex items-center text-xs text-gray-500 font-medium opacity-70 pointer-events-none"
+                                  style={{ 
+                                    left: `${position}%`,
+                                    height: '100%',
+                                    paddingLeft: '8px' // ヘッダーと同じ左パディング
+                                  }}
+                                >
+                                  {hour}:00
+                                </div>
+                              );
+                            }
                           }
                         }
                         return markers;

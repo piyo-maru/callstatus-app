@@ -13,10 +13,10 @@ export class DepartmentSettingsService {
     });
 
     const activeContracts = await this.prisma.contract.findMany({
-      include: { staff: true }
+      include: { Staff: true }
     });
 
-    const activeContractsFiltered = activeContracts.filter(c => c.staff?.isActive === true);
+    const activeContractsFiltered = activeContracts.filter(c => c.Staff?.isActive === true);
 
     // 現在使用中の部署・グループ名を取得
     const activeDepartments = new Set([
@@ -65,12 +65,12 @@ export class DepartmentSettingsService {
     // 現在有効な契約からも部署・グループを取得
     const contracts = await this.prisma.contract.findMany({
       include: {
-        staff: true
+        Staff: true
       }
     });
 
     // 在籍中の社員の契約のみをフィルタリング
-    const activeContracts = contracts.filter(c => c.staff?.isActive === true);
+    const activeContracts = contracts.filter(c => c.Staff?.isActive === true);
 
     // 全ての部署・グループを統合してユニークにする
     const allDepartments = [

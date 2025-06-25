@@ -18,6 +18,11 @@ export class StaffController {
     return this.staffService.findAll();
   }
 
+  @Get(':id/details')
+  async getStaffDetails(@Param('id') id: string) {
+    return this.staffService.findStaffDetails(+id);
+  }
+
   @Post()
   create(@Body() createStaffDto: { name: string; department: string; group: string; }) {
     return this.staffService.create(createStaffDto);

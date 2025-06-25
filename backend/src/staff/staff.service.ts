@@ -93,6 +93,53 @@ export class StaffService {
     });
   }
 
+  async findStaffDetails(id: number) {
+    const staff = await this.prisma.staff.findUnique({
+      where: { id },
+      include: {
+        Contract: true
+      }
+    });
+
+    if (!staff) {
+      throw new NotFoundException(`Staff with ID ${id} not found`);
+    }
+
+    // 契約情報を整理して返す
+    const contract = staff.Contract?.[0]; // 通常は1つの契約のみ
+    const workingDays = [];
+    
+    if (contract) {
+      const dayHours = [
+        { day: '月曜日', hours: contract.mondayHours },
+        { day: '火曜日', hours: contract.tuesdayHours },
+        { day: '水曜日', hours: contract.wednesdayHours },
+        { day: '木曜日', hours: contract.thursdayHours },
+        { day: '金曜日', hours: contract.fridayHours },
+        { day: '土曜日', hours: contract.saturdayHours },
+        { day: '日曜日', hours: contract.sundayHours }
+      ];
+      
+      workingDays.push(...dayHours.filter(d => d.hours).map(d => `${d.day}: ${d.hours}`));
+    }
+
+    return {
+      id: staff.id,
+      empNo: staff.empNo,
+      name: staff.name,
+      department: staff.department,
+      group: staff.group,
+      isActive: staff.isActive,
+      contract: contract ? {
+        empNo: contract.empNo,
+        email: contract.email,
+        workingDays: workingDays,
+        // 雇用形態判定（勤務日数で簡易判定）
+        employmentType: workingDays.length >= 5 ? 'REGULAR' : workingDays.length >= 3 ? 'PART_TIME' : 'CONTRACT'
+      } : null
+    };
+  }
+
   async create(createStaffDto: { name: string; department: string; group: string; }) {
     // 文字チェックを実行
     const characterCheck = this.checkSupportedCharacters([createStaffDto]);
