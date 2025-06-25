@@ -59,6 +59,22 @@ interface PresetButtonProps {
   disabled?: boolean;
 }
 
+// メイン画面と同じ担当設定データ型定義
+type GeneralResponsibilityData = {
+  fax: boolean;
+  subjectCheck: boolean;
+  custom: string;
+};
+
+type ReceptionResponsibilityData = {
+  lunch: boolean;
+  fax: boolean;
+  cs: boolean;
+  custom: string;
+};
+
+type ResponsibilityData = GeneralResponsibilityData | ReceptionResponsibilityData;
+
 // ユーティリティ関数（TimelineUtilsから使用）
 const availableStatuses = ['online', 'remote', 'meeting', 'training', 'break', 'off', 'unplanned', 'night duty'];
 
@@ -67,10 +83,22 @@ const PersonalSchedulePage: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [currentStaff, setCurrentStaff] = useState<Staff | null>(null);
+  const [contractData, setContractData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedDateForPreset, setSelectedDateForPreset] = useState<Date | null>(null);
   const [showPresetModal, setShowPresetModal] = useState(false);
+  const [isResponsibilityModalOpen, setIsResponsibilityModalOpen] = useState(false);
+  const [selectedDateForResponsibility, setSelectedDateForResponsibility] = useState<Date | null>(null);
+  const [responsibilityData, setResponsibilityData] = useState<{ [key: string]: ResponsibilityData }>({});
+  const [isCompactMode, setIsCompactMode] = useState(() => {
+    // localStorageから初期値を読み込み
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('personalScheduleCompactMode');
+      return saved !== null ? JSON.parse(saved) : false;
+    }
+    return false;
+  });
   
   
   // モーダル関連の状態
@@ -88,6 +116,7 @@ const PersonalSchedulePage: React.FC = () => {
     rowRef: HTMLDivElement;
     day: Date;
   } | null>(null);
+  const [dragOffset, setDragOffset] = useState<number>(0); // ドラッグオフセット（メイン画面と同じ）
 
   // プリセット予定（指定された内容）
   const presetSchedules: PresetSchedule[] = [
@@ -173,6 +202,83 @@ const PersonalSchedulePage: React.FC = () => {
       },
     });
   }, []);
+
+  // 担当設定データ取得関数
+  const fetchResponsibilityData = useCallback(async (dateString: string) => {
+    try {
+      const response = await authenticatedFetch(`${getApiUrl()}/api/responsibilities?date=${dateString}`);
+      if (response.ok) {
+        const data = await response.json();
+        console.log(`担当設定データ取得 (${dateString}):`, data);
+        // APIレスポンスの構造を確認して適切に返す
+        if (data.responsibilities && Array.isArray(data.responsibilities)) {
+          return data.responsibilities;
+        } else if (Array.isArray(data)) {
+          return data;
+        }
+      }
+    } catch (error) {
+      console.error('担当設定データ取得エラー:', error);
+    }
+    return [];
+  }, [authenticatedFetch, getApiUrl]);
+
+  // 担当設定保存関数
+  const saveResponsibilityData = useCallback(async (staffId: number, date: string, responsibilityData: ResponsibilityData) => {
+    try {
+      const response = await authenticatedFetch(`${getApiUrl()}/api/responsibilities`, {
+        method: 'POST',
+        body: JSON.stringify({
+          staffId,
+          date,
+          responsibilities: responsibilityData
+        })
+      });
+      
+      if (response.ok) {
+        // 担当設定データを再取得して更新
+        const updatedData = await fetchResponsibilityData(date);
+        const responsibilityMap: { [key: string]: ResponsibilityData } = {};
+        
+        // updatedDataが配列かどうかチェック
+        if (Array.isArray(updatedData)) {
+          console.log('担当設定保存後のデータ更新:', updatedData);
+          updatedData.forEach((assignment: any) => {
+            const key = `${assignment.staffId}-${date}`;
+            console.log(`責任データマップ更新: ${key}`, assignment);
+            
+            if (!responsibilityMap[key]) {
+              // 部署に応じて初期化
+              if (currentStaff?.department.includes('受付') || currentStaff?.group.includes('受付')) {
+                responsibilityMap[key] = { lunch: false, fax: false, cs: false, custom: '' } as ReceptionResponsibilityData;
+              } else {
+                responsibilityMap[key] = { fax: false, subjectCheck: false, custom: '' } as GeneralResponsibilityData;
+              }
+            }
+            
+            if (assignment.assignmentType === 'fax') responsibilityMap[key].fax = true;
+            if (assignment.assignmentType === 'subjectCheck') (responsibilityMap[key] as GeneralResponsibilityData).subjectCheck = true;
+            if (assignment.assignmentType === 'lunch') (responsibilityMap[key] as ReceptionResponsibilityData).lunch = true;
+            if (assignment.assignmentType === 'cs') (responsibilityMap[key] as ReceptionResponsibilityData).cs = true;
+            if (assignment.assignmentType === 'custom') responsibilityMap[key].custom = assignment.customLabel || '';
+          });
+          
+          console.log('保存後のresponsibilityMap:', responsibilityMap);
+          setResponsibilityData(prev => {
+            const newData = { ...prev, ...responsibilityMap };
+            console.log('responsibilityData ステート更新:', newData);
+            return newData;
+          });
+        } else {
+          console.log('担当設定の更新データが配列ではありません:', updatedData);
+        }
+        return true;
+      }
+    } catch (error) {
+      console.error('担当設定保存エラー:', error);
+    }
+    return false;
+  }, [authenticatedFetch, getApiUrl, fetchResponsibilityData]);
 
   // 現在のユーザーの社員情報を取得
   const fetchCurrentStaff = useCallback(async () => {
@@ -290,11 +396,170 @@ const PersonalSchedulePage: React.FC = () => {
     }
   }, [authLoading, user, fetchCurrentStaff]);
 
+  // 担当設定データ読み込み（メイン画面と同じ方式）
+  const loadResponsibilityData = useCallback(async () => {
+    if (!currentStaff) return;
+    
+    console.log('担当設定データ読み込み開始（メイン画面方式）:', {
+      staffId: currentStaff.id,
+      staffName: currentStaff.name,
+      monthDaysCount: monthDays.length
+    });
+    
+    const responsibilityMap: { [key: string]: ResponsibilityData } = {};
+    
+    // 選択月の各日の担当設定を取得（メイン画面と同じAPI構造）
+    for (const day of monthDays) {
+      const dateString = format(day, 'yyyy-MM-dd');
+      
+      try {
+        const response = await authenticatedFetch(`${getApiUrl()}/api/responsibilities?date=${dateString}`);
+        if (response.ok) {
+          const data = await response.json();
+          console.log(`${dateString}の担当設定データ（メイン画面形式）:`, data);
+          
+          // メイン画面と同じ構造: {responsibilities: [...]}
+          if (data.responsibilities && Array.isArray(data.responsibilities)) {
+            data.responsibilities.forEach((responsibilityInfo: any) => {
+              if (responsibilityInfo.staffId === currentStaff.id && responsibilityInfo.responsibilities) {
+                const key = `${responsibilityInfo.staffId}-${dateString}`;
+                console.log(`担当設定マップ追加（メイン画面方式）: ${key}`, responsibilityInfo.responsibilities);
+                
+                // メイン画面と同じように、responsibilityInfo.responsibilitiesを直接使用
+                responsibilityMap[key] = responsibilityInfo.responsibilities;
+              }
+            });
+          }
+        } else {
+          console.warn(`担当設定API失敗 (${dateString}):`, response.status);
+        }
+      } catch (error) {
+        console.error(`担当設定データ取得エラー (${dateString}):`, error);
+      }
+    }
+    
+    console.log('担当設定データ読み込み完了（メイン画面方式）:', {
+      mapKeys: Object.keys(responsibilityMap),
+      mapData: responsibilityMap
+    });
+    
+    setResponsibilityData(responsibilityMap);
+  }, [currentStaff, monthDays, authenticatedFetch, getApiUrl]);
+
   useEffect(() => {
     if (currentStaff) {
       fetchSchedules();
+      // 担当設定データも取得
+      loadResponsibilityData();
     }
-  }, [currentStaff, fetchSchedules]);
+  }, [currentStaff, fetchSchedules, loadResponsibilityData]);
+
+  // スケジュール更新関数（移動用）
+  const handleUpdateSchedule = useCallback(async (scheduleId: number | string, updateData: any) => {
+    try {
+      console.log('スケジュール更新開始:', { scheduleId, updateData });
+      
+      const response = await authenticatedFetch(`${getApiUrl()}/api/schedules/${scheduleId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(updateData)
+      });
+      
+      if (response.ok) {
+        console.log('スケジュール更新成功');
+        // データを再取得して更新
+        await fetchSchedules();
+      } else {
+        console.error('スケジュール更新失敗:', response.status);
+        const errorData = await response.json().catch(() => ({}));
+        setError(`スケジュールの更新に失敗しました: ${errorData.message || ''}`);
+      }
+    } catch (error) {
+      console.error('スケジュール更新エラー:', error);
+      setError('スケジュールの更新に失敗しました');
+    }
+  }, [authenticatedFetch, getApiUrl, fetchSchedules]);
+
+  // ドロップハンドラー（メイン画面と同じ）
+  const handleDrop = useCallback((e: React.DragEvent, day: Date) => {
+    try {
+      const scheduleData = JSON.parse(e.dataTransfer.getData('application/json'));
+      console.log('ドロップされたスケジュール:', scheduleData);
+      
+      // ドロップ位置から時刻を計算
+      const rect = e.currentTarget.getBoundingClientRect();
+      const dropX = e.clientX - rect.left - dragOffset;
+      const dropPercent = (dropX / rect.width) * 100;
+      const dropTime = positionPercentToTime(Math.max(0, Math.min(100, dropPercent)));
+      
+      // スケジュールの長さを保持
+      const originalStart = typeof scheduleData.start === 'number' ? scheduleData.start : 0;
+      const originalEnd = typeof scheduleData.end === 'number' ? scheduleData.end : 0;
+      const duration = originalEnd - originalStart;
+      
+      const snappedStart = Math.round(dropTime * 4) / 4; // 15分単位
+      const snappedEnd = Math.round((dropTime + duration) * 4) / 4;
+      
+      console.log('移動計算:', {
+        original: `${originalStart}-${originalEnd}`,
+        drop: `${dropTime}`,
+        new: `${snappedStart}-${snappedEnd}`,
+        duration
+      });
+      
+      if (snappedStart >= 8 && snappedEnd <= 21 && snappedStart < snappedEnd) {
+        // API呼び出しで更新
+        handleUpdateSchedule(scheduleData.id, {
+          ...scheduleData,
+          start: snappedStart,
+          end: snappedEnd,
+          date: format(day, 'yyyy-MM-dd')
+        });
+      } else {
+        console.log('ドロップ位置が無効:', { snappedStart, snappedEnd });
+      }
+    } catch (error) {
+      console.error('ドロップ処理エラー:', error);
+    }
+  }, [dragOffset, handleUpdateSchedule]);
+
+  // 担当設定バッジ生成（メイン画面と同じロジック）
+  const generateResponsibilityBadges = useCallback((date: Date): JSX.Element[] => {
+    if (!currentStaff) return [];
+    
+    const dateString = format(date, 'yyyy-MM-dd');
+    const key = `${currentStaff.id}-${dateString}`;
+    const responsibility = responsibilityData[key];
+    
+    console.log('バッジ生成チェック:', {
+      date: dateString,
+      staffId: currentStaff.id,
+      key,
+      responsibility,
+      responsibilityDataKeys: Object.keys(responsibilityData),
+      responsibilityDataValues: responsibilityData
+    });
+    
+    if (!responsibility) return [];
+    
+    const badges: JSX.Element[] = [];
+    
+    // 受付部署の場合
+    if ('lunch' in responsibility) {
+      const receptionResp = responsibility as ReceptionResponsibilityData;
+      if (receptionResp.lunch) badges.push(<span key="lunch" className="inline-block bg-blue-100 text-blue-800 text-xs px-1 py-0.5 rounded font-medium">[昼当番]</span>);
+      if (receptionResp.fax) badges.push(<span key="fax" className="inline-block bg-green-100 text-green-800 text-xs px-1 py-0.5 rounded font-medium">[FAX]</span>);
+      if (receptionResp.cs) badges.push(<span key="cs" className="inline-block bg-purple-100 text-purple-800 text-xs px-1 py-0.5 rounded font-medium">[CS]</span>);
+      if (receptionResp.custom) badges.push(<span key="custom" className="inline-block bg-red-100 text-red-800 text-xs px-1 py-0.5 rounded font-medium">[{receptionResp.custom}]</span>);
+    } else {
+      // 一般部署の場合
+      const generalResp = responsibility as GeneralResponsibilityData;
+      if (generalResp.fax) badges.push(<span key="fax" className="inline-block bg-green-100 text-green-800 text-xs px-1 py-0.5 rounded font-medium">[FAX]</span>);
+      if (generalResp.subjectCheck) badges.push(<span key="subject" className="inline-block bg-orange-100 text-orange-800 text-xs px-1 py-0.5 rounded font-medium">[件名]</span>);
+      if (generalResp.custom) badges.push(<span key="custom" className="inline-block bg-red-100 text-red-800 text-xs px-1 py-0.5 rounded font-medium">[{generalResp.custom}]</span>);
+    }
+    
+    return badges;
+  }, [currentStaff, responsibilityData]);
 
   // プリセット予定を追加（複数スケジュール対応）
   const addPresetSchedule = useCallback(async (preset: PresetSchedule, targetDate: Date) => {
@@ -502,6 +767,51 @@ const PersonalSchedulePage: React.FC = () => {
     });
   }, []);
 
+  // コンパクトモード切替処理
+  const handleCompactModeToggle = () => {
+    const newMode = !isCompactMode;
+    setIsCompactMode(newMode);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('personalScheduleCompactMode', JSON.stringify(newMode));
+    }
+  };
+
+  // 担当設定保存処理
+  const handleResponsibilitySave = async (data: ResponsibilityData) => {
+    if (!currentStaff || !selectedDateForResponsibility) {
+      alert('担当設定の保存に必要な情報が不足しています');
+      return;
+    }
+
+    try {
+      const dateString = format(selectedDateForResponsibility, 'yyyy-MM-dd');
+      console.log('担当設定保存:', {
+        staff: currentStaff.name,
+        date: dateString,
+        data
+      });
+      
+      const success = await saveResponsibilityData(currentStaff.id, dateString, data);
+      
+      if (success) {
+        alert(`担当設定を保存しました:\nFAX対応: ${data.fax ? 'あり' : 'なし'}\n件名チェック: ${('subjectCheck' in data) ? (data.subjectCheck ? 'あり' : 'なし') : 'N/A'}\nその他: ${data.custom || 'なし'}`);
+        
+        // モーダルを閉じる
+        setIsResponsibilityModalOpen(false);
+        setSelectedDateForResponsibility(null);
+        
+        // 担当設定データを再読み込みしてバッジを更新
+        await loadResponsibilityData();
+      } else {
+        alert('担当設定の保存に失敗しました');
+      }
+      
+    } catch (error) {
+      console.error('担当設定の保存に失敗:', error);
+      alert('担当設定の保存に失敗しました');
+    }
+  };
+
   // ステータス色の取得
   const getStatusColor = useCallback((status: string): string => {
     const colors: { [key: string]: string } = {
@@ -533,7 +843,12 @@ const PersonalSchedulePage: React.FC = () => {
     const rect = e.currentTarget.getBoundingClientRect();
     const startX = e.clientX - rect.left;
     
-    console.log('タイムラインドラッグ開始:', { day: format(day, 'yyyy-MM-dd'), startX });
+    console.log('=== タイムラインドラッグ開始 ===');
+    console.log('day:', format(day, 'yyyy-MM-dd'));
+    console.log('startX:', startX);
+    console.log('currentStaff:', currentStaff?.name);
+    console.log('target element:', e.target);
+    console.log('currentTarget element:', e.currentTarget);
     
     setDragInfo({ 
       staff: currentStaff, 
@@ -580,7 +895,16 @@ const PersonalSchedulePage: React.FC = () => {
       console.log('時刻変換:', { start, end, snappedStart, snappedEnd });
 
       if (snappedStart < snappedEnd && snappedStart >= 8 && snappedEnd <= 21) {
-        console.log('予定作成モーダルを開く');
+        // 新規予定作成
+        console.log('=== 予定作成モーダルを開く ===');
+        console.log('作成する予定:', {
+          staffId: dragInfo.staff.id,
+          staffName: dragInfo.staff.name,
+          status: 'online',
+          start: snappedStart,
+          end: snappedEnd,
+          date: format(dragInfo.day, 'yyyy-MM-dd')
+        });
         // 予定作成モーダルを開く
         setDraggedSchedule({
           staffId: dragInfo.staff.id,
@@ -591,7 +915,8 @@ const PersonalSchedulePage: React.FC = () => {
         });
         setIsModalOpen(true);
       } else {
-        console.log('時刻範囲が無効:', { snappedStart, snappedEnd });
+        console.log('=== 時刻範囲が無効 ===');
+        console.log('無効な範囲:', { snappedStart, snappedEnd, valid_range: '8-21' });
       }
       setDragInfo(null);
     };
@@ -606,8 +931,12 @@ const PersonalSchedulePage: React.FC = () => {
   }, [dragInfo]);
 
   // メイン画面と同じスケジュールクリック処理
-  const handleScheduleClick = useCallback((schedule: Schedule, scheduleLayer: string) => {
+  const handleScheduleClick = useCallback((schedule: Schedule, scheduleLayer: string, scheduleDate: Date) => {
     if (schedule.layer === 'contract') return; // 契約レイヤーは編集不可
+    
+    // 過去の日付は編集不可
+    const isPastDate = scheduleDate < new Date(new Date().setHours(0, 0, 0, 0));
+    if (isPastDate) return;
     
     const currentSelection = selectedSchedule;
     if (currentSelection && 
@@ -671,31 +1000,90 @@ const PersonalSchedulePage: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50 p-4">
       <div className="max-w-7xl mx-auto">
-        {/* ヘッダー */}
-        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">個人スケジュール</h1>
-              <p className="text-gray-600 mt-1">
-                {currentStaff.name} ({currentStaff.department} - {currentStaff.group})
-              </p>
-            </div>
-            <div className="flex items-center space-x-4">
-              <button
-                onClick={() => handleMonthChange('prev')}
-                className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md"
-              >
-                ←
-              </button>
-              <h2 className="text-xl font-semibold text-gray-900 min-w-[120px] text-center">
+        {/* ヘッダー（メイン画面風） */}
+        <div className="bg-white rounded-lg shadow-sm mb-4">
+          {/* タイトル行 */}
+          <div className="px-6 py-3 border-b">
+            <h1 className="text-lg font-semibold text-gray-900">個人スケジュール</h1>
+          </div>
+          
+          {/* ナビゲーション行 */}
+          <div className="px-6 py-3 flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="inline-flex rounded-md shadow-sm" role="group">
+                <button 
+                  type="button" 
+                  onClick={() => handleMonthChange('prev')} 
+                  className="px-2 py-1 text-xs font-medium text-gray-900 bg-white border border-gray-200 rounded-l-lg hover:bg-gray-100 h-7"
+                >
+                  &lt;
+                </button>
+                <button 
+                  type="button" 
+                  onClick={() => setSelectedDate(new Date())} 
+                  className="px-2 py-1 text-xs font-medium text-gray-900 bg-white border-t border-b border-gray-200 hover:bg-gray-100 h-7"
+                >
+                  今月
+                </button>
+                <button 
+                  type="button" 
+                  onClick={() => handleMonthChange('next')} 
+                  className="px-2 py-1 text-xs font-medium text-gray-900 bg-white border border-gray-200 rounded-r-lg hover:bg-gray-100 h-7"
+                >
+                  &gt;
+                </button>
+              </div>
+              <h2 className="text-lg font-semibold text-gray-900">
                 {format(selectedDate, 'yyyy年M月', { locale: ja })}
               </h2>
-              <button
-                onClick={() => handleMonthChange('next')}
-                className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md"
-              >
-                →
-              </button>
+            </div>
+            
+            {/* 表示切替トグルボタン */}
+            <div className="flex items-center space-x-3">
+              <span className="text-sm text-gray-600">表示:</span>
+              <div className="flex items-center space-x-2">
+                <span className={`text-xs ${!isCompactMode ? 'text-gray-900 font-medium' : 'text-gray-500'}`}>
+                  標準
+                </span>
+                <button
+                  onClick={handleCompactModeToggle}
+                  className={`toggle-switch ${isCompactMode ? 'active' : ''}`}
+                  type="button"
+                >
+                  <div className={`toggle-thumb ${isCompactMode ? 'active' : ''}`}></div>
+                </button>
+                <span className={`text-xs ${isCompactMode ? 'text-gray-900 font-medium' : 'text-gray-500'}`}>
+                  コンパクト
+                </span>
+              </div>
+            </div>
+          </div>
+          
+          {/* 個人情報行 */}
+          <div className="px-6 py-3 bg-gray-50 border-t">
+            <div className="p-2 bg-blue-50 rounded border border-blue-200">
+              <div className="space-y-3">
+                <div className="flex items-center space-x-6">
+                  <span><span className="text-sm text-gray-600"><strong>名前:</strong></span> <span className="text-base text-blue-800">{currentStaff.name}</span></span>
+                  <span><span className="text-sm text-gray-600"><strong>社員番号:</strong></span> <span className="text-base text-blue-800">{currentStaff.empNo || 'N/A'}</span></span>
+                  <span><span className="text-sm text-gray-600"><strong>部署:</strong></span> <span className="text-base text-blue-800">{currentStaff.department}</span></span>
+                  <span><span className="text-sm text-gray-600"><strong>グループ:</strong></span> <span className="text-base text-blue-800">{currentStaff.group}</span></span>
+                </div>
+                <div>
+                  <span className="text-sm text-gray-600"><strong>契約勤務時間:</strong></span> 
+                  <span className="ml-2 text-blue-800 text-sm">
+                    {contractData ? (
+                      ['月曜日', '火曜日', '水曜日', '木曜日', '金曜日', '土曜日', '日曜日'].map((day, index) => {
+                        const dayKeys = ['mondayHours', 'tuesdayHours', 'wednesdayHours', 'thursdayHours', 'fridayHours', 'saturdayHours', 'sundayHours'];
+                        const hours = contractData[dayKeys[index]];
+                        return hours ? `${day}: ${hours}` : null;
+                      }).filter(Boolean).join('　')
+                    ) : (
+                      '月曜日: 09:00-18:00　火曜日: 09:00-18:00　水曜日: 09:00-18:00　木曜日: 09:00-18:00　金曜日: 09:00-18:00'
+                    )}
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -708,27 +1096,45 @@ const PersonalSchedulePage: React.FC = () => {
         )}
 
         {/* プリセット予定ボタン */}
-        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">クイック予定追加</h3>
-          <div className="mb-4 text-sm text-gray-600">
+        <div className="sticky top-4 z-20 bg-white rounded-lg shadow-sm p-4 mb-6 border border-gray-200">
+          <div className="mb-3 text-xs text-gray-600">
             📌 今日の予定を追加、または下の日付をクリックして特定の日に追加
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
-            {presetSchedules.map((preset) => (
-              <button
-                key={preset.id}
-                onClick={() => {
-                  const targetDate = selectedDateForPreset || new Date();
-                  addPresetSchedule(preset, targetDate);
-                }}
-                className="p-3 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-left"
-              >
-                <div className="font-medium text-gray-900">{preset.displayName}</div>
-                <div className="text-gray-500 text-xs mt-1">
-                  {preset.timeDisplay}
-                </div>
-              </button>
-            ))}
+            {presetSchedules.map((preset) => {
+              // ステータスに応じた色を設定
+              const getStatusColor = (scheduleStatus: string) => {
+                switch (scheduleStatus) {
+                  case 'online': return 'bg-green-200 border-green-300 text-green-800';
+                  case 'remote': return 'bg-emerald-200 border-emerald-300 text-emerald-800';
+                  case 'meeting': return 'bg-amber-200 border-amber-300 text-amber-800';
+                  case 'training': return 'bg-blue-200 border-blue-300 text-blue-800';
+                  case 'break': return 'bg-orange-200 border-orange-300 text-orange-800';
+                  case 'off': return 'bg-red-200 border-red-300 text-red-800';
+                  case 'unplanned': return 'bg-red-300 border-red-400 text-red-900';
+                  case 'night duty': return 'bg-indigo-200 border-indigo-300 text-indigo-800';
+                  default: return 'bg-gray-200 border-gray-300 text-gray-800';
+                }
+              };
+              
+              const statusColor = getStatusColor(preset.schedules[0]?.status || '');
+              
+              return (
+                <button
+                  key={preset.id}
+                  onClick={() => {
+                    const targetDate = selectedDateForPreset || new Date();
+                    addPresetSchedule(preset, targetDate);
+                  }}
+                  className={`p-2 text-sm border rounded-lg hover:opacity-80 transition-colors text-left ${statusColor}`}
+                >
+                  <div className="font-medium">{preset.displayName}</div>
+                  <div className="text-xs mt-1 opacity-75">
+                    {preset.timeDisplay}
+                  </div>
+                </button>
+              );
+            })}
           </div>
           {selectedDateForPreset && (
             <div className="mt-3 p-2 bg-blue-50 rounded border border-blue-200">
@@ -746,13 +1152,13 @@ const PersonalSchedulePage: React.FC = () => {
         </div>
 
         {/* 月間ガントチャート（メイン画面スタイル） */}
-        <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+        <div className={`bg-white rounded-lg shadow-sm overflow-hidden ${isCompactMode ? 'compact-mode' : ''}`}>
           <div className="overflow-x-auto">
             <div className="min-w-[1300px]">
               {/* 時間軸ヘッダー（メイン画面と同じ） */}
               <div className="sticky top-0 z-10 bg-gray-100 border-b overflow-hidden">
-                <div className="flex font-bold text-sm">
-                  <div className="w-24 text-left pl-2 border-r py-2 bg-gray-50">
+                <div className="flex font-semibold text-sm">
+                  <div className="w-24 text-left pl-2 border-r py-2 bg-gray-50 text-xs">
                     日付
                   </div>
                   {Array.from({ length: 13 }).map((_, i) => {
@@ -762,7 +1168,7 @@ const PersonalSchedulePage: React.FC = () => {
                     return (
                       <div 
                         key={hour} 
-                        className={`text-left pl-2 border-r py-2 whitespace-nowrap ${isEarlyOrNight ? 'bg-blue-50' : ''}`}
+                        className={`text-left pl-2 border-r py-2 whitespace-nowrap text-xs ${isEarlyOrNight ? 'bg-blue-50' : ''}`}
                         style={{ width }}
                       >
                         {hour}:00
@@ -796,12 +1202,13 @@ const PersonalSchedulePage: React.FC = () => {
                 // デバッグログ削除（無限ループ防止）
                 
                 const isCurrentDay = isToday(day);
+                const isPastDate = day < new Date(new Date().setHours(0, 0, 0, 0)); // 今日より前の日付
                 
                 return (
-                  <div key={day.getTime()} className="flex border-b border-gray-100 hover:bg-gray-50 h-[45px] relative">
-                    {/* 日付列 */}
+                  <div key={day.getTime()} className={`flex border-b border-gray-100 hover:bg-gray-50 relative staff-timeline-row ${isCompactMode ? 'h-[32px]' : 'h-[45px]'} ${isPastDate ? 'opacity-50' : ''}`}>
+                    {/* 日付列（動的幅・バッジ対応） */}
                     <div 
-                      className={`w-24 p-3 border-r border-gray-200 cursor-pointer hover:bg-blue-50 transition-colors flex flex-col justify-center ${
+                      className={`min-w-24 max-w-56 p-3 border-r border-gray-200 cursor-pointer hover:bg-blue-50 transition-colors flex flex-col justify-center ${
                         isCurrentDay ? 'bg-blue-50 font-semibold text-blue-900' : ''
                       } ${
                         selectedDateForPreset && isSameDay(selectedDateForPreset, day) ? 'bg-blue-100 border-blue-300' : ''
@@ -810,20 +1217,42 @@ const PersonalSchedulePage: React.FC = () => {
                       } ${
                         day.getDay() === 6 ? 'bg-blue-50 text-blue-600' : ''  // 土曜日
                       }`}
-                      onClick={() => {
+                      style={{
+                        width: 'auto', // 自動幅調整
+                        flexShrink: 0, // 縮小しない
+                        flexGrow: 0,   // 拡大しない
+                      }}
+                      onClick={(e) => {
+                        if (isPastDate) return; // 過去の日付は選択不可
+                        
+                        // 左クリック: 選択状態の管理
                         if (selectedDateForPreset && isSameDay(selectedDateForPreset, day)) {
-                          setSelectedDateForPreset(null);
+                          // 既に選択されている日付をクリック → 担当設定モーダルを開く
+                          setSelectedDateForResponsibility(day);
+                          setIsResponsibilityModalOpen(true);
                         } else {
+                          // 未選択の日付をクリック → 選択状態にする
                           setSelectedDateForPreset(day);
                         }
                       }}
+                      onContextMenu={(e) => {
+                        e.preventDefault(); // 右クリックメニューを無効化
+                        if (isPastDate) return;
+                        
+                        // 右クリック: 選択解除
+                        setSelectedDateForPreset(null);
+                      }}
                     >
-                      <div className="text-sm">
+                      <div className="text-xs font-semibold whitespace-nowrap">
                         {format(day, 'M/d E', { locale: ja })}
                       </div>
                       {selectedDateForPreset && isSameDay(selectedDateForPreset, day) && (
-                        <div className="text-xs text-blue-600 mt-1">📌 選択中</div>
+                        <div className="text-xs text-blue-600 mt-1 whitespace-nowrap">📌 選択中</div>
                       )}
+                      {/* 担当設定バッジ（1行表示） */}
+                      <div className="flex gap-1 mt-1 whitespace-nowrap">
+                        {generateResponsibilityBadges(day)}
+                      </div>
                     </div>
 
                     {/* タイムライン（メイン画面と同じスタイル） */}
@@ -833,9 +1262,31 @@ const PersonalSchedulePage: React.FC = () => {
                       } ${
                         day.getDay() === 6 ? 'bg-blue-50/30' : ''  // 土曜日の背景
                       }`}
-                      onMouseDown={(e) => handleTimelineMouseDown(e, day)}
-                      style={{ cursor: dragInfo ? 'grabbing' : 'crosshair' }}
+                      onMouseDown={(e) => {
+                        if (isPastDate) return; // 過去の日付は操作不可
+                        handleTimelineMouseDown(e, day);
+                      }}
+                      onDragOver={(e) => {
+                        e.preventDefault(); // ドロップを許可
+                        e.dataTransfer.dropEffect = 'move';
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        if (isPastDate) return; // 過去の日付はドロップ不可
+                        handleDrop(e, day);
+                      }}
+                      style={{ cursor: isPastDate ? 'not-allowed' : (dragInfo ? 'grabbing' : 'default') }}
                     >
+                      {/* 過去の日付用グレーオーバーレイ */}
+                      {isPastDate && (
+                        <div className="absolute inset-0 bg-gray-400 opacity-20 z-50 pointer-events-none">
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <span className="text-xs text-gray-600 font-medium bg-white px-2 py-1 rounded opacity-80">
+                              編集不可
+                            </span>
+                          </div>
+                        </div>
+                      )}
                       {/* 早朝エリア（8:00-9:00）の背景強調 */}
                       <div className="absolute top-0 bottom-0 bg-blue-50 opacity-30 z-10" 
                            style={{ left: `0%`, width: `${((9-8)*4)/52*100}%` }} 
@@ -927,6 +1378,7 @@ const PersonalSchedulePage: React.FC = () => {
                           <div
                             key={`${schedule.id}-${schedule.layer}-${index}`}
                             data-layer={scheduleLayer}
+                            draggable={!isContract && !isHistorical} // メイン画面と同じドラッグ可能条件
                             className={`schedule-block absolute h-6 rounded text-white text-xs flex items-center justify-between px-2 group transition-all duration-200 ${
                               isContract || isHistorical ? 'cursor-default' : 'cursor-ew-resize hover:opacity-80'
                             } ${
@@ -952,17 +1404,40 @@ const PersonalSchedulePage: React.FC = () => {
                               e.stopPropagation();
                               console.log('スケジュールクリック:', { id: schedule.id, layer: scheduleLayer, isContract, isHistorical });
                               if (!isContract && !isHistorical) {
-                                handleScheduleClick(schedule, scheduleLayer);
+                                handleScheduleClick(schedule, scheduleLayer, day);
                               }
                             }}
-                            onMouseDown={(e) => {
-                              // 調整レイヤーのみイベント伝播を停止（編集可能な予定）
-                              // 契約レイヤーは背景扱いなのでドラッグを許可
+                            onDragStart={(e) => {
                               if (!isContract && !isHistorical) {
-                                e.stopPropagation();
-                                console.log('調整レイヤー要素マウスダウン - ドラッグ処理回避');
+                                console.log('ドラッグ開始:', schedule.id);
+                                // ゴーストエレメント位置調整用オフセットを計算（メイン画面と同じ）
+                                const scheduleElement = e.currentTarget as HTMLElement;
+                                const scheduleRect = scheduleElement.getBoundingClientRect();
+                                const mouseOffsetX = e.clientX - scheduleRect.left;
+                                setDragOffset(mouseOffsetX);
+                                
+                                e.dataTransfer.setData('application/json', JSON.stringify({
+                                  ...schedule,
+                                  sourceDate: format(day, 'yyyy-MM-dd')
+                                }));
+                                e.dataTransfer.effectAllowed = 'move';
+                              }
+                            }}
+                            onDragEnd={(e) => {
+                              console.log('ドラッグ終了:', schedule.id);
+                              setDragOffset(0);
+                            }}
+                            onMouseDown={(e) => {
+                              // ドラッグ不可の場合のみマウス処理（契約・履歴レイヤー）
+                              if (isContract || isHistorical) {
+                                if (isContract) {
+                                  console.log('契約レイヤー要素マウスダウン - ドラッグ許可');
+                                } else {
+                                  console.log('履歴レイヤー要素マウスダウン');
+                                }
                               } else {
-                                console.log('契約レイヤー要素マウスダウン - ドラッグ許可');
+                                // 調整レイヤーでもクリック選択は有効
+                                e.stopPropagation();
                               }
                             }}
                           >
@@ -988,7 +1463,7 @@ const PersonalSchedulePage: React.FC = () => {
                         );
                       })}
 
-                      {/* メイン画面と同じドラッグプレビュー */}
+                      {/* ドラッグプレビュー（新規作成のみ、メイン画面と同じ） */}
                       {dragInfo && format(dragInfo.day, 'yyyy-MM-dd') === dayStr && (
                         <div 
                           className="absolute bg-indigo-200 bg-opacity-50 border-2 border-dashed border-indigo-500 rounded pointer-events-none z-30"
@@ -1034,6 +1509,21 @@ const PersonalSchedulePage: React.FC = () => {
         onConfirm={() => { if (deletingScheduleId) handleDeleteSchedule(deletingScheduleId); }} 
         message="この予定を削除しますか？" 
       />
+      
+      {/* 担当設定モーダル */}
+      {isResponsibilityModalOpen && currentStaff && selectedDateForResponsibility && (
+        <ResponsibilityModal
+          isOpen={isResponsibilityModalOpen}
+          onClose={() => {
+            setIsResponsibilityModalOpen(false);
+            setSelectedDateForResponsibility(null);
+          }}
+          staff={currentStaff}
+          selectedDate={selectedDateForResponsibility}
+          onSave={handleResponsibilitySave}
+          existingData={responsibilityData[`${currentStaff.id}-${format(selectedDateForResponsibility, 'yyyy-MM-dd')}`] || null}
+        />
+      )}
     </div>
   );
 };
@@ -1273,6 +1763,196 @@ const ConfirmationModal = ({ isOpen, onClose, onConfirm, message }: {
             削除
           </button>
         </div>
+      </div>
+    </div>,
+    document.body
+  );
+};
+
+// 担当設定モーダルコンポーネント
+interface ResponsibilityModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  staff: Staff;
+  selectedDate: Date;
+  onSave: (data: ResponsibilityData) => void;
+  existingData?: ResponsibilityData | null;
+}
+
+const ResponsibilityModal: React.FC<ResponsibilityModalProps> = ({
+  isOpen,
+  onClose,
+  staff,
+  selectedDate,
+  onSave,
+  existingData
+}) => {
+  // 部署判定
+  const isReception = staff.department.includes('受付') || staff.group.includes('受付');
+  
+  // 一般部署用
+  const [fax, setFax] = useState(false);
+  const [subjectCheck, setSubjectCheck] = useState(false);
+  const [custom, setCustom] = useState('');
+  
+  // 受付部署用
+  const [lunch, setLunch] = useState(false);
+  const [cs, setCs] = useState(false);
+
+  // 既存データの読み込み（メイン画面と同じロジック）
+  useEffect(() => {
+    if (isOpen && existingData) {
+      console.log('既存担当設定データを読み込み:', existingData);
+      
+      if (isReception) {
+        const r = existingData as ReceptionResponsibilityData;
+        setLunch(r.lunch || false);
+        setFax(r.fax || false);
+        setCs(r.cs || false);
+        setCustom(r.custom || '');
+      } else {
+        const r = existingData as GeneralResponsibilityData;
+        setFax(r.fax || false);
+        setSubjectCheck(r.subjectCheck || false);
+        setCustom(r.custom || '');
+      }
+    } else if (isOpen && !existingData) {
+      // 既存データがない場合は初期化
+      console.log('既存担当設定データなし - 初期値を設定');
+      setFax(false);
+      setSubjectCheck(false);
+      setLunch(false);
+      setCs(false);
+      setCustom('');
+    }
+  }, [isOpen, existingData, isReception]);
+
+  if (!isOpen) return null;
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (isReception) {
+      onSave({
+        lunch,
+        fax,
+        cs,
+        custom
+      } as ReceptionResponsibilityData);
+    } else {
+      onSave({
+        fax,
+        subjectCheck,
+        custom
+      } as GeneralResponsibilityData);
+    }
+    
+    onClose();
+  };
+
+  return createPortal(
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+      <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-md">
+        <h2 className="text-lg font-semibold mb-4">
+          担当設定 - {format(selectedDate, 'M月d日(E)', { locale: ja })}
+        </h2>
+        
+        <div className="mb-4 p-3 bg-blue-50 rounded border">
+          <div className="text-sm text-blue-800">
+            <strong>担当者:</strong> {staff.name} ({staff.department})
+          </div>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-3">
+            {isReception ? (
+              // 受付部署用UI
+              <>
+                <label className="flex items-center space-x-3">
+                  <input
+                    type="checkbox"
+                    checked={lunch}
+                    onChange={(e) => setLunch(e.target.checked)}
+                    className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                  />
+                  <span className="text-sm">🍽️ 昼当番</span>
+                </label>
+                
+                <label className="flex items-center space-x-3">
+                  <input
+                    type="checkbox"
+                    checked={fax}
+                    onChange={(e) => setFax(e.target.checked)}
+                    className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                  />
+                  <span className="text-sm">📠 FAX当番</span>
+                </label>
+                
+                <label className="flex items-center space-x-3">
+                  <input
+                    type="checkbox"
+                    checked={cs}
+                    onChange={(e) => setCs(e.target.checked)}
+                    className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                  />
+                  <span className="text-sm">☎️ CS担当</span>
+                </label>
+              </>
+            ) : (
+              // 一般部署用UI
+              <>
+                <label className="flex items-center space-x-3">
+                  <input
+                    type="checkbox"
+                    checked={fax}
+                    onChange={(e) => setFax(e.target.checked)}
+                    className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                  />
+                  <span className="text-sm">📠 FAX当番</span>
+                </label>
+                
+                <label className="flex items-center space-x-3">
+                  <input
+                    type="checkbox"
+                    checked={subjectCheck}
+                    onChange={(e) => setSubjectCheck(e.target.checked)}
+                    className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                  />
+                  <span className="text-sm">📝 件名チェック担当</span>
+                </label>
+              </>
+            )}
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                その他の担当業務
+              </label>
+              <textarea
+                value={custom}
+                onChange={(e) => setCustom(e.target.value)}
+                placeholder="その他の担当業務があれば入力してください"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                rows={3}
+              />
+            </div>
+          </div>
+
+          <div className="flex space-x-3 pt-4 border-t">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+            >
+              キャンセル
+            </button>
+            <button
+              type="submit"
+              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+            >
+              保存
+            </button>
+          </div>
+        </form>
       </div>
     </div>,
     document.body
