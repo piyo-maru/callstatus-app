@@ -3828,6 +3828,20 @@ export default function FullMainApp() {
         >
           📅 個人ページ
         </a>
+        <a
+          href="/monthly-planner"
+          className="text-sm bg-purple-100 hover:bg-purple-200 text-purple-800 px-3 py-1 rounded border border-purple-300 transition-colors"
+        >
+          📅 月次プランナー
+        </a>
+        {user?.role === 'ADMIN' && (
+          <a
+            href="/admin/pending-approval"
+            className="text-sm bg-orange-100 hover:bg-orange-200 text-orange-800 px-3 py-1 rounded border border-orange-300 transition-colors"
+          >
+            🔐 Pending承認
+          </a>
+        )}
         <button
           onClick={logout}
           className="text-sm bg-gray-100 hover:bg-gray-200 px-3 py-1 rounded border"

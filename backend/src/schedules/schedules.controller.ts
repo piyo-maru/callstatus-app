@@ -110,6 +110,8 @@ export class SchedulesController {
     };
   }
 
+  // 統合API（pending + active schedules）は後で実装
+
   // 統合スケジュール取得API（現在/過去の自動分岐）
   @Get('unified')
   async findUnified(

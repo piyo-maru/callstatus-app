@@ -9,6 +9,7 @@ import { DailyAssignmentsModule } from './daily-assignments/daily-assignments.mo
 import { ResponsibilitiesModule } from './responsibilities/responsibilities.module';
 import { DepartmentSettingsModule } from './department-settings/department-settings.module';
 import { SnapshotsModule } from './snapshots/snapshots.module';
+import { PendingModule } from './pending/pending.module';
 // 一時的に無効化（コンパイルエラー回避）
 // import { AssignmentsModule } from './assignments/assignments.module';
 // import { ContractModule } from './contract/contract.module';
@@ -26,6 +27,7 @@ import { SnapshotsModule } from './snapshots/snapshots.module';
     ResponsibilitiesModule,
     DepartmentSettingsModule,
     SnapshotsModule,
+    PendingModule,
     // 他のすべてのモジュールを一時的に無効化（コンパイルエラー回避）
     // AuthModule, 
     // AuditModule, 

@@ -8,18 +8,31 @@ datasource db {
 }
 
 model Adjustment {
-  id        Int      @id @default(autoincrement())
-  date      DateTime
-  status    String
-  start     DateTime
-  end       DateTime
-  memo      String?
-  reason    String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime
-  staffId   Int
-  batchId   String?
-  Staff     Staff    @relation(fields: [staffId], references: [id])
+  id              Int                    @id @default(autoincrement())
+  date            DateTime
+  status          String
+  start           DateTime
+  end             DateTime
+  memo            String?
+  reason          String?
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime
+  staffId         Int
+  batchId         String?
+  
+  // Pending関連フィールド
+  isPending       Boolean                @default(false)
+  approvedBy      Int?
+  approvedAt      DateTime?
+  pendingType     String?                // 'monthly-planner', 'manual'
+  rejectedAt      DateTime?
+  rejectedBy      Int?
+  rejectionReason String?
+  
+  Staff           Staff                  @relation(fields: [staffId], references: [id])
+  ApprovedBy      Staff?                 @relation("ApprovedAdjustments", fields: [approvedBy], references: [id])
+  RejectedBy      Staff?                 @relation("RejectedAdjustments", fields: [rejectedBy], references: [id])
+  ApprovalLogs    PendingApprovalLog[]
 }
 
 model Contract {
@@ -95,6 +108,11 @@ model Staff {
   Schedule            Schedule[]
   TemporaryAssignment TemporaryAssignment[]
   user_auth           user_auth?
+  
+  // Pending関連リレーション
+  ApprovedAdjustments Adjustment[]         @relation("ApprovedAdjustments")
+  RejectedAdjustments Adjustment[]         @relation("RejectedAdjustments")
+  ApprovalActions     PendingApprovalLog[] @relation("ApprovalActions")
 }
 
 model TemporaryAssignment {
@@ -303,4 +321,20 @@ enum SnapshotStatus {
   COMPLETED
   FAILED
   ROLLED_BACK
+}
+
+model PendingApprovalLog {
+  id           Int      @id @default(autoincrement())
+  adjustmentId Int
+  action       String   // 'approved', 'rejected', 'pending'
+  actorId      Int
+  reason       String?
+  createdAt    DateTime @default(now())
+  
+  Adjustment   Adjustment @relation(fields: [adjustmentId], references: [id])
+  Actor        Staff      @relation("ApprovalActions", fields: [actorId], references: [id])
+  
+  @@index([adjustmentId])
+  @@index([actorId])
+  @@map("pending_approval_logs")
 }

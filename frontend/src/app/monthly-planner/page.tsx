@@ -20,7 +20,44 @@ type Staff = {
   isActive?: boolean;
 };
 
-// 月次プランナーでは予定データは参照しない（削除）
+// Pending予定データの型定義
+type PendingSchedule = {
+  id: number;
+  staffId: number;
+  staffName?: string;
+  date: string;
+  status: string;
+  start: number;
+  end: number;
+  memo?: string;
+  isPending: boolean;
+  pendingType: 'monthly-planner' | 'manual';
+  approvedBy?: { id: number; name: string };
+  approvedAt?: string;
+  rejectedBy?: { id: number; name: string };
+  rejectedAt?: string;
+  rejectionReason?: string;
+  approvalLogs?: any[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+// 既存のスケジュールとpendingを統合した型
+type UnifiedSchedule = {
+  id: string;
+  staffId: number;
+  status: string;
+  start: number;
+  end: number;
+  memo?: string;
+  isPending?: boolean;
+  pendingType?: string;
+  approvedBy?: any;
+  approvedAt?: string;
+  rejectedBy?: any;
+  rejectedAt?: string;
+  layer?: string;
+};
 
 type SelectedCell = {
   staffId: number;
@@ -44,6 +81,11 @@ export default function MonthlyPlannerPage() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  
+  // Pending関連状態
+  const [pendingSchedules, setPendingSchedules] = useState<PendingSchedule[]>([]);
+  const [unifiedSchedules, setUnifiedSchedules] = useState<UnifiedSchedule[]>([]);
+  const [showApprovalMode, setShowApprovalMode] = useState(false);
   
   // セル選択状態
   const [selectedCells, setSelectedCells] = useState<SelectedCell[]>([]);
@@ -291,31 +333,109 @@ export default function MonthlyPlannerPage() {
     setShowPresetMenu(true);
   }, [selectedCells]);
 
-  // プリセット適用
+  // Pending取得関数
+  const fetchPendingSchedules = useCallback(async () => {
+    try {
+      const currentApiUrl = getApiUrl();
+      const year = currentMonth.getFullYear();
+      const month = currentMonth.getMonth() + 1;
+      
+      // 当月のpendingを取得
+      const response = await fetch(`${currentApiUrl}/api/schedules/pending`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        const data: PendingSchedule[] = await response.json();
+        // 当月のpendingのみフィルター
+        const monthlyPendings = data.filter(pending => {
+          const pendingDate = new Date(pending.date);
+          return pendingDate.getFullYear() === year && pendingDate.getMonth() + 1 === month;
+        });
+        setPendingSchedules(monthlyPendings);
+      }
+    } catch (error) {
+      console.error('Failed to fetch pending schedules:', error);
+    }
+  }, [currentMonth, token]);
+
+  // 統合スケジュール取得関数（将来的にunified APIを使用）
+  const fetchUnifiedSchedules = useCallback(async () => {
+    try {
+      const currentApiUrl = getApiUrl();
+      const year = currentMonth.getFullYear();
+      const month = currentMonth.getMonth() + 1;
+      
+      // 月の全日程分を取得
+      const daysInMonth = new Date(year, month, 0).getDate();
+      const schedulePromises = [];
+      
+      for (let day = 1; day <= daysInMonth; day++) {
+        const dateString = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        schedulePromises.push(
+          fetch(`${currentApiUrl}/api/schedules/layered?date=${dateString}`, {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            }
+          }).then(res => res.ok ? res.json() : null)
+        );
+      }
+      
+      const results = await Promise.all(schedulePromises);
+      const allSchedules: UnifiedSchedule[] = [];
+      
+      results.forEach((result, index) => {
+        if (result && result.schedules) {
+          const day = index + 1;
+          const dateString = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+          
+          result.schedules.forEach((schedule: any) => {
+            allSchedules.push({
+              ...schedule,
+              date: dateString,
+              isPending: false,
+              layer: schedule.layer || 'adjustment'
+            });
+          });
+        }
+      });
+      
+      setUnifiedSchedules(allSchedules);
+    } catch (error) {
+      console.error('Failed to fetch unified schedules:', error);
+    }
+  }, [currentMonth, token]);
+
+  // プリセット適用（Pending作成に変更）
   const applyPreset = useCallback(async (preset: typeof presetSchedules[0]) => {
     if (selectedCells.length === 0) return;
 
     try {
       const currentApiUrl = getApiUrl();
       
-      // 選択されたセルに対してスケジュールを作成
+      // 選択されたセルに対してPendingを作成
       const createPromises = selectedCells.map(async (cell) => {
-        const scheduleData = {
+        const pendingData = {
           staffId: cell.staffId,
           date: cell.date,
           status: preset.status,
           start: preset.start,
           end: preset.end,
-          memo: preset.label
+          memo: `月次プランナー: ${preset.label}`,
+          pendingType: 'monthly-planner' as const
         };
 
-        const response = await fetch(`${currentApiUrl}/api/schedules`, {
+        const response = await fetch(`${currentApiUrl}/api/schedules/pending`, {
           method: 'POST',
           headers: { 
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json' 
           },
-          body: JSON.stringify(scheduleData)
+          body: JSON.stringify(pendingData)
         });
 
         return response.ok;
@@ -325,16 +445,37 @@ export default function MonthlyPlannerPage() {
       const successCount = results.filter(Boolean).length;
       
       if (successCount > 0) {
-        alert(`${successCount}件の予定を作成しました`);
+        alert(`${successCount}件のPending予定を作成しました（承認待ち）`);
+        // Pendingデータを再取得
+        await fetchPendingSchedules();
       }
     } catch (error) {
-      console.error('Failed to apply preset:', error);
-      alert('予定の作成に失敗しました');
+      console.error('Failed to create pending:', error);
+      alert('Pending予定の作成に失敗しました');
     }
 
     setSelectedCells([]);
     setShowPresetMenu(false);
-  }, [selectedCells, token]);
+  }, [selectedCells, token, fetchPendingSchedules]);
+
+  // セル内のスケジュール取得関数
+  const getCellSchedules = useCallback((staffId: number, day: number) => {
+    const year = currentMonth.getFullYear();
+    const month = currentMonth.getMonth() + 1;
+    const dateString = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    
+    // Pendingスケジュールを取得
+    const pendings = pendingSchedules.filter(pending => 
+      pending.staffId === staffId && pending.date === dateString
+    );
+    
+    // 通常のスケジュールを取得
+    const activeSchedules = unifiedSchedules.filter(schedule => 
+      schedule.staffId === staffId && schedule.date === dateString
+    );
+    
+    return { pendings, activeSchedules };
+  }, [currentMonth, pendingSchedules, unifiedSchedules]);
 
   // セルの選択状態判定
   const isCellSelected = useCallback((staffId: number, day: number) => {
@@ -345,11 +486,45 @@ export default function MonthlyPlannerPage() {
     return selectedCells.some(cell => cell.staffId === staffId && cell.date === dateString);
   }, [selectedCells, currentMonth]);
 
+  // Pending削除関数
+  const deletePending = useCallback(async (pendingId: number) => {
+    if (!confirm('このPending予定を削除しますか？')) return;
+    
+    try {
+      const currentApiUrl = getApiUrl();
+      const response = await fetch(`${currentApiUrl}/api/schedules/pending/${pendingId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        alert('Pending予定を削除しました');
+        await fetchPendingSchedules();
+      } else {
+        alert('削除に失敗しました');
+      }
+    } catch (error) {
+      console.error('Failed to delete pending:', error);
+      alert('削除に失敗しました');
+    }
+  }, [token, fetchPendingSchedules]);
+
   // 初期データ取得
   useEffect(() => {
     fetchStaffData();
     fetchDepartmentSettings();
   }, [fetchStaffData, fetchDepartmentSettings]);
+
+  // 月が変更された時にpendingとスケジュールデータを取得
+  useEffect(() => {
+    if (staffList.length > 0) {
+      fetchPendingSchedules();
+      fetchUnifiedSchedules();
+    }
+  }, [currentMonth, staffList, fetchPendingSchedules, fetchUnifiedSchedules]);
 
   // メニューを閉じる
   useEffect(() => {
@@ -381,6 +556,18 @@ export default function MonthlyPlannerPage() {
           </div>
 
           <div className="flex items-center space-x-4">
+            {/* 承認モード切り替え */}
+            <button
+              onClick={() => setShowApprovalMode(!showApprovalMode)}
+              className={`px-3 py-1 text-sm rounded ${
+                showApprovalMode 
+                  ? 'bg-orange-600 text-white hover:bg-orange-700' 
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              }`}
+            >
+              {showApprovalMode ? '承認モード ON' : '承認モード OFF'}
+            </button>
+            
             {selectedCells.length > 0 && (
               <div className="flex items-center space-x-2">
                 <span className="text-sm text-gray-600">
@@ -390,7 +577,7 @@ export default function MonthlyPlannerPage() {
                   onClick={showPresetMenuHandler}
                   className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
                 >
-                  予定設定
+                  Pending作成
                 </button>
                 <button
                   onClick={() => setSelectedCells([])}
@@ -531,16 +718,87 @@ export default function MonthlyPlannerPage() {
                                 <div key={staff.id} className="flex h-[45px]">
                                   {dateArray.map(day => {
                                     const isSelected = isCellSelected(staff.id, day);
+                                    const { pendings, activeSchedules } = getCellSchedules(staff.id, day);
+                                    const hasPending = pendings.length > 0;
+                                    const hasActive = activeSchedules.length > 0;
+                                    
                                     return (
                                       <div
                                         key={day}
                                         onClick={(e) => handleCellClick(staff.id, day, e)}
                                         className={`
-                                          w-20 border-r border-b cursor-pointer relative
+                                          w-20 border-r border-b cursor-pointer relative overflow-hidden
                                           ${isSelected ? 'bg-blue-100 border-blue-300' : 'hover:bg-gray-100'}
                                         `}
                                       >
-                                        {/* セル内容は空（予定データは参照しない） */}
+                                        {/* アクティブなスケジュール表示 */}
+                                        {activeSchedules.map((schedule, index) => (
+                                          <div
+                                            key={`active-${index}`}
+                                            className="absolute inset-0 text-xs flex items-center justify-center"
+                                            style={{ 
+                                              backgroundColor: STATUS_COLORS[schedule.status],
+                                              opacity: schedule.layer === 'contract' ? 0.3 : 0.7,
+                                              zIndex: schedule.layer === 'contract' ? 1 : 2
+                                            }}
+                                          >
+                                            <span className="text-white font-medium">
+                                              {capitalizeStatus(schedule.status)}
+                                            </span>
+                                          </div>
+                                        ))}
+
+                                        {/* Pendingスケジュール表示（最前面） */}
+                                        {pendings.map((pending, index) => (
+                                          <div key={`pending-${pending.id}`} className="relative">
+                                            {/* Pending予定の背景 */}
+                                            <div
+                                              className="absolute inset-0 border-2 border-dashed border-orange-400 bg-orange-50 opacity-70"
+                                              style={{ 
+                                                backgroundColor: STATUS_COLORS[pending.status],
+                                                zIndex: 10
+                                              }}
+                                            />
+                                            
+                                            {/* 承認待ちラベル */}
+                                            <div className="absolute top-0 right-0 bg-orange-500 text-white text-xs px-1 rounded-bl z-20">
+                                              承認待ち
+                                            </div>
+                                            
+                                            {/* Pending内容表示 */}
+                                            <div className="absolute inset-0 text-xs flex items-center justify-center z-15">
+                                              <span className="text-gray-800 font-medium">
+                                                {capitalizeStatus(pending.status)}
+                                              </span>
+                                            </div>
+                                            
+                                            {/* 削除ボタン（承認モード時のみ表示） */}
+                                            {showApprovalMode && (
+                                              <button
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  deletePending(pending.id);
+                                                }}
+                                                className="absolute top-1 left-1 bg-red-500 text-white text-xs w-4 h-4 rounded-full flex items-center justify-center hover:bg-red-600 z-30"
+                                                title="Pending削除"
+                                              >
+                                                ×
+                                              </button>
+                                            )}
+                                          </div>
+                                        ))}
+                                        
+                                        {/* セル内の時刻表示（pendingまたはactiveがある場合） */}
+                                        {(hasPending || hasActive) && (
+                                          <div className="absolute bottom-0 left-0 text-xs text-gray-600 bg-white bg-opacity-75 px-1 z-25">
+                                            {pendings.length > 0 
+                                              ? `${pendings[0].start}:00-${pendings[0].end}:00`
+                                              : hasActive && activeSchedules[0]
+                                              ? `${Math.floor(activeSchedules[0].start)}:${String(Math.round((activeSchedules[0].start % 1) * 60)).padStart(2, '0')}-${Math.floor(activeSchedules[0].end)}:${String(Math.round((activeSchedules[0].end % 1) * 60)).padStart(2, '0')}`
+                                              : ''
+                                            }
+                                          </div>
+                                        )}
                                       </div>
                                     );
                                   })}
@@ -574,7 +832,7 @@ export default function MonthlyPlannerPage() {
           }}
         >
           <div className="px-3 py-1 text-xs font-medium text-gray-500 border-b">
-            予定を設定
+            Pending予定を作成
           </div>
           {presetSchedules.map(preset => (
             <button

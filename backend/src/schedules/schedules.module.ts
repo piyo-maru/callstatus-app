@@ -10,5 +10,6 @@ import { SnapshotsModule } from '../snapshots/snapshots.module';
   imports: [PrismaModule, LayerManagerModule, SnapshotsModule],
   controllers: [SchedulesController],
   providers: [SchedulesService, SchedulesGateway],
+  exports: [SchedulesService, SchedulesGateway],
 })
 export class SchedulesModule {}
