@@ -131,8 +131,12 @@ const DraggablePending: React.FC<{
   pendingStyle: any;
   isTransparent: boolean;
   onDragStart: (pending: PendingSchedule) => void;
-}> = ({ pending, backgroundColor, textColor, pendingStyle, isTransparent, onDragStart }) => {
+  onApprovalClick?: (pending: PendingSchedule) => void;
+  isApprovalMode?: boolean;
+}> = ({ pending, backgroundColor, textColor, pendingStyle, isTransparent, onDragStart, onApprovalClick, isApprovalMode }) => {
   const canDrag = !pending.approvedAt && !pending.rejectedAt; // 未承認のみドラッグ可能
+  const canApprove = !pending.approvedAt && !pending.rejectedAt; // 未承認のみ承認可能
+  const isRejected = pending.rejectedAt && !pending.approvedAt; // 却下済み
 
   const handleDragStart = (e: React.DragEvent) => {
     if (!canDrag) {
@@ -144,13 +148,36 @@ const DraggablePending: React.FC<{
     onDragStart(pending);
   };
 
+  const handleClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (isRejected && onApprovalClick) {
+      // 却下済み予定の場合は却下理由モーダルを表示
+      onApprovalClick(pending);
+    } else if (isApprovalMode && pending.approvedAt && !pending.rejectedAt && onApprovalClick) {
+      // 承認モードで承認済み予定の場合は削除モーダルを表示
+      onApprovalClick(pending);
+    } else if (isApprovalMode && canApprove && onApprovalClick) {
+      // 承認モードで未承認予定の場合は承認モーダルを表示
+      onApprovalClick(pending);
+    }
+  };
+
+  const getCursor = () => {
+    if (isRejected) return 'cursor-pointer'; // 却下済み予定もクリック可能
+    if (isApprovalMode && pending.approvedAt && !pending.rejectedAt) return 'cursor-pointer'; // 承認済み予定もクリック可能
+    if (isApprovalMode && canApprove) return 'cursor-pointer';
+    if (canDrag) return 'cursor-move';
+    return 'cursor-default';
+  };
+
   return (
     <div
-      draggable={canDrag}
+      draggable={canDrag && !isApprovalMode}
       onDragStart={handleDragStart}
-      className={`w-full h-full rounded-md flex flex-col text-xs text-center pt-1 ${
-        canDrag ? 'cursor-move' : 'cursor-default'
-      }`}
+      onClick={handleClick}
+      className={`w-full h-full rounded-md flex flex-col text-xs text-center pt-1 ${getCursor()}`}
       style={pendingStyle}
     >
       {/* 予定種別 */}
@@ -269,6 +296,22 @@ function MonthlyPlannerPageContent() {
     staffId: number;
     day: number;
   } | null>(null);
+
+  // 承認モード状態
+  const [isApprovalMode, setIsApprovalMode] = useState(false);
+  
+  // 承認モーダル状態
+  const [showApprovalModal, setShowApprovalModal] = useState(false);
+  const [selectedPendingForApproval, setSelectedPendingForApproval] = useState<PendingSchedule | null>(null);
+  
+  // 却下済み予定モーダル状態
+  const [showRejectedModal, setShowRejectedModal] = useState(false);
+  const [selectedRejectedPending, setSelectedRejectedPending] = useState<PendingSchedule | null>(null);
+
+  // 承認済み予定削除モーダル状態
+  const [showApprovedDeleteModal, setShowApprovedDeleteModal] = useState(false);
+  const [selectedApprovedPending, setSelectedApprovedPending] = useState<PendingSchedule | null>(null);
+  const [unapprovalReason, setUnapprovalReason] = useState('');
   
   // 部署・グループフィルター
   const [selectedDepartment, setSelectedDepartment] = useState<string>('all');
@@ -534,6 +577,141 @@ function MonthlyPlannerPageContent() {
     }
   }, [currentMonth, selectedCellForHighlight, pendingSchedules]);
 
+  // 承認モードでの予定クリック処理
+  const handleApprovalClick = useCallback((pending: PendingSchedule) => {
+    if (pending.rejectedAt && !pending.approvedAt) {
+      // 却下済み予定の場合
+      setSelectedRejectedPending(pending);
+      setShowRejectedModal(true);
+    } else if (pending.approvedAt && !pending.rejectedAt && isApprovalMode) {
+      // 承認済み予定で承認モードの場合は削除モーダル表示
+      setSelectedApprovedPending(pending);
+      setShowApprovedDeleteModal(true);
+    } else if (!pending.approvedAt && !pending.rejectedAt) {
+      // 未承認予定の場合
+      setSelectedPendingForApproval(pending);
+      setShowApprovalModal(true);
+    }
+  }, [isApprovalMode]);
+
+  // 承認処理
+  const handleApprove = useCallback(async (reason: string = '') => {
+    if (!selectedPendingForApproval) return;
+
+    try {
+      const currentApiUrl = getApiUrl();
+      const response = await fetch(`${currentApiUrl}/api/schedules/pending/${selectedPendingForApproval.id}/approve`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ reason })
+      });
+
+      if (response.ok) {
+        alert('予定を承認しました');
+        await fetchPendingSchedules();
+        setShowApprovalModal(false);
+        setSelectedPendingForApproval(null);
+      } else {
+        alert('承認に失敗しました');
+      }
+    } catch (error) {
+      console.error('Failed to approve pending:', error);
+      alert('承認に失敗しました');
+    }
+  }, [selectedPendingForApproval, fetchPendingSchedules]);
+
+  // 却下処理
+  const handleReject = useCallback(async (reason: string) => {
+    if (!selectedPendingForApproval || !reason.trim()) {
+      alert('却下理由を入力してください');
+      return;
+    }
+
+    try {
+      const currentApiUrl = getApiUrl();
+      const response = await fetch(`${currentApiUrl}/api/schedules/pending/${selectedPendingForApproval.id}/reject`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ reason })
+      });
+
+      if (response.ok) {
+        alert('予定を却下しました');
+        await fetchPendingSchedules();
+        setShowApprovalModal(false);
+        setSelectedPendingForApproval(null);
+      } else {
+        alert('却下に失敗しました');
+      }
+    } catch (error) {
+      console.error('Failed to reject pending:', error);
+      alert('却下に失敗しました');
+    }
+  }, [selectedPendingForApproval, fetchPendingSchedules]);
+
+  // 却下済み予定のクリア処理
+  const handleClearRejected = useCallback(async () => {
+    if (!selectedRejectedPending) return;
+
+    if (!confirm('この予定を削除しますか？')) return;
+
+    try {
+      const currentApiUrl = getApiUrl();
+      const response = await fetch(`${currentApiUrl}/api/schedules/pending/${selectedRejectedPending.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        alert('予定を削除しました');
+        await fetchPendingSchedules();
+        setShowRejectedModal(false);
+        setSelectedRejectedPending(null);
+      } else {
+        alert('削除に失敗しました');
+      }
+    } catch (error) {
+      console.error('Failed to delete rejected pending:', error);
+      alert('削除に失敗しました');
+    }
+  }, [selectedRejectedPending, fetchPendingSchedules]);
+
+  // 承認済み予定削除処理
+  const handleUnapproveSchedule = useCallback(async (reason: string) => {
+    if (!selectedApprovedPending) return;
+
+    try {
+      const currentApiUrl = getApiUrl();
+      const response = await fetch(`${currentApiUrl}/api/schedules/pending/${selectedApprovedPending.id}/unapprove`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ reason })
+      });
+
+      if (response.ok) {
+        alert('承認を取り消しました');
+        await fetchPendingSchedules();
+        setShowApprovedDeleteModal(false);
+        setSelectedApprovedPending(null);
+        setUnapprovalReason('');
+      } else {
+        const errorData = await response.json();
+        alert(`承認取り消しに失敗しました: ${errorData.message || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Failed to unapprove pending:', error);
+      alert('承認取り消しに失敗しました');
+    }
+  }, [selectedApprovedPending, fetchPendingSchedules]);
+
   // プリセット適用
   const applyPreset = useCallback(async (preset: PresetSchedule) => {
     if (!selectedCell) return;
@@ -788,8 +966,19 @@ function MonthlyPlannerPageContent() {
         <div className="px-6 py-3 border-b border-gray-200">
           <div className="flex items-center justify-between">
             <h1 className="text-lg font-semibold text-gray-900">月次プランナー</h1>
-            <div className="text-sm text-gray-600">
-              トグル
+            <div className="flex items-center space-x-4">
+              {/* 承認モードトグル */}
+              <label className="flex items-center space-x-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={isApprovalMode}
+                  onChange={(e) => setIsApprovalMode(e.target.checked)}
+                  className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <span className={`font-medium ${isApprovalMode ? 'text-blue-600' : 'text-gray-600'}`}>
+                  承認モード
+                </span>
+              </label>
             </div>
           </div>
         </div>
@@ -999,6 +1188,8 @@ function MonthlyPlannerPageContent() {
                                                   pendingStyle={pendingStyle}
                                                   isTransparent={isTransparent}
                                                   onDragStart={setDraggedPending}
+                                                  onApprovalClick={handleApprovalClick}
+                                                  isApprovalMode={isApprovalMode}
                                                 />
                                               </div>
                                             );
@@ -1086,6 +1277,218 @@ function MonthlyPlannerPageContent() {
                   onClick={() => {
                     setShowModal(false);
                     setSelectedCellForHighlight(null);
+                  }}
+                  className="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
+                >
+                  キャンセル
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* 承認モーダル */}
+      {showApprovalModal && selectedPendingForApproval && typeof window !== 'undefined' && createPortal(
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-96 max-w-md mx-4">
+            <div className="text-center">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">予定の承認・却下</h2>
+              
+              {/* 予定情報 */}
+              <div className="bg-gray-50 p-4 rounded-md mb-4 text-left">
+                <div className="text-sm text-gray-600 mb-2">
+                  <strong>スタッフ:</strong> {selectedPendingForApproval.staffName}
+                </div>
+                <div className="text-sm text-gray-600 mb-2">
+                  <strong>日付:</strong> {new Date(selectedPendingForApproval.date).toLocaleDateString('ja-JP')}
+                </div>
+                <div className="text-sm text-gray-600 mb-2">
+                  <strong>時間:</strong> {String(selectedPendingForApproval.start).padStart(2, '0')}:00 - {String(selectedPendingForApproval.end).padStart(2, '0')}:00
+                </div>
+                <div className="text-sm text-gray-600 mb-2">
+                  <strong>ステータス:</strong> {capitalizeStatus(selectedPendingForApproval.status)}
+                </div>
+                {selectedPendingForApproval.memo && (
+                  <div className="text-sm text-gray-600">
+                    <strong>メモ:</strong> {selectedPendingForApproval.memo}
+                  </div>
+                )}
+              </div>
+
+              {/* 却下理由入力 */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  却下理由（却下の場合は必須）
+                </label>
+                <textarea
+                  id="rejectionReason"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  rows={3}
+                  placeholder="却下する場合は理由を入力してください"
+                />
+              </div>
+
+              {/* ボタン */}
+              <div className="flex space-x-3">
+                <button
+                  onClick={() => handleApprove()}
+                  className="flex-1 px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600"
+                >
+                  承認
+                </button>
+                <button
+                  onClick={() => {
+                    const textarea = document.getElementById('rejectionReason') as HTMLTextAreaElement;
+                    handleReject(textarea.value);
+                  }}
+                  className="flex-1 px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600"
+                >
+                  却下
+                </button>
+                <button
+                  onClick={() => {
+                    setShowApprovalModal(false);
+                    setSelectedPendingForApproval(null);
+                  }}
+                  className="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
+                >
+                  キャンセル
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* 却下済み予定モーダル */}
+      {showRejectedModal && selectedRejectedPending && typeof window !== 'undefined' && createPortal(
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-96 max-w-md mx-4">
+            <div className="text-center">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">却下された予定</h2>
+              
+              {/* 予定情報 */}
+              <div className="bg-gray-50 p-4 rounded-md mb-4 text-left">
+                <div className="text-sm text-gray-600 mb-2">
+                  <strong>スタッフ:</strong> {selectedRejectedPending.staffName}
+                </div>
+                <div className="text-sm text-gray-600 mb-2">
+                  <strong>日付:</strong> {new Date(selectedRejectedPending.date).toLocaleDateString('ja-JP')}
+                </div>
+                <div className="text-sm text-gray-600 mb-2">
+                  <strong>時間:</strong> {String(selectedRejectedPending.start).padStart(2, '0')}:00 - {String(selectedRejectedPending.end).padStart(2, '0')}:00
+                </div>
+                <div className="text-sm text-gray-600 mb-2">
+                  <strong>ステータス:</strong> {capitalizeStatus(selectedRejectedPending.status)}
+                </div>
+                {selectedRejectedPending.memo && (
+                  <div className="text-sm text-gray-600 mb-2">
+                    <strong>メモ:</strong> {selectedRejectedPending.memo}
+                  </div>
+                )}
+                <div className="text-sm text-gray-600 mb-2">
+                  <strong>却下日時:</strong> {selectedRejectedPending.rejectedAt ? new Date(selectedRejectedPending.rejectedAt).toLocaleString('ja-JP') : '-'}
+                </div>
+                {selectedRejectedPending.rejectionReason && (
+                  <div className="text-sm text-red-600">
+                    <strong>却下理由:</strong> {selectedRejectedPending.rejectionReason}
+                  </div>
+                )}
+              </div>
+
+              {/* ボタン */}
+              <div className="flex space-x-3">
+                <button
+                  onClick={handleClearRejected}
+                  className="flex-1 px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600"
+                >
+                  予定を削除
+                </button>
+                <button
+                  onClick={() => {
+                    setShowRejectedModal(false);
+                    setSelectedRejectedPending(null);
+                  }}
+                  className="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
+                >
+                  キャンセル
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* 承認済み予定削除モーダル */}
+      {showApprovedDeleteModal && selectedApprovedPending && typeof window !== 'undefined' && createPortal(
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl w-96 mx-4">
+            <div className="p-6">
+              <h3 className="text-lg font-semibold text-gray-800 mb-4">承認済み予定の削除</h3>
+              
+              {/* 予定詳細 */}
+              <div className="bg-gray-50 p-4 rounded-md mb-4">
+                <div className="text-sm text-gray-600 mb-2">
+                  <strong>スタッフ:</strong> {selectedApprovedPending.staffName || 'Unknown'}
+                </div>
+                <div className="text-sm text-gray-600 mb-2">
+                  <strong>日付:</strong> {selectedApprovedPending.date}
+                </div>
+                <div className="text-sm text-gray-600 mb-2">
+                  <strong>時間:</strong> {String(selectedApprovedPending.start).padStart(2, '0')}:00 - {String(selectedApprovedPending.end).padStart(2, '0')}:00
+                </div>
+                <div className="text-sm text-gray-600 mb-2">
+                  <strong>ステータス:</strong> {capitalizeStatus(selectedApprovedPending.status)}
+                </div>
+                {selectedApprovedPending.memo && (
+                  <div className="text-sm text-gray-600 mb-2">
+                    <strong>メモ:</strong> {selectedApprovedPending.memo}
+                  </div>
+                )}
+                <div className="text-sm text-green-600">
+                  <strong>承認日時:</strong> {selectedApprovedPending.approvedAt ? new Date(selectedApprovedPending.approvedAt).toLocaleString('ja-JP') : '-'}
+                </div>
+              </div>
+
+              {/* 削除理由入力 */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  削除理由 <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  value={unapprovalReason}
+                  onChange={(e) => setUnapprovalReason(e.target.value)}
+                  placeholder="承認を取り消す理由を入力してください"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  rows={3}
+                  required
+                />
+              </div>
+
+              {/* ボタン */}
+              <div className="flex space-x-3">
+                <button
+                  onClick={() => {
+                    if (unapprovalReason.trim()) {
+                      handleUnapproveSchedule(unapprovalReason.trim());
+                    } else {
+                      alert('削除理由を入力してください');
+                    }
+                  }}
+                  className="flex-1 px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600"
+                  disabled={!unapprovalReason.trim()}
+                >
+                  承認を取り消す
+                </button>
+                <button
+                  onClick={() => {
+                    setShowApprovedDeleteModal(false);
+                    setSelectedApprovedPending(null);
+                    setUnapprovalReason('');
                   }}
                   className="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
                 >

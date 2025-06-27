@@ -255,9 +255,9 @@ export class PendingService {
     //   throw new ForbiddenException('他の人のpendingは削除できません');
     // }
 
-    // 承認済み・却下済みは削除不可
-    if (pending.approvedAt || pending.rejectedAt) {
-      throw new BadRequestException('承認済み・却下済みのpendingは削除できません');
+    // 承認済みは削除不可、却下済みは削除可能
+    if (pending.approvedAt) {
+      throw new BadRequestException('承認済みのpendingは削除できません');
     }
 
     // まずApprovalLogsを削除
@@ -350,6 +350,50 @@ export class PendingService {
 
     console.log('Pending rejected:', id);
     return this.formatPendingResponse(rejected);
+  }
+
+  /**
+   * 承認済み予定の承認取り消し（削除扱い）
+   */
+  async unapprove(id: number, reason: string, actorId: number) {
+    const pending = await this.prisma.adjustment.findUnique({
+      where: { id, isPending: true }
+    });
+
+    if (!pending) {
+      throw new NotFoundException('Pendingが見つかりません');
+    }
+
+    if (!pending.approvedAt) {
+      throw new BadRequestException('承認済みでないpendingは取り消しできません');
+    }
+
+    if (pending.rejectedAt) {
+      throw new BadRequestException('既に却下済みのpendingです');
+    }
+
+    const unapproved = await this.prisma.adjustment.update({
+      where: { id },
+      data: {
+        approvedBy: null,
+        approvedAt: null,
+        rejectedBy: actorId,
+        rejectedAt: new Date(),
+        rejectionReason: reason || '承認取り消し',
+      },
+    });
+
+    // 承認取り消しログに記録
+    await this.prisma.pendingApprovalLog.create({
+      data: {
+        adjustmentId: id,
+        action: 'unapproved',
+        actorId: actorId,
+        reason: reason || '承認取り消し',
+      },
+    });
+
+    return this.formatPendingResponse(unapproved);
   }
 
   /**

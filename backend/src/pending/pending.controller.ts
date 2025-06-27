@@ -128,6 +128,20 @@ export class PendingController {
     const mockStaffId = 1;
     return this.pendingService.reject(id, approvalDto, mockStaffId);
   }
+
+  /**
+   * 承認済み予定の承認取り消し（削除扱い）
+   */
+  @Post(':id/unapprove')
+  // @UseGuards(RolesGuard) // 一時的に無効化
+  // @Roles('ADMIN') // 一時的に無効化
+  async unapprove(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() approvalDto: ApprovalDto
+  ) {
+    const mockStaffId = 1;
+    return this.pendingService.unapprove(id, approvalDto.reason || '承認取り消し', mockStaffId);
+  }
 }
 
 @Controller('admin/pending-schedules')
