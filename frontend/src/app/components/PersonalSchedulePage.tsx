@@ -212,7 +212,7 @@ const PersonalSchedulePage: React.FC = () => {
       const response = await authenticatedFetch(`${getApiUrl()}/api/responsibilities?date=${dateString}`);
       if (response.ok) {
         const data = await response.json();
-        console.log(`担当設定データ取得 (${dateString}):`, data);
+        if (isDebugMode) console.log(`担当設定データ取得 (${dateString}):`, data);
         // APIレスポンスの構造を確認して適切に返す
         if (data.responsibilities && Array.isArray(data.responsibilities)) {
           return data.responsibilities;
@@ -221,7 +221,7 @@ const PersonalSchedulePage: React.FC = () => {
         }
       }
     } catch (error) {
-      console.error('担当設定データ取得エラー:', error);
+      console.error('担当設定データ取得エラー:', error); // エラーログは保持
     }
     return [];
   }, [authenticatedFetch, getApiUrl]);
@@ -245,7 +245,7 @@ const PersonalSchedulePage: React.FC = () => {
         
         // updatedDataが配列かどうかチェック
         if (Array.isArray(updatedData)) {
-          console.log('担当設定保存後のデータ更新:', updatedData);
+          if (isDebugMode) console.log('担当設定保存後のデータ更新:', updatedData);
           updatedData.forEach((assignment: any) => {
             const key = `${assignment.staffId}-${date}`;
             console.log(`責任データマップ更新: ${key}`, assignment);
@@ -278,7 +278,7 @@ const PersonalSchedulePage: React.FC = () => {
         return true;
       }
     } catch (error) {
-      console.error('担当設定保存エラー:', error);
+      console.error('担当設定保存エラー:', error); // エラーログは保持
     }
     return false;
   }, [authenticatedFetch, getApiUrl, fetchResponsibilityData, currentStaff]);
@@ -291,15 +291,17 @@ const PersonalSchedulePage: React.FC = () => {
     }
 
     try {
-      console.log('API URL:', getApiUrl());
-      console.log('ユーザーメール:', user.email);
+      if (isDev) {
+        console.log('API URL:', getApiUrl());
+        console.log('ユーザーメール:', user.email);
+      }
       
       const response = await authenticatedFetch(`${getApiUrl()}/api/staff`);
-      console.log('スタッフAPI レスポンス状態:', response.status);
+      if (isDev) console.log('スタッフAPI レスポンス状態:', response.status);
       
       if (response.ok) {
         const staffList: Staff[] = await response.json();
-        console.log('取得したスタッフリスト:', staffList);
+        if (isDev) console.log('取得したスタッフリスト:', staffList);
         
         // ユーザーメールから社員を検索
         let userStaff = staffList.find(staff => {
@@ -309,23 +311,23 @@ const PersonalSchedulePage: React.FC = () => {
         });
         
         if (!userStaff && staffList.length > 0) {
-          console.log('ユーザーに対応する社員が見つからないため、最初の社員を使用');
+          if (isDev) console.log('ユーザーに対応する社員が見つからないため、最初の社員を使用');
           userStaff = staffList[0];
         }
         
         if (userStaff) {
-          console.log('選択された社員:', userStaff);
+          if (isDev) console.log('選択された社員:', userStaff);
           setCurrentStaff(userStaff);
         } else {
           setError('対応する社員情報が見つかりません');
         }
       } else {
         const errorText = await response.text();
-        console.error('スタッフAPI エラー:', response.status, errorText);
+        console.error('スタッフAPI エラー:', response.status, errorText); // エラーログは保持
         setError(`社員情報の取得に失敗しました: ${response.status}`);
       }
     } catch (err) {
-      console.error('社員情報の取得に失敗:', err);
+      console.error('社員情報の取得に失敗:', err); // エラーログは保持
       setError('社員情報の取得中にエラーが発生しました');
     }
   }, [user, getApiUrl, authenticatedFetch]);
@@ -347,18 +349,231 @@ const PersonalSchedulePage: React.FC = () => {
     }
   }, [savedScrollPosition]);
 
+  // 開発環境でのみデバッグログを出力する制御
+  // デバッグモードを有効にするにはブラウザコンソールで: window.DEBUG_PERSONAL_SCHEDULE = true
+  const isDev = process.env.NODE_ENV === 'development';
+  const isDebugMode = isDev && (typeof window !== 'undefined' && (window as any).DEBUG_PERSONAL_SCHEDULE);
+
+  // ヘックス色をRGBに変換するユーティリティ関数
+  const hexToRgb = useCallback((hex: string) => {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result ? {
+      r: parseInt(result[1], 16),
+      g: parseInt(result[2], 16),
+      b: parseInt(result[3], 16)
+    } : null;
+  }, []);
+
+  // 色を藄くする関数（白とブレンド）
+  const lightenColor = useCallback((color: string, amount: number = 0.7): string => {
+    const rgb = hexToRgb(color);
+    if (!rgb) return color;
+
+    // 白とブレンドして薄くする
+    const r = Math.round(rgb.r + (255 - rgb.r) * amount);
+    const g = Math.round(rgb.g + (255 - rgb.g) * amount);
+    const b = Math.round(rgb.b + (255 - rgb.b) * amount);
+
+    return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+  }, [hexToRgb]);
+
+  // 色を暗くする関数（ボーダー用）
+  const darkenColor = useCallback((color: string, amount: number = 0.2): string => {
+    const rgb = hexToRgb(color);
+    if (!rgb) return color;
+
+    const r = Math.round(rgb.r * (1 - amount));
+    const g = Math.round(rgb.g * (1 - amount));
+    const b = Math.round(rgb.b * (1 - amount));
+
+    return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+  }, [hexToRgb]);
+
+  // WCAG標準に基づいた相対輝度計算
+  const getRelativeLuminance = useCallback((rgb: {r: number; g: number; b: number}): number => {
+    // 各色成分をsRGBから線形RGBに変換
+    const toLinear = (value: number): number => {
+      const normalized = value / 255;
+      return normalized <= 0.03928 
+        ? normalized / 12.92 
+        : Math.pow((normalized + 0.055) / 1.055, 2.4);
+    };
+
+    const r = toLinear(rgb.r);
+    const g = toLinear(rgb.g);
+    const b = toLinear(rgb.b);
+
+    // WCAG標準の相対輝度計算式
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  }, []);
+
+  // コントラスト比を計算
+  const getContrastRatio = useCallback((color1: {r: number; g: number; b: number}, color2: {r: number; g: number; b: number}): number => {
+    const lum1 = getRelativeLuminance(color1);
+    const lum2 = getRelativeLuminance(color2);
+    
+    const lighter = Math.max(lum1, lum2);
+    const darker = Math.min(lum1, lum2);
+    
+    return (lighter + 0.05) / (darker + 0.05);
+  }, [getRelativeLuminance]);
+
+  // RGBをHSLに変換
+  const rgbToHsl = useCallback((rgb: {r: number; g: number; b: number}) => {
+    const r = rgb.r / 255;
+    const g = rgb.g / 255;
+    const b = rgb.b / 255;
+
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    let h = 0;
+    let s = 0;
+    const l = (max + min) / 2;
+
+    if (max !== min) {
+      const d = max - min;
+      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+      
+      switch (max) {
+        case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+        case g: h = (b - r) / d + 2; break;
+        case b: h = (r - g) / d + 4; break;
+      }
+      h /= 6;
+    }
+
+    return { h: h * 360, s: s * 100, l: l * 100 };
+  }, []);
+
+  // HSLをRGBに変換
+  const hslToRgb = useCallback((h: number, s: number, l: number) => {
+    h = h / 360;
+    s = s / 100;
+    l = l / 100;
+
+    const hue2rgb = (p: number, q: number, t: number) => {
+      if (t < 0) t += 1;
+      if (t > 1) t -= 1;
+      if (t < 1/6) return p + (q - p) * 6 * t;
+      if (t < 1/2) return q;
+      if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+      return p;
+    };
+
+    if (s === 0) {
+      const gray = Math.round(l * 255);
+      return { r: gray, g: gray, b: gray };
+    }
+
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    const p = 2 * l - q;
+    
+    const r = Math.round(hue2rgb(p, q, h + 1/3) * 255);
+    const g = Math.round(hue2rgb(p, q, h) * 255);
+    const b = Math.round(hue2rgb(p, q, h - 1/3) * 255);
+
+    return { r, g, b };
+  }, []);
+
+  // 色相ベースで調和したテキスト色を生成
+  const getHueBasedTextColor = useCallback((backgroundColor: string): string => {
+    const bgRgb = hexToRgb(backgroundColor);
+    
+    if (!bgRgb) {
+      return '#000000';
+    }
+
+    const bgHsl = rgbToHsl(bgRgb);
+    const bgLuminance = getRelativeLuminance(bgRgb);
+    
+    // 背景の明度に基づいてベースとなる色を決定
+    const isDarkBackground = bgLuminance < 0.5;
+    
+    // 色相ベースのテキスト色候補を生成
+    const candidates = [];
+    
+    if (isDarkBackground) {
+      // 暗い背景の場合：明るい色をベースに
+      // 同系統の明るい色（彩度を下げて柔らかく）
+      candidates.push({
+        color: hslToRgb(bgHsl.h, Math.max(20, bgHsl.s * 0.3), 85),
+        name: 'harmonious-light'
+      });
+      
+      // 補色の明るい色（アクセント効果）
+      candidates.push({
+        color: hslToRgb((bgHsl.h + 180) % 360, Math.max(30, bgHsl.s * 0.5), 90),
+        name: 'complementary-light'
+      });
+      
+      // 純白とオフホワイト
+      candidates.push({ color: { r: 255, g: 255, b: 255 }, name: 'white' });
+      candidates.push({ color: { r: 248, g: 250, b: 252 }, name: 'off-white' });
+      
+    } else {
+      // 明るい背景の場合：暗い色をベースに
+      // 同系統の暗い色（彩度を高めて鮮やかに）
+      candidates.push({
+        color: hslToRgb(bgHsl.h, Math.min(80, Math.max(40, bgHsl.s * 1.2)), 25),
+        name: 'harmonious-dark'
+      });
+      
+      // 補色の暗い色
+      candidates.push({
+        color: hslToRgb((bgHsl.h + 180) % 360, Math.min(70, Math.max(35, bgHsl.s * 0.8)), 30),
+        name: 'complementary-dark'
+      });
+      
+      // チャコール系
+      candidates.push({ color: { r: 31, g: 41, b: 55 }, name: 'charcoal' });  // #1f2937
+      candidates.push({ color: { r: 17, g: 24, b: 39 }, name: 'dark-blue' }); // #111827
+    }
+    
+    // 各候補色とのコントラスト比を計算
+    const contrastResults = candidates.map(candidate => {
+      const contrast = getContrastRatio(bgRgb, candidate.color);
+      return {
+        ...candidate,
+        contrast,
+        hex: `#${candidate.color.r.toString(16).padStart(2, '0')}${candidate.color.g.toString(16).padStart(2, '0')}${candidate.color.b.toString(16).padStart(2, '0')}`
+      };
+    });
+    
+    // WCAG AAレベルを満たす色を優先選択
+    const minContrast = 4.5;
+    const validCandidates = contrastResults.filter(c => c.contrast >= minContrast);
+    
+    if (validCandidates.length > 0) {
+      // 調和系の色を優先し、次にコントラストの高い色を選択
+      const harmoniousCandidates = validCandidates.filter(c => c.name.includes('harmonious'));
+      if (harmoniousCandidates.length > 0) {
+        return harmoniousCandidates.sort((a, b) => b.contrast - a.contrast)[0].hex;
+      }
+      
+      // 調和系がない場合は最高コントラストを選択
+      return validCandidates.sort((a, b) => b.contrast - a.contrast)[0].hex;
+    }
+    
+    // 最低でも最高コントラストを選択
+    const bestCandidate = contrastResults.sort((a, b) => b.contrast - a.contrast)[0];
+    return bestCandidate.hex;
+    
+  }, [hexToRgb, rgbToHsl, hslToRgb, getRelativeLuminance, getContrastRatio]);
+
   // スケジュールデータを取得
   const fetchSchedules = useCallback(async () => {
     if (!currentStaff) {
-      console.log('currentStaffが設定されていないため、スケジュール取得をスキップ');
+      if (isDev) console.log('currentStaffが設定されていないため、スケジュール取得をスキップ');
       return;
     }
 
-    console.log('スケジュール取得開始:', {
-      currentStaff: currentStaff.name,
-      staffId: currentStaff.id,
-      monthDays: monthDays.length
-    });
+    if (isDev) {
+      console.log('スケジュール取得開始:', {
+        currentStaff: currentStaff.name,
+        staffId: currentStaff.id,
+        monthDays: monthDays.length
+      });
+    }
 
     setLoading(true);
     setError(null);
@@ -367,13 +582,13 @@ const PersonalSchedulePage: React.FC = () => {
       const promises = monthDays.map(async (day) => {
         const dateStr = format(day, 'yyyy-MM-dd');
         const url = `${getApiUrl()}/api/schedules/unified?date=${dateStr}&includeMasking=false`;
-        console.log(`API呼び出し: ${url}`);
+        if (isDebugMode) console.log(`API呼び出し: ${url}`);
         
         const response = await authenticatedFetch(url);
         
         if (response.ok) {
           const data = await response.json();
-          console.log(`${dateStr}のレスポンス:`, data);
+          if (isDebugMode) console.log(`${dateStr}のレスポンス:`, data);
           
           const filteredSchedules = data.schedules?.filter((schedule: Schedule) => 
             schedule.staffId === currentStaff.id
@@ -396,7 +611,7 @@ const PersonalSchedulePage: React.FC = () => {
 
       const results = await Promise.all(promises);
       const allSchedules = results.flat();
-      console.log('全スケジュール取得完了:', allSchedules.length, '件');
+      if (isDev) console.log('全スケジュール取得完了:', allSchedules.length, '件');
       
       setSchedules(allSchedules);
       
@@ -421,11 +636,13 @@ const PersonalSchedulePage: React.FC = () => {
   const loadResponsibilityData = useCallback(async () => {
     if (!currentStaff) return;
     
-    console.log('担当設定データ読み込み開始（メイン画面方式）:', {
-      staffId: currentStaff.id,
-      staffName: currentStaff.name,
-      monthDaysCount: monthDays.length
-    });
+    if (isDev) {
+      console.log('担当設定データ読み込み開始（メイン画面方式）:', {
+        staffId: currentStaff.id,
+        staffName: currentStaff.name,
+        monthDaysCount: monthDays.length
+      });
+    }
     
     const responsibilityMap: { [key: string]: ResponsibilityData } = {};
     
@@ -437,14 +654,14 @@ const PersonalSchedulePage: React.FC = () => {
         const response = await authenticatedFetch(`${getApiUrl()}/api/responsibilities?date=${dateString}`);
         if (response.ok) {
           const data = await response.json();
-          console.log(`${dateString}の担当設定データ（メイン画面形式）:`, data);
+          if (isDebugMode) console.log(`${dateString}の担当設定データ（メイン画面形式）:`, data);
           
           // メイン画面と同じ構造: {responsibilities: [...]}
           if (data.responsibilities && Array.isArray(data.responsibilities)) {
             data.responsibilities.forEach((responsibilityInfo: any) => {
               if (responsibilityInfo.staffId === currentStaff.id && responsibilityInfo.responsibilities) {
                 const key = `${responsibilityInfo.staffId}-${dateString}`;
-                console.log(`担当設定マップ追加（メイン画面方式）: ${key}`, responsibilityInfo.responsibilities);
+                if (isDebugMode) console.log(`担当設定マップ追加（メイン画面方式）: ${key}`, responsibilityInfo.responsibilities);
                 
                 // メイン画面と同じように、responsibilityInfo.responsibilitiesを直接使用
                 responsibilityMap[key] = responsibilityInfo.responsibilities;
@@ -551,14 +768,14 @@ const PersonalSchedulePage: React.FC = () => {
     const key = `${currentStaff.id}-${dateString}`;
     const responsibility = responsibilityData[key];
     
-    console.log('バッジ生成チェック:', {
-      date: dateString,
-      staffId: currentStaff.id,
-      key,
-      responsibility,
-      responsibilityDataKeys: Object.keys(responsibilityData),
-      responsibilityDataValues: responsibilityData
-    });
+    // バッジ生成ログを削除（高頻度実行でパフォーマンスに影響）
+    if (isDebugMode) {
+      console.log('バッジ生成チェック:', {
+        date: dateString,
+        staffId: currentStaff.id,
+        key
+      });
+    }
     
     if (!responsibility) return [];
     
@@ -591,12 +808,14 @@ const PersonalSchedulePage: React.FC = () => {
     }
 
     const dateStr = format(targetDate, 'yyyy-MM-dd');
-    console.log('プリセット予定追加:', {
-      preset: preset.name,
-      targetDate: dateStr,
-      currentStaff: currentStaff.name,
-      schedulesCount: preset.schedules.length
-    });
+    if (isDev) {
+      console.log('プリセット予定追加:', {
+        preset: preset.name,
+        targetDate: dateStr,
+        currentStaff: currentStaff.name,
+        schedulesCount: preset.schedules.length
+      });
+    }
     
     try {
       const url = `${getApiUrl()}/api/schedules`;
@@ -612,7 +831,7 @@ const PersonalSchedulePage: React.FC = () => {
           date: dateStr,
         };
 
-        console.log('送信データ:', newSchedule);
+        if (isDebugMode) console.log('送信データ:', newSchedule);
 
         const response = await authenticatedFetch(url, {
           method: 'POST',
@@ -627,7 +846,7 @@ const PersonalSchedulePage: React.FC = () => {
         }
 
         const result = await response.json();
-        console.log('追加成功:', result);
+        if (isDev) console.log('追加成功:', result);
       }
       
       // 全スケジュール追加後にデータを再取得
@@ -636,17 +855,17 @@ const PersonalSchedulePage: React.FC = () => {
       
       // 成功メッセージ
       setError(null);
-      console.log(`${preset.name}を追加しました（${preset.schedules.length}件）`);
+      if (isDev) console.log(`${preset.name}を追加しました（${preset.schedules.length}件）`);
       
     } catch (err) {
-      console.error('スケジュール追加エラー:', err);
+      console.error('スケジュール追加エラー:', err); // エラーログは保持
       setError(`${preset.name}の追加に失敗しました`);
     }
   }, [currentStaff, getApiUrl, authenticatedFetch, fetchSchedules, saveScrollPosition]);
 
   // スケジュール保存ハンドラー（メイン画面と同じ）
   const handleSaveSchedule = useCallback(async (scheduleData: Schedule & { id?: number | string; date?: string }) => {
-    console.log('スケジュール保存:', scheduleData);
+    if (isDev) console.log('スケジュール保存:', scheduleData);
     
     try {
       const isEditing = scheduleData.id !== undefined;
@@ -670,7 +889,7 @@ const PersonalSchedulePage: React.FC = () => {
           });
           
           if (response.ok) {
-            console.log('スケジュール作成成功');
+            if (isDev) console.log('スケジュール作成成功');
             saveScrollPosition();
             await fetchSchedules();
             setIsModalOpen(false);
@@ -694,7 +913,7 @@ const PersonalSchedulePage: React.FC = () => {
           });
           
           if (response.ok) {
-            console.log('スケジュール更新成功');
+            if (isDev) console.log('スケジュール更新成功');
             saveScrollPosition();
             await fetchSchedules();
             setIsModalOpen(false);
@@ -721,7 +940,7 @@ const PersonalSchedulePage: React.FC = () => {
         });
         
         if (response.ok) {
-          console.log('スケジュール作成成功');
+          if (isDev) console.log('スケジュール作成成功');
           await fetchSchedules();
           setIsModalOpen(false);
           setDraggedSchedule(null);
@@ -731,14 +950,14 @@ const PersonalSchedulePage: React.FC = () => {
         }
       }
     } catch (err) {
-      console.error('スケジュール保存エラー:', err);
+      console.error('スケジュール保存エラー:', err); // エラーログは保持
       setError('スケジュールの保存中にエラーが発生しました');
     }
   }, [currentStaff, getApiUrl, authenticatedFetch, fetchSchedules, saveScrollPosition]);
 
   // スケジュール削除ハンドラー
   const handleDeleteSchedule = useCallback(async (scheduleId: number | string) => {
-    console.log('スケジュール削除:', scheduleId, typeof scheduleId);
+    if (isDev) console.log('スケジュール削除:', scheduleId, typeof scheduleId);
     
     try {
       let actualId: number;
@@ -749,7 +968,7 @@ const PersonalSchedulePage: React.FC = () => {
         const parts = scheduleId.split('_');
         if (parts.length >= 3) {
           actualId = parseInt(parts[2], 10);
-          console.log('統合ID形式から数値ID抽出:', scheduleId, '->', actualId);
+          if (isDebugMode) console.log('統合ID形式から数値ID抽出:', scheduleId, '->', actualId);
         } else {
           console.error('統合ID形式から数値IDを抽出できません:', scheduleId);
           setError('削除対象の予定IDが不正です');
@@ -764,7 +983,7 @@ const PersonalSchedulePage: React.FC = () => {
       });
       
       if (response.ok) {
-        console.log('スケジュール削除成功');
+        if (isDev) console.log('スケジュール削除成功');
         saveScrollPosition();
         await fetchSchedules();
         setDeletingScheduleId(null);
@@ -774,7 +993,7 @@ const PersonalSchedulePage: React.FC = () => {
         setError(errorData.message || 'スケジュールの削除に失敗しました');
       }
     } catch (err) {
-      console.error('スケジュール削除エラー:', err);
+      console.error('スケジュール削除エラー:', err); // エラーログは保持
       setError('スケジュールの削除中にエラーが発生しました');
     }
   }, [getApiUrl, authenticatedFetch, fetchSchedules, saveScrollPosition]);
@@ -868,12 +1087,12 @@ const PersonalSchedulePage: React.FC = () => {
     const rect = e.currentTarget.getBoundingClientRect();
     const startX = e.clientX - rect.left;
     
-    console.log('=== タイムラインドラッグ開始 ===');
-    console.log('day:', format(day, 'yyyy-MM-dd'));
-    console.log('startX:', startX);
-    console.log('currentStaff:', currentStaff?.name);
-    console.log('target element:', e.target);
-    console.log('currentTarget element:', e.currentTarget);
+    if (isDebugMode) {
+      console.log('=== タイムラインドラッグ開始 ===');
+      console.log('day:', format(day, 'yyyy-MM-dd'));
+      console.log('startX:', startX);
+      console.log('currentStaff:', currentStaff?.name);
+    }
     
     setDragInfo({ 
       staff: currentStaff, 
@@ -900,10 +1119,10 @@ const PersonalSchedulePage: React.FC = () => {
       }
 
       const dragDistance = Math.abs(dragInfo.startX - dragInfo.currentX);
-      console.log('ドラッグ終了:', { dragDistance });
+      if (isDebugMode) console.log('ドラッグ終了:', { dragDistance });
 
       if (dragDistance < 10) {
-        console.log('ドラッグ距離不足、キャンセル');
+        if (isDebugMode) console.log('ドラッグ距離不足、キャンセル');
         setDragInfo(null);
         return; // 10px未満の移動は無効化
       }
@@ -917,19 +1136,21 @@ const PersonalSchedulePage: React.FC = () => {
       const snappedStart = Math.round(start * 4) / 4; // 15分単位
       const snappedEnd = Math.round(end * 4) / 4;
 
-      console.log('時刻変換:', { start, end, snappedStart, snappedEnd });
+      if (isDebugMode) console.log('時刻変換:', { start, end, snappedStart, snappedEnd });
 
       if (snappedStart < snappedEnd && snappedStart >= 8 && snappedEnd <= 21) {
         // 新規予定作成
-        console.log('=== 予定作成モーダルを開く ===');
-        console.log('作成する予定:', {
-          staffId: dragInfo.staff.id,
-          staffName: dragInfo.staff.name,
-          status: 'online',
-          start: snappedStart,
-          end: snappedEnd,
-          date: format(dragInfo.day, 'yyyy-MM-dd')
-        });
+        if (isDebugMode) {
+          console.log('=== 予定作成モーダルを開く ===');
+          console.log('作成する予定:', {
+            staffId: dragInfo.staff.id,
+            staffName: dragInfo.staff.name,
+            status: 'online',
+            start: snappedStart,
+            end: snappedEnd,
+            date: format(dragInfo.day, 'yyyy-MM-dd')
+          });
+        }
         // 予定作成モーダルを開く
         setDraggedSchedule({
           staffId: dragInfo.staff.id,
@@ -940,8 +1161,10 @@ const PersonalSchedulePage: React.FC = () => {
         });
         setIsModalOpen(true);
       } else {
-        console.log('=== 時刻範囲が無効 ===');
-        console.log('無効な範囲:', { snappedStart, snappedEnd, valid_range: '8-21' });
+        if (isDebugMode) {
+          console.log('=== 時刻範囲が無効 ===');
+          console.log('無効な範囲:', { snappedStart, snappedEnd, valid_range: '8-21' });
+        }
       }
       setDragInfo(null);
     };
@@ -1150,22 +1373,19 @@ const PersonalSchedulePage: React.FC = () => {
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
             {presetSchedules.map((preset) => {
-              // ステータスに応じた色を設定
-              const getStatusColor = (scheduleStatus: string) => {
-                switch (scheduleStatus) {
-                  case 'online': return 'bg-green-200 border-green-300 text-green-800';
-                  case 'remote': return 'bg-emerald-200 border-emerald-300 text-emerald-800';
-                  case 'meeting': return 'bg-amber-200 border-amber-300 text-amber-800';
-                  case 'training': return 'bg-blue-200 border-blue-300 text-blue-800';
-                  case 'break': return 'bg-orange-200 border-orange-300 text-orange-800';
-                  case 'off': return 'bg-red-200 border-red-300 text-red-800';
-                  case 'unplanned': return 'bg-red-300 border-red-400 text-red-900';
-                  case 'night duty': return 'bg-indigo-200 border-indigo-300 text-indigo-800';
-                  default: return 'bg-gray-200 border-gray-300 text-gray-800';
-                }
-              };
+              const status = preset.schedules[0]?.status || 'online';
               
-              const statusColor = getStatusColor(preset.schedules[0]?.status || '');
+              // STATUS_COLORSから元の色を取得
+              const originalColor = STATUS_COLORS[status] || STATUS_COLORS.online;
+              
+              // 背景色を薄くした色を生成（白と70%ブレンド）
+              const lightBackgroundColor = lightenColor(originalColor, 0.7);
+              
+              // ボーダー色を少し暗くした色を生成
+              const borderColor = darkenColor(lightBackgroundColor, 0.3);
+              
+              // 色相ベースで調和したテキスト色を決定
+              const textColor = getHueBasedTextColor(lightBackgroundColor);
               
               return (
                 <button
@@ -1174,7 +1394,12 @@ const PersonalSchedulePage: React.FC = () => {
                     const targetDate = selectedDateForPreset || new Date();
                     addPresetSchedule(preset, targetDate);
                   }}
-                  className={`p-2 text-sm border rounded-lg hover:opacity-80 transition-colors text-left ${statusColor}`}
+                  className="p-2 text-sm border rounded-lg hover:opacity-80 transition-colors text-left"
+                  style={{
+                    backgroundColor: lightBackgroundColor,
+                    borderColor: borderColor,
+                    color: textColor
+                  }}
                 >
                   <div className="font-medium">{preset.displayName}</div>
                   <div className="text-xs mt-1 opacity-75">

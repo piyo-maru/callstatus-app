@@ -1067,18 +1067,6 @@ function MonthlyPlannerPageContent() {
               >
                 ログアウト
               </button>
-              {/* 承認モードトグル */}
-              <label className="flex items-center space-x-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={isApprovalMode}
-                  onChange={(e) => setIsApprovalMode(e.target.checked)}
-                  className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
-                />
-                <span className={`font-medium ${isApprovalMode ? 'text-blue-600' : 'text-gray-600'}`}>
-                  承認モード
-                </span>
-              </label>
             </div>
           </div>
         </div>
@@ -1113,6 +1101,19 @@ function MonthlyPlannerPageContent() {
               {currentMonth.getFullYear()}年{currentMonth.getMonth() + 1}月
             </h2>
           </div>
+
+          {/* 承認モードトグル - 月表示の右側 */}
+          <label className="flex items-center space-x-2 text-sm">
+            <input
+              type="checkbox"
+              checked={isApprovalMode}
+              onChange={(e) => setIsApprovalMode(e.target.checked)}
+              className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+            />
+            <span className={`font-medium ${isApprovalMode ? 'text-blue-600' : 'text-gray-600'}`}>
+              承認モード
+            </span>
+          </label>
         </div>
 
         {/* フィルター行 */}
