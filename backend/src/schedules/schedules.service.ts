@@ -42,16 +42,21 @@ export class SchedulesService {
       console.log(`Found ${layeredSchedules.length} layered schedules`);
 
       // LayeredScheduleを従来のSchedule形式に変換
-      const schedules = layeredSchedules.map((ls, index) => ({
-        id: this.generateLayerBasedId(ls.layer, ls.id, index),
-        staffId: ls.staffId,
-        status: ls.status,
-        start: this.utcToJstDecimal(ls.start),
-        end: this.utcToJstDecimal(ls.end),
-        memo: ls.memo || null,
-        editable: ls.layer === 'adjustment', // 調整レイヤーのみ編集可能
-        layer: ls.layer // レイヤー情報を追加
-      }));
+      const schedules = layeredSchedules.map((ls, index) => {
+        // 統一された文字列ID生成（フロントエンドとの整合性確保）
+        const stringId = `${ls.layer}_${ls.id}_${index}`;
+        
+        return {
+          id: stringId,
+          staffId: ls.staffId,
+          status: ls.status,
+          start: this.utcToJstDecimal(ls.start),
+          end: this.utcToJstDecimal(ls.end),
+          memo: ls.memo || null,
+          editable: ls.layer === 'adjustment', // 調整レイヤーのみ編集可能
+          layer: ls.layer // レイヤー情報を追加
+        };
+      });
 
       console.log(`Converted to ${schedules.length} schedule records`);
       return { 
@@ -128,14 +133,17 @@ export class SchedulesService {
     console.log(`JST時刻 ${createScheduleDto.start} → UTC時刻 ${startUtc.toISOString()}`);
     console.log(`JST時刻 ${createScheduleDto.end} → UTC時刻 ${endUtc.toISOString()}`);
     
-    // 一時的にScheduleテーブルを使用（Adjustmentのスキーマ設定に問題があるため）
-    const newSchedule = await this.prisma.schedule.create({
+    // 調整レイヤー（Adjustmentテーブル）に保存（2層システム設計に準拠）
+    const newSchedule = await this.prisma.adjustment.create({
       data: {
         staffId: createScheduleDto.staffId,
         status: createScheduleDto.status,
         start: startUtc,
         end: endUtc,
-        memo: createScheduleDto.memo || null
+        memo: createScheduleDto.memo || null,
+        date: new Date(`${createScheduleDto.date}T00:00:00Z`), // 日付フィールド（UTC）
+        updatedAt: new Date(), // 必須フィールド
+        isPending: false // pending機能以外の通常予定はfalse
       },
     });
     
@@ -173,14 +181,21 @@ export class SchedulesService {
     }
 
     try {
-      // 一時的にScheduleテーブルを使用（createと整合性保持）
-      console.log(`Calling updateScheduleTable with ID: ${id}`);
-      const result = await this.updateScheduleTable(id, updateScheduleDto);
-      console.log('Update successful:', result);
-      return result;
-    } catch (error) {
-      console.error('Update error in service:', error.message);
-      throw error;
+      // まずAdjustmentテーブルで試す（調整レイヤー）
+      console.log(`Attempting to update in Adjustment table with ID: ${id}`);
+      return await this.updateAdjustmentSchedule(id, updateScheduleDto);
+    } catch (adjustmentError) {
+      console.log(`Not found in Adjustment table, trying Schedule table: ${adjustmentError.message}`);
+      
+      try {
+        // AdjustmentテーブルになければScheduleテーブルで試す（旧データ）
+        console.log(`Attempting to update in Schedule table with ID: ${id}`);
+        return await this.updateScheduleTable(id, updateScheduleDto);
+      } catch (scheduleError) {
+        console.error(`Schedule not found in both tables: ${scheduleError.message}`);
+        console.warn(`データ不整合の可能性: ID ${id} が表示されているが、データベースに存在しません`);
+        throw new NotFoundException(`指定されたスケジュールが見つかりません (ID: ${id})`);
+      }
     }
   }
 
@@ -236,26 +251,55 @@ export class SchedulesService {
     return response;
   }
 
-  async remove(id: number) {
-    // Contractレイヤー（ID範囲: 1000000-1999999）は削除不可
-    if (id >= 1000000 && id < 2000000) {
-      throw new NotFoundException(`契約レイヤーのスケジュールは削除不可能です (ID: ${id})`);
+  async remove(id: number | string) {
+    console.log(`Attempting to remove schedule with ID: ${id}, type: ${typeof id}`);
+    
+    // 文字列IDの場合は実際のデータベースIDを抽出
+    let actualId: number;
+    if (typeof id === 'string') {
+      // adjustment_adj_123_0 または adj_123 形式から数値IDを抽出
+      if (id.startsWith('adjustment_adj_')) {
+        // adjustment_adj_123_0 → 123
+        const parts = id.split('_');
+        actualId = parseInt(parts[2], 10);
+        console.log(`統合ID形式から実際のID抽出: ${id} → ${actualId}`);
+      } else if (id.startsWith('adj_')) {
+        // adj_123 → 123
+        actualId = this.extractScheduleId(id);
+        console.log(`調整レイヤーIDから実際のID抽出: ${id} → ${actualId}`);
+      } else {
+        // その他の文字列ID形式
+        const numericId = parseInt(id, 10);
+        if (isNaN(numericId)) {
+          throw new BadRequestException(`無効なID形式: ${id}`);
+        }
+        actualId = numericId;
+      }
+    } else {
+      actualId = id;
     }
 
-    console.log(`Attempting to remove schedule with ID: ${id}`);
+    // Contractレイヤー（ID範囲: 1000000-1999999）は削除不可
+    if (actualId >= 1000000 && actualId < 2000000) {
+      throw new NotFoundException(`契約レイヤーのスケジュールは削除不可能です (ID: ${actualId})`);
+    }
+
+    console.log(`Using actual ID for deletion: ${actualId}`);
     
     try {
-      // まずAdjustmentテーブルで試す（調整レイヤー）
-      return await this.removeAdjustmentSchedule(id);
+      // 2層システム設計に準拠：新規作成されたスケジュールはAdjustmentテーブルに保存されるため、まずAdjustmentテーブルで試す
+      return await this.removeAdjustmentSchedule(actualId);
     } catch (adjustmentError) {
-      console.log(`Not found in Adjustment table, trying Schedule table: ${adjustmentError.message}`);
+      console.log(`Not found in Adjustment table, trying legacy Schedule table: ${adjustmentError.message}`);
       
       try {
-        // AdjustmentテーブルになければScheduleテーブルで試す（旧データ）
-        return await this.removeScheduleTable(id);
+        // AdjustmentテーブルになければScheduleテーブルで試す（旧データの後方互換性）
+        return await this.removeScheduleTable(actualId);
       } catch (scheduleError) {
         console.error(`Schedule not found in both tables: ${scheduleError.message}`);
-        throw new NotFoundException(`指定されたスケジュールが見つかりません (ID: ${id})`);
+        console.warn(`データ不整合の可能性: ID ${actualId} が表示されているが、データベースに存在しません`);
+        // ユーザーには削除成功として扱う（既に存在しないため）
+        return { id: actualId, message: 'スケジュールは既に削除済みです' };
       }
     }
   }

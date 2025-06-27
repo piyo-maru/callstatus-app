@@ -391,34 +391,9 @@ export class SchedulesController {
   async remove(@Param('id') id: string) {
     // 一時的に権限チェックをスキップ（認証システム修正まで）
     
-    // 文字列IDを数値IDに変換
-    let numericId: number;
-    console.log(`Parsing delete ID: ${id}`);
+    console.log(`Delete schedule request with ID: ${id}, type: ${typeof id}`);
     
-    if (id.startsWith('adjustment_adj_')) {
-      // "adjustment_adj_2283_397" 形式から実際のIDを抽出
-      // 構造: adjustment_adj_{実際のID}_{配列インデックス}
-      const parts = id.split('_');
-      if (parts.length >= 3) {
-        numericId = parseInt(parts[2]) || 0; // adj_の次の数値が実際のID
-      }
-    } else if (id.startsWith('adj_')) {
-      // "adj_123" 形式から数値IDを抽出
-      const parts = id.split('_');
-      numericId = parseInt(parts[1]) || 0;
-    } else if (id.startsWith('adjustment_sch_')) {
-      // "adjustment_sch_31_468" 形式から実際のIDを抽出
-      // 構造: adjustment_sch_{実際のID}_{配列インデックス}
-      const parts = id.split('_');
-      if (parts.length >= 3) {
-        numericId = parseInt(parts[2]) || 0; // sch_の次の数値が実際のID
-      }
-    } else {
-      // 通常の数値ID
-      numericId = +id;
-    }
-    
-    console.log(`Delete schedule: ${id} -> ${numericId}`);
-    return this.schedulesService.remove(numericId);
+    // 文字列IDをそのままサービスに渡す（サービス側でID抽出処理を実行）
+    return this.schedulesService.remove(id);
   }
 }

@@ -85,7 +85,7 @@ type ScheduleFromDB = {
 };
 
 type Schedule = {
-  id: number;
+  id: number | string;
   staffId: number;
   status: string;
   start: number;
@@ -204,8 +204,12 @@ const teamColors: { [key: string]: string } = {
 };
 // 設定ファイルからAPIのURLを取得する関数
 const getApiUrl = (): string => {
-  // 相対パスを使用してCORSを回避
-  return '';
+  // バックエンドAPIのURLを正しく設定
+  if (typeof window !== 'undefined' && window.APP_CONFIG?.API_HOST) {
+    return window.APP_CONFIG.API_HOST;
+  }
+  const currentHost = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
+  return `http://${currentHost}:3002`;
 };
 const availableStatuses = ['online', 'remote', 'meeting', 'training', 'break', 'off', 'unplanned', 'night duty'];
 const AVAILABLE_STATUSES = ['online', 'remote', 'night duty'];
@@ -409,9 +413,9 @@ const ScheduleModal = ({ isOpen, onClose, staffList, onSave, scheduleToEdit, ini
     }
   }, [scheduleToEdit, initialData, isOpen]);
 
-  // 開始時刻変更時に終了時刻を自動調整（新規作成時のみ）
+  // 開始時刻変更時に終了時刻を自動調整（新規作成時のみ、ドラッグ作成は除く）
   useEffect(() => {
-    if (!isEditMode && startTime && parseFloat(startTime) > 0) {
+    if (!isEditMode && !initialData?.isDragCreated && startTime && parseFloat(startTime) > 0) {
       const start = parseFloat(startTime);
       let newEndTime = start + 1; // 1時間後
       
@@ -422,7 +426,7 @@ const ScheduleModal = ({ isOpen, onClose, staffList, onSave, scheduleToEdit, ini
       
       setEndTime(newEndTime.toString());
     }
-  }, [startTime, isEditMode]);
+  }, [startTime, isEditMode, initialData?.isDragCreated]);
 
   if (!isOpen || !isClient) return null;
 
@@ -2367,7 +2371,7 @@ const StatusChart = ({ data, staffList, selectedDepartment, selectedGroup, showC
                 <YAxis allowDecimals={false} tick={{ fontSize: 10 }} width={25} />
                 <Tooltip 
                   wrapperStyle={{ zIndex: 100 }}
-                  formatter={(value, name) => [value, capitalizeStatus(name)]}
+                  formatter={(value, name) => [value, capitalizeStatus(String(name))]}
                   labelFormatter={(label) => `時刻: ${label}`}
                 />
                 {/* Legendを非表示にする */}
@@ -2401,8 +2405,8 @@ export default function FullMainApp() {
 
   // 認証対応API呼び出しヘルパー
   const authenticatedFetch = useCallback(async (url: string, options: RequestInit = {}) => {
-    const headers = {
-      ...options.headers,
+    const headers: Record<string, string> = {
+      ...options.headers as Record<string, string>,
     };
 
     // FormDataを使用する場合はContent-Typeを設定しない（ブラウザが自動設定）
@@ -2437,8 +2441,8 @@ export default function FullMainApp() {
     
     const roles = Array.isArray(requiredRole) ? requiredRole : [requiredRole];
     
-    // USER の場合、自分のスタッフIDと一致する場合のみ編集可能
-    if (user.role === 'USER' && targetStaffId !== undefined) {
+    // STAFF の場合、自分のスタッフIDと一致する場合のみ編集可能
+    if (user.role === 'STAFF' && targetStaffId !== undefined) {
       return targetStaffId === user.staffId;
     }
     
@@ -2447,7 +2451,7 @@ export default function FullMainApp() {
 
   // UI表示制御ヘルパー
   const canEdit = useCallback((targetStaffId?: number) => {
-    return hasPermission(['USER', 'ADMIN'], targetStaffId);
+    return hasPermission(['STAFF', 'ADMIN'], targetStaffId);
   }, [hasPermission]);
 
   const canManage = useCallback(() => {
@@ -2768,8 +2772,8 @@ export default function FullMainApp() {
         // 支援設定（temporary assignment）を探す
         const tempAssignment = supportData.assignments?.find((s: any) => 
           s.staffId === staff.id && s.type === 'temporary'
-        );
-        const responsibilityInfo = responsibilityData.responsibilities?.find((r: any) => r.staffId === staff.id);
+        ) as any;
+        const responsibilityInfo = responsibilityData.responsibilities?.find((r: any) => r.staffId === staff.id) as any;
         
         let result = { ...staff };
         
@@ -2938,8 +2942,8 @@ export default function FullMainApp() {
     return { startTime, endTime };
   };
 
-  const handleOpenModal = (schedule: Schedule | null = null, initialData: Partial<Schedule> | null = null) => {
-    console.log('=== handleOpenModal ===', { schedule, initialData });
+  const handleOpenModal = (schedule: Schedule | null = null, initialData: Partial<Schedule> | null = null, isDragCreated: boolean = false) => {
+    console.log('=== handleOpenModal ===', { schedule, initialData, isDragCreated });
     
     // 新規作成時（scheduleもinitialDataもない場合）は現在時刻を自動設定
     let finalInitialData = initialData;
@@ -2962,13 +2966,21 @@ export default function FullMainApp() {
       console.log('自動時刻設定:', { startTime, endTime });
     }
     
+    // ドラッグ作成フラグを追加（モーダル内で自動調整を無効にするため）
+    if (finalInitialData && isDragCreated) {
+      finalInitialData.isDragCreated = true;
+    }
+    
     setEditingSchedule(schedule);
     setDraggedSchedule(finalInitialData);
     setIsModalOpen(true);
     console.log('Modal opened, isModalOpen set to true');
   };
   
-  const handleSaveSchedule = async (scheduleData: Schedule & { id?: number }) => {
+  // メイン画面では全て /api/schedules を使用（バックエンドで複合ID処理済み）
+  // IDの変換は不要 - 複合IDをそのまま送信
+
+  const handleSaveSchedule = async (scheduleData: Schedule & { id?: number | string }) => {
     // JST基準で正しい日付文字列を生成
     const year = displayDate.getFullYear();
     const month = String(displayDate.getMonth() + 1).padStart(2, '0');
@@ -3011,20 +3023,14 @@ export default function FullMainApp() {
       let response;
       if (scheduleData.id) {
         console.log('PATCH request to:', `${currentApiUrl}/api/schedules/${scheduleData.id}`);
-        response = await fetch(`${currentApiUrl}/api/schedules/${scheduleData.id}`, { 
+        response = await authenticatedFetch(`${currentApiUrl}/api/schedules/${scheduleData.id}`, { 
           method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-          },
           body: JSON.stringify(payload) 
         });
       } else {
         console.log('POST request to:', `${currentApiUrl}/api/schedules`);
-        response = await fetch(`${currentApiUrl}/api/schedules`, { 
+        response = await authenticatedFetch(`${currentApiUrl}/api/schedules`, { 
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
           body: JSON.stringify(payload) 
         });
       }
@@ -3055,14 +3061,31 @@ export default function FullMainApp() {
     }
   };
   
-  const handleDeleteSchedule = async (id: number) => {
+  const handleDeleteSchedule = async (id: number | string) => {
     const currentApiUrl = getApiUrl();
     try {
-      await authenticatedFetch(`${currentApiUrl}/api/schedules/${id}`, { method: 'DELETE' });
-      console.log('Schedule deleted successfully, fetching updated data...');
+      console.log('DELETE request to:', `${currentApiUrl}/api/schedules/${id}`);
+      const response = await authenticatedFetch(`${currentApiUrl}/api/schedules/${id}`, { method: 'DELETE' });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(`予定の削除に失敗しました: ${response.status} ${response.statusText} - ${errorData.message || 'Unknown error'}`);
+      }
+      
+      const responseData = await response.json().catch(() => null);
+      if (responseData?.message) {
+        console.log('Schedule deletion result:', responseData.message);
+        alert(responseData.message); // 既に削除済みなどのメッセージを表示
+      } else {
+        console.log('Schedule deleted successfully, fetching updated data...');
+      }
+      
       // データを再取得してUIを更新
       await fetchData(displayDate);
-    } catch (error) { console.error('予定の削除に失敗しました', error); }
+    } catch (error) { 
+      console.error('予定の削除に失敗しました', error);
+      alert(`予定の削除に失敗しました: ${error instanceof Error ? error.message : String(error)}`);
+    }
     setDeletingScheduleId(null);
   };
 
@@ -3451,7 +3474,7 @@ export default function FullMainApp() {
     }
   };
 
-  const handleMoveSchedule = async (scheduleId: number, newStaffId: number, newStart: number, newEnd: number) => {
+  const handleMoveSchedule = async (scheduleId: number | string, newStaffId: number, newStart: number, newEnd: number) => {
     // 権限チェック：移動先スタッフの編集権限があるかチェック
     if (!canEdit(newStaffId)) {
       alert('このスタッフのスケジュールを編集する権限がありません。');
@@ -3466,6 +3489,7 @@ export default function FullMainApp() {
     const date = `${year}-${month}-${day}`;
     
     try {
+      console.log('MOVE PATCH request to:', `${currentApiUrl}/api/schedules/${scheduleId}`);
       const response = await authenticatedFetch(`${currentApiUrl}/api/schedules/${scheduleId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -3529,7 +3553,7 @@ export default function FullMainApp() {
         const snappedStart = Math.round(start * 4) / 4;
         const snappedEnd = Math.round(end * 4) / 4;
         if (snappedStart < snappedEnd) {
-            handleOpenModal(null, { staffId: dragInfo.staff.id, start: snappedStart, end: snappedEnd });
+            handleOpenModal(null, { staffId: dragInfo.staff.id, start: snappedStart, end: snappedEnd }, true);
         }
         setDragInfo(null);
     };
@@ -3568,7 +3592,7 @@ export default function FullMainApp() {
   // フィルター用のソート済み部署リスト（最適化済み）
   const sortedDepartmentsForFilter = useMemo(() => {
     const perfStart = performance.now();
-    const uniqueDepts = [...new Set(staffList.map(s => s.isSupporting ? (s.currentDept || s.department) : s.department))];
+    const uniqueDepts = Array.from(new Set(staffList.map(s => s.isSupporting ? (s.currentDept || s.department) : s.department)));
     const sorted = uniqueDepts.sort((a, b) => {
       // 部署設定を取得（O(1)でマップから取得）
       const settingA = departmentMap.get(a);
@@ -3597,7 +3621,7 @@ export default function FullMainApp() {
       const currentDept = s.isSupporting ? (s.currentDept || s.department) : s.department;
       return selectedDepartment === 'all' || currentDept === selectedDepartment;
     });
-    const uniqueGroups = [...new Set(filteredStaff.map(s => s.isSupporting ? (s.currentGroup || s.group) : s.group))];
+    const uniqueGroups = Array.from(new Set(filteredStaff.map(s => s.isSupporting ? (s.currentGroup || s.group) : s.group)));
     
     // 最適化されたsortGroupsByDepartment関数を使用
     const sorted = sortGroupsByDepartment(uniqueGroups);
@@ -3820,7 +3844,7 @@ export default function FullMainApp() {
       </h1>
       <div className="flex items-center space-x-4">
         <span className="text-sm text-gray-600">
-          {user?.staff?.name || user?.email} ({user?.role === 'ADMIN' ? '管理者' : '一般ユーザー'})
+          {user?.name || user?.email} ({user?.role === 'ADMIN' ? '管理者' : '一般ユーザー'})
         </span>
         <a
           href="/personal"
@@ -4028,7 +4052,7 @@ export default function FullMainApp() {
                     {sortByDisplayOrder(Object.entries(groups), 'group').map(([group, staffInGroup]) => (
                       <div key={group}>
                         <h4 className="px-2 pl-6 min-h-[33px] text-xs font-semibold whitespace-nowrap flex items-center" style={{backgroundColor: teamColors[group] || '#f5f5f5'}}>{group}</h4>
-                        {staffInGroup.map(staff => {
+                        {staffInGroup.map((staff: any) => {
                           const supportBorderColor = getSupportBorderColor(staff);
                           return (
                           <div key={staff.id} 
@@ -4143,7 +4167,7 @@ export default function FullMainApp() {
                         {sortByDisplayOrder(Object.entries(groups), 'group').map(([group, staffInGroup]) => (
                           <div key={group}>
                             <div className="min-h-[33px]" style={{backgroundColor: teamColors[group] || '#f5f5f5'}}></div>
-                            {staffInGroup.map(staff => {
+                            {staffInGroup.map((staff: any) => {
                               const supportBorderColor = getSupportBorderColor(staff);
                               return (
                               <div key={staff.id} 
@@ -4288,7 +4312,7 @@ export default function FullMainApp() {
                                           <span className="ml-1 text-yellow-200">📝</span>
                                         )}
                                       </span>
-                                      {!isContract && canEdit(schedule.staffId) && (
+                                      {!isContract && !isHistoricalData && canEdit(schedule.staffId) && (
                                         <button onClick={(e) => { e.stopPropagation(); setDeletingScheduleId(schedule.id); }} 
                                                 className="text-white hover:text-red-200 ml-2">×</button>
                                       )}
