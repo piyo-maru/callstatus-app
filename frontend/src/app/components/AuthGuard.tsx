@@ -69,7 +69,15 @@ export default function AuthGuard({ children, requiredRole, fallback }: AuthGuar
               この機能を利用するには適切な権限が必要です。
             </p>
             <p className="text-sm text-gray-500">
-              現在の権限: {userRole === 'STAFF' ? '一般ユーザー' : userRole === 'ADMIN' ? '管理者' : userRole === 'READONLY' ? '閲覧専用' : '不明'}
+              現在の権限: {(() => {
+                const role = userRole as UserRole;
+                switch (role) {
+                  case 'STAFF': return '一般ユーザー';
+                  case 'ADMIN': return '管理者';
+                  case 'READONLY': return '閲覧専用';
+                  default: return '不明';
+                }
+              })()}
             </p>
             {fallback}
           </div>

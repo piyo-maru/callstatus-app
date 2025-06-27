@@ -360,7 +360,7 @@ const PersonalSchedulePage: React.FC = () => {
           ) || [];
           
           // 取得したスケジュールに日付情報を追加
-          const schedulesWithDate = filteredSchedules.map(schedule => ({
+          const schedulesWithDate = filteredSchedules.map((schedule: any) => ({
             ...schedule,
             date: dateStr, // 取得日付を明示的に設定
             start: typeof schedule.start === 'number' ? schedule.start : new Date(schedule.start),
@@ -1368,7 +1368,7 @@ const PersonalSchedulePage: React.FC = () => {
                         const endPosition = timeToPositionPercent(endHour);
                         const barWidth = endPosition - startPosition;
                         const isContract = schedule.layer === 'contract';
-                        const isHistorical = schedule.layer === 'historical' || schedule.isHistorical;
+                        const isHistorical = (schedule as any).layer === 'historical' || (schedule as any).isHistorical;
                         const scheduleLayer = schedule.layer || 'adjustment';
                         const isSelected = selectedSchedule && 
                           selectedSchedule.schedule.id === schedule.id && 

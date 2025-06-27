@@ -10,6 +10,7 @@ import { ResponsibilitiesModule } from './responsibilities/responsibilities.modu
 import { DepartmentSettingsModule } from './department-settings/department-settings.module';
 import { SnapshotsModule } from './snapshots/snapshots.module';
 import { PendingModule } from './pending/pending.module';
+import { ContractsModule } from './contracts/contracts.module';
 // 一時的に無効化（コンパイルエラー回避）
 // import { AssignmentsModule } from './assignments/assignments.module';
 // import { ContractModule } from './contract/contract.module';
@@ -28,6 +29,7 @@ import { PendingModule } from './pending/pending.module';
     DepartmentSettingsModule,
     SnapshotsModule,
     PendingModule,
+    ContractsModule,
     // 他のすべてのモジュールを一時的に無効化（コンパイルエラー回避）
     // AuthModule, 
     // AuditModule, 

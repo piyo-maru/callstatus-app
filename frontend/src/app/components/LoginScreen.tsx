@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useAuth } from './AuthProvider';
 
 export default function LoginScreen() {
-  const { login, setPassword: setUserPassword, checkUserExists, loading } = useAuth();
+  const { loginWithCredentials, setPassword: setUserPassword, checkUserExists, loading } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -62,7 +62,7 @@ export default function LoginScreen() {
     setError('');
 
     try {
-      await login(email, password);
+      await loginWithCredentials(email, password);
     } catch (error: any) {
       setError(error.message || 'ログインに失敗しました');
       console.error('Login error:', error);

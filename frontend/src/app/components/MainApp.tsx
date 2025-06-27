@@ -18,9 +18,9 @@ export function useAuthenticatedAPI() {
   const { token, logout } = useAuth();
 
   const apiCall = useCallback(async (url: string, options: RequestInit = {}) => {
-    const headers = {
+    const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      ...options.headers,
+      ...options.headers as Record<string, string>,
     };
 
     if (token) {
@@ -132,7 +132,7 @@ export default function MainApp() {
       </h1>
       <div className="flex items-center space-x-4">
         <span className="text-sm text-gray-600">
-          {user?.staff?.name || user?.email} ({user?.role === 'ADMIN' ? '管理者' : '一般ユーザー'})
+          {user?.name || user?.email} ({user?.role === 'ADMIN' ? '管理者' : '一般ユーザー'})
         </span>
         <button
           onClick={logout}
@@ -153,7 +153,7 @@ export default function MainApp() {
           <div className="flex items-center space-x-4">
             <DatePicker
               selected={selectedDate}
-              onChange={(date: Date) => setSelectedDate(date)}
+              onChange={(date: Date | null) => date && setSelectedDate(date)}
               dateFormat="yyyy年MM月dd日"
               locale="ja"
               className="px-3 py-2 border border-gray-300 rounded-md"
@@ -223,7 +223,7 @@ export default function MainApp() {
             <div className="mt-6 p-4 bg-green-50 rounded border">
               <h3 className="font-medium text-green-900">認証状態</h3>
               <div className="mt-2 text-sm text-green-700">
-                <div>ユーザー: {user?.staff?.name || user?.email}</div>
+                <div>ユーザー: {user?.name || user?.email}</div>
                 <div>権限: {user?.role === 'ADMIN' ? '管理者（全機能利用可能）' : '一般ユーザー（閲覧・自分の予定編集）'}</div>
                 <div>スタッフ数: {staff.length}</div>
                 <div>スケジュール数: {schedules.length}</div>

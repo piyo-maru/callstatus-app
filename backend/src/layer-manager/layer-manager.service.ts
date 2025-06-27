@@ -155,6 +155,11 @@ export class LayerManagerService {
       }
     });
 
+    console.log(`LayerManager: Found ${adjustments.length} adjustments for ${dateString}`);
+    adjustments.forEach(adj => {
+      console.log(`LayerManager: Adjustment ID ${adj.id}, staffId ${adj.staffId}, status ${adj.status}, start ${adj.start.toISOString()}`);
+    });
+
     return adjustments.map(adj => {
       const adjustmentSchedule: LayeredSchedule = {
         id: `adj_${adj.id}`,
@@ -166,7 +171,7 @@ export class LayerManagerService {
         layer: 'adjustment' as const,
         priority: 3 // 個別調整は最高優先度
       };
-      console.log(`Adjustment schedule created: ID ${adjustmentSchedule.id}, staffId ${adj.staffId}`);
+      console.log(`Adjustment schedule created: ID ${adjustmentSchedule.id}, staffId ${adj.staffId}, database ID: ${adj.id}`);
       return adjustmentSchedule;
     });
   }
