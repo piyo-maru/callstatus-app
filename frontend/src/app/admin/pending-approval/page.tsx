@@ -38,7 +38,7 @@ const getApiUrl = (): string => {
 };
 
 export default function PendingApprovalPage() {
-  const { user, token } = useAuth();
+  const { user, token, logout } = useAuth();
   
   // 基本状態
   const [pendingList, setPendingList] = useState<PendingSchedule[]>([]);
@@ -205,11 +205,34 @@ export default function PendingApprovalPage() {
   return (
     <div className="h-screen flex flex-col bg-gray-50">
       {/* ヘッダー */}
-      <div className="bg-white shadow-sm border-b p-4">
-        <div className="flex items-center justify-between">
+      <div className="bg-white shadow-sm border-b">
+        {/* タイトル行 */}
+        <div className="px-6 py-3 border-b border-gray-200">
+          <div className="flex items-center justify-between">
+            <h1 className="text-lg font-semibold text-gray-900">🔐 申請承認管理</h1>
+            <div className="flex items-center space-x-4">
+              <span className="text-sm text-gray-600">
+                {user?.name || user?.email} ({user?.role === 'ADMIN' ? '管理者' : '一般ユーザー'})
+              </span>
+              <a
+                href="/monthly-planner"
+                className="text-sm bg-purple-100 hover:bg-purple-200 text-purple-800 px-3 py-1 rounded border border-purple-300 transition-colors"
+              >
+                📅 月次プランナー
+              </a>
+              <button
+                onClick={logout}
+                className="text-sm bg-gray-100 hover:bg-gray-200 px-3 py-1 rounded border"
+              >
+                ログアウト
+              </button>
+            </div>
+          </div>
+        </div>
+        
+        {/* 統計・操作行 */}
+        <div className="px-6 py-3 flex items-center justify-between">
           <div className="flex items-center space-x-4">
-            <h1 className="text-xl font-bold text-gray-900">🔐 Pending承認管理</h1>
-            
             {/* 統計表示 */}
             <div className="flex items-center space-x-4 text-sm">
               <div className="bg-yellow-100 px-2 py-1 rounded">

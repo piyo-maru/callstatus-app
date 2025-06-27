@@ -79,7 +79,7 @@ type ResponsibilityData = GeneralResponsibilityData | ReceptionResponsibilityDat
 const availableStatuses = ['online', 'remote', 'meeting', 'training', 'break', 'off', 'unplanned', 'night duty'];
 
 const PersonalSchedulePage: React.FC = () => {
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, logout } = useAuth();
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [currentStaff, setCurrentStaff] = useState<Staff | null>(null);
@@ -99,7 +99,10 @@ const PersonalSchedulePage: React.FC = () => {
     }
     return false;
   });
-  
+
+  // スクロール位置管理のためのref
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [savedScrollPosition, setSavedScrollPosition] = useState<number>(0);
   
   // モーダル関連の状態
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -278,7 +281,7 @@ const PersonalSchedulePage: React.FC = () => {
       console.error('担当設定保存エラー:', error);
     }
     return false;
-  }, [authenticatedFetch, getApiUrl, fetchResponsibilityData]);
+  }, [authenticatedFetch, getApiUrl, fetchResponsibilityData, currentStaff]);
 
   // 現在のユーザーの社員情報を取得
   const fetchCurrentStaff = useCallback(async () => {
@@ -326,6 +329,23 @@ const PersonalSchedulePage: React.FC = () => {
       setError('社員情報の取得中にエラーが発生しました');
     }
   }, [user, getApiUrl, authenticatedFetch]);
+
+  // スクロール位置保存・復元関数
+  const saveScrollPosition = useCallback(() => {
+    if (scrollContainerRef.current) {
+      setSavedScrollPosition(scrollContainerRef.current.scrollLeft);
+    }
+  }, []);
+
+  const restoreScrollPosition = useCallback(() => {
+    if (scrollContainerRef.current && savedScrollPosition > 0) {
+      setTimeout(() => {
+        if (scrollContainerRef.current) {
+          scrollContainerRef.current.scrollLeft = savedScrollPosition;
+        }
+      }, 50); // DOM更新後に復元
+    }
+  }, [savedScrollPosition]);
 
   // スケジュールデータを取得
   const fetchSchedules = useCallback(async () => {
@@ -378,16 +398,17 @@ const PersonalSchedulePage: React.FC = () => {
       const allSchedules = results.flat();
       console.log('全スケジュール取得完了:', allSchedules.length, '件');
       
-      // デバッグログ削除（無限ループ防止）
-      
       setSchedules(allSchedules);
+      
+      // スクロール位置復元
+      restoreScrollPosition();
     } catch (err) {
       console.error('スケジュールの取得に失敗:', err);
       setError('スケジュールの取得に失敗しました');
     } finally {
       setLoading(false);
     }
-  }, [currentStaff, monthDays, getApiUrl, authenticatedFetch]);
+  }, [currentStaff, monthDays, getApiUrl, authenticatedFetch, restoreScrollPosition]);
 
   // 初期化処理
   useEffect(() => {
@@ -610,6 +631,7 @@ const PersonalSchedulePage: React.FC = () => {
       }
       
       // 全スケジュール追加後にデータを再取得
+      saveScrollPosition();
       await fetchSchedules();
       
       // 成功メッセージ
@@ -620,7 +642,7 @@ const PersonalSchedulePage: React.FC = () => {
       console.error('スケジュール追加エラー:', err);
       setError(`${preset.name}の追加に失敗しました`);
     }
-  }, [currentStaff, getApiUrl, authenticatedFetch, fetchSchedules]);
+  }, [currentStaff, getApiUrl, authenticatedFetch, fetchSchedules, saveScrollPosition]);
 
   // スケジュール保存ハンドラー（メイン画面と同じ）
   const handleSaveSchedule = useCallback(async (scheduleData: Schedule & { id?: number | string; date?: string }) => {
@@ -649,6 +671,7 @@ const PersonalSchedulePage: React.FC = () => {
           
           if (response.ok) {
             console.log('スケジュール作成成功');
+            saveScrollPosition();
             await fetchSchedules();
             setIsModalOpen(false);
             setEditingSchedule(null);
@@ -672,6 +695,7 @@ const PersonalSchedulePage: React.FC = () => {
           
           if (response.ok) {
             console.log('スケジュール更新成功');
+            saveScrollPosition();
             await fetchSchedules();
             setIsModalOpen(false);
             setEditingSchedule(null);
@@ -710,7 +734,7 @@ const PersonalSchedulePage: React.FC = () => {
       console.error('スケジュール保存エラー:', err);
       setError('スケジュールの保存中にエラーが発生しました');
     }
-  }, [currentStaff, getApiUrl, authenticatedFetch, fetchSchedules]);
+  }, [currentStaff, getApiUrl, authenticatedFetch, fetchSchedules, saveScrollPosition]);
 
   // スケジュール削除ハンドラー
   const handleDeleteSchedule = useCallback(async (scheduleId: number | string) => {
@@ -741,6 +765,7 @@ const PersonalSchedulePage: React.FC = () => {
       
       if (response.ok) {
         console.log('スケジュール削除成功');
+        saveScrollPosition();
         await fetchSchedules();
         setDeletingScheduleId(null);
         setSelectedSchedule(null); // 選択解除
@@ -752,7 +777,7 @@ const PersonalSchedulePage: React.FC = () => {
       console.error('スケジュール削除エラー:', err);
       setError('スケジュールの削除中にエラーが発生しました');
     }
-  }, [getApiUrl, authenticatedFetch, fetchSchedules]);
+  }, [getApiUrl, authenticatedFetch, fetchSchedules, saveScrollPosition]);
 
   // 月変更ハンドラー
   const handleMonthChange = useCallback((direction: 'prev' | 'next') => {
@@ -999,12 +1024,35 @@ const PersonalSchedulePage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 p-4">
-      <div className="max-w-7xl mx-auto">
+      <div className="max-w-none mx-auto">
         {/* ヘッダー（メイン画面風） */}
         <div className="bg-white rounded-lg shadow-sm mb-4">
           {/* タイトル行 */}
-          <div className="px-6 py-3 border-b">
-            <h1 className="text-lg font-semibold text-gray-900">個人スケジュール</h1>
+          <div className="px-6 py-3 border-b flex justify-between items-center">
+            <h1 className="text-lg font-semibold text-gray-900">個人ページ</h1>
+            <div className="flex items-center space-x-4">
+              <span className="text-sm text-gray-600">
+                {user?.name || user?.email} ({user?.role === 'ADMIN' ? '管理者' : '一般ユーザー'})
+              </span>
+              <a
+                href="/"
+                className="text-sm bg-green-100 hover:bg-green-200 text-green-800 px-3 py-1 rounded border border-green-300 transition-colors"
+              >
+                📊 出社状況
+              </a>
+              <a
+                href="/monthly-planner"
+                className="text-sm bg-purple-100 hover:bg-purple-200 text-purple-800 px-3 py-1 rounded border border-purple-300 transition-colors"
+              >
+                📅 月次プランナー
+              </a>
+              <button
+                onClick={logout}
+                className="text-sm bg-gray-100 hover:bg-gray-200 px-3 py-1 rounded border"
+              >
+                ログアウト
+              </button>
+            </div>
           </div>
           
           {/* ナビゲーション行 */}
@@ -1096,7 +1144,7 @@ const PersonalSchedulePage: React.FC = () => {
         )}
 
         {/* プリセット予定ボタン */}
-        <div className="sticky top-4 z-20 bg-white rounded-lg shadow-sm p-4 mb-6 border border-gray-200">
+        <div className="sticky top-4 z-30 bg-white rounded-lg shadow-sm p-4 mb-6 border border-gray-200">
           <div className="mb-3 text-xs text-gray-600">
             📌 今日の予定を追加、または下の日付をクリックして特定の日に追加
           </div>
@@ -1151,113 +1199,134 @@ const PersonalSchedulePage: React.FC = () => {
           )}
         </div>
 
-        {/* 月間ガントチャート（メイン画面スタイル） */}
-        <div className={`bg-white rounded-lg shadow-sm overflow-hidden ${isCompactMode ? 'compact-mode' : ''}`}>
-          <div className="overflow-x-auto">
-            <div className="min-w-[1300px]">
-              {/* 時間軸ヘッダー（メイン画面と同じ） */}
-              <div className="sticky top-0 z-10 bg-gray-100 border-b overflow-hidden">
-                <div className="flex font-semibold text-sm">
-                  <div className="w-24 text-left pl-2 border-r py-2 bg-gray-50 text-xs">
-                    日付
-                  </div>
-                  {Array.from({ length: 13 }).map((_, i) => {
-                    const hour = 8 + i;
-                    const isEarlyOrNight = hour === 8 || hour >= 18;
-                    const width = `${(4 / 52) * 100}%`; // 4マス分 = 1時間分の幅
-                    return (
-                      <div 
-                        key={hour} 
-                        className={`text-left pl-2 border-r py-2 whitespace-nowrap text-xs ${isEarlyOrNight ? 'bg-blue-50' : ''}`}
-                        style={{ width }}
-                      >
-                        {hour}:00
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
+        {/* 月間ガントチャート（メイン画面と同じ2列構造） */}
+        <div className="bg-white shadow rounded-lg relative">
+          <div className="flex">
+            {/* 左側：日付列（メイン画面のスタッフ名列と同じ構造） */}
+            <div className="min-w-fit max-w-[400px] sticky left-0 z-20 bg-white border-r border-gray-200">
+              {/* 上部スクロールバー用のスペーサー */}
+              <div className="h-[17px] bg-gray-50 border-b"></div>
+              {/* ヘッダー行 - 時刻行と同じ高さに調整 */}
+              <div className="px-2 py-2 bg-gray-100 font-bold text-gray-600 text-sm text-center border-b whitespace-nowrap">日付 / 担当設定</div>
 
               {/* 日付行（メイン画面スタイル） */}
               {monthDays.map((day) => {
-                // デバッグ：日付フィルタリングの詳細
                 const dayStr = format(day, 'yyyy-MM-dd');
                 const daySchedules = schedules.filter(schedule => {
-                  // スケジュールにdateフィールドがある場合はそれを使用
                   if (schedule.date) {
                     return schedule.date === dayStr;
                   }
-                  // startがDateオブジェクトの場合
                   if (schedule.start instanceof Date) {
                     return isSameDay(schedule.start, day);
                   }
-                  // startが文字列の場合
                   if (typeof schedule.start === 'string') {
                     return isSameDay(new Date(schedule.start), day);
                   }
-                  // その他の場合（数値など）- この場合は日付が不明なのでfalse
                   return false;
                 });
-                
-                // デバッグログ削除（無限ループ防止）
                 
                 const isCurrentDay = isToday(day);
                 const isPastDate = day < new Date(new Date().setHours(0, 0, 0, 0)); // 今日より前の日付
                 
                 return (
-                  <div key={day.getTime()} className={`flex border-b border-gray-100 hover:bg-gray-50 relative staff-timeline-row ${isCompactMode ? 'h-[32px]' : 'h-[45px]'} ${isPastDate ? 'opacity-50' : ''}`}>
-                    {/* 日付列（動的幅・バッジ対応） */}
-                    <div 
-                      className={`min-w-24 max-w-56 p-3 border-r border-gray-200 cursor-pointer hover:bg-blue-50 transition-colors flex flex-col justify-center ${
-                        isCurrentDay ? 'bg-blue-50 font-semibold text-blue-900' : ''
-                      } ${
-                        selectedDateForPreset && isSameDay(selectedDateForPreset, day) ? 'bg-blue-100 border-blue-300' : ''
-                      } ${
-                        day.getDay() === 0 ? 'bg-red-50 text-red-600' : ''  // 日曜日
-                      } ${
-                        day.getDay() === 6 ? 'bg-blue-50 text-blue-600' : ''  // 土曜日
-                      }`}
-                      style={{
-                        width: 'auto', // 自動幅調整
-                        flexShrink: 0, // 縮小しない
-                        flexGrow: 0,   // 拡大しない
-                      }}
-                      onClick={(e) => {
-                        if (isPastDate) return; // 過去の日付は選択不可
-                        
-                        // 左クリック: 選択状態の管理
-                        if (selectedDateForPreset && isSameDay(selectedDateForPreset, day)) {
-                          // 既に選択されている日付をクリック → 担当設定モーダルを開く
-                          setSelectedDateForResponsibility(day);
-                          setIsResponsibilityModalOpen(true);
-                        } else {
-                          // 未選択の日付をクリック → 選択状態にする
-                          setSelectedDateForPreset(day);
-                        }
-                      }}
-                      onContextMenu={(e) => {
-                        e.preventDefault(); // 右クリックメニューを無効化
-                        if (isPastDate) return;
-                        
-                        // 右クリック: 選択解除
-                        setSelectedDateForPreset(null);
-                      }}
-                    >
-                      <div className="text-xs font-semibold whitespace-nowrap">
-                        {format(day, 'M/d E', { locale: ja })}
+                  <div 
+                    key={day.getTime()} 
+                    className={`px-2 text-sm font-medium whitespace-nowrap ${isCompactMode ? 'h-[32px]' : 'h-[45px]'} ${isPastDate ? 'opacity-50 cursor-default' : 'hover:bg-gray-50 cursor-pointer'} flex items-center border-b border-gray-100 ${
+                      isCurrentDay ? 'bg-blue-50 font-semibold text-blue-900' : ''
+                    } ${
+                      selectedDateForPreset && isSameDay(selectedDateForPreset, day) ? 'bg-blue-100 border-blue-300' : ''
+                    } ${
+                      day.getDay() === 0 ? 'bg-red-50 text-red-600' : ''  // 日曜日
+                    } ${
+                      day.getDay() === 6 ? 'bg-blue-50 text-blue-600' : ''  // 土曜日
+                    }`}
+                    onClick={(e) => {
+                      if (isPastDate) return; // 過去の日付は選択不可
+                      
+                      if (selectedDateForPreset && isSameDay(selectedDateForPreset, day)) {
+                        setSelectedDateForResponsibility(day);
+                        setIsResponsibilityModalOpen(true);
+                      } else {
+                        setSelectedDateForPreset(day);
+                      }
+                    }}
+                    onContextMenu={(e) => {
+                      e.preventDefault(); // 右クリックメニューを無効化
+                      if (isPastDate) return;
+                      setSelectedDateForPreset(null);
+                    }}
+                  >
+                    <span className="flex items-center justify-between w-full">
+                      <div className="flex flex-col">
+                        <div className="text-xs font-semibold whitespace-nowrap">
+                          {format(day, 'M/d E', { locale: ja })}
+                        </div>
+                        {selectedDateForPreset && isSameDay(selectedDateForPreset, day) && (
+                          <div className="text-xs text-blue-600 mt-1 whitespace-nowrap">📌 選択中</div>
+                        )}
                       </div>
-                      {selectedDateForPreset && isSameDay(selectedDateForPreset, day) && (
-                        <div className="text-xs text-blue-600 mt-1 whitespace-nowrap">📌 選択中</div>
-                      )}
-                      {/* 担当設定バッジ（1行表示） */}
-                      <div className="flex gap-1 mt-1 whitespace-nowrap">
+                      <div className="flex gap-1 ml-2">
                         {generateResponsibilityBadges(day)}
                       </div>
-                    </div>
-
-                    {/* タイムライン（メイン画面と同じスタイル） */}
-                    <div 
-                      className={`flex-1 relative hover:bg-gray-50 ${
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+            
+            {/* 右側：タイムライン列（メイン画面と同じ構造） */}
+            <div className="flex-1 flex flex-col">
+              {/* 上部スクロールバー */}
+              <div className="overflow-x-auto border-b">
+                <div className="min-w-[1300px] h-[17px]"></div>
+              </div>
+              {/* ヘッダー行 */}
+              <div className="sticky top-0 z-10 bg-gray-100 border-b overflow-hidden">
+                <div className="min-w-[1300px]">
+                  <div className="flex font-bold text-sm">
+                    {Array.from({ length: 13 }).map((_, i) => {
+                      const hour = 8 + i;
+                      const isEarlyOrNight = hour === 8 || hour >= 18;
+                      const width = `${(4 / 52) * 100}%`; // 4マス分 = 1時間分の幅
+                      return (
+                        <div 
+                          key={hour} 
+                          className={`text-left pl-2 border-r py-2 whitespace-nowrap ${isEarlyOrNight ? 'bg-blue-50' : ''}`}
+                          style={{ width }}
+                        >
+                          {hour}:00
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+              
+              {/* タイムライン行（各日付のスケジュール） */}
+              <div ref={scrollContainerRef} className="overflow-x-auto">
+                <div className="min-w-[1300px]">
+                  {monthDays.map((day) => {
+                    const dayStr = format(day, 'yyyy-MM-dd');
+                    const daySchedules = schedules.filter(schedule => {
+                      if (schedule.date) {
+                        return schedule.date === dayStr;
+                      }
+                      if (schedule.start instanceof Date) {
+                        return isSameDay(schedule.start, day);
+                      }
+                      if (typeof schedule.start === 'string') {
+                        return isSameDay(new Date(schedule.start), day);
+                      }
+                      return false;
+                    });
+                    
+                    const isCurrentDay = isToday(day);
+                    const isPastDate = day < new Date(new Date().setHours(0, 0, 0, 0));
+                    
+                    return (
+                      <div 
+                        key={`timeline-${day.getTime()}`} 
+                        className={`flex border-b border-gray-100 relative ${isCompactMode ? 'h-[32px]' : 'h-[45px]'} ${isPastDate ? 'opacity-50' : ''} ${
                         day.getDay() === 0 ? 'bg-red-50/30' : ''  // 日曜日の背景
                       } ${
                         day.getDay() === 6 ? 'bg-blue-50/30' : ''  // 土曜日の背景
@@ -1277,7 +1346,6 @@ const PersonalSchedulePage: React.FC = () => {
                       }}
                       style={{ cursor: isPastDate ? 'not-allowed' : (dragInfo ? 'grabbing' : 'default') }}
                     >
-                      {/* 過去の日付用グレーオーバーレイ */}
                       {isPastDate && (
                         <div className="absolute inset-0 bg-gray-400 opacity-20 z-50 pointer-events-none">
                           <div className="absolute inset-0 flex items-center justify-center">
@@ -1287,22 +1355,18 @@ const PersonalSchedulePage: React.FC = () => {
                           </div>
                         </div>
                       )}
-                      {/* 早朝エリア（8:00-9:00）の背景強調 */}
                       <div className="absolute top-0 bottom-0 bg-blue-50 opacity-30 z-10" 
                            style={{ left: `0%`, width: `${((9-8)*4)/52*100}%` }} 
                            title="早朝時間帯（8:00-9:00）">
                       </div>
 
-                      {/* 夜間エリア（18:00-21:00）の背景強調 */}
                       <div className="absolute top-0 bottom-0 bg-blue-50 opacity-30 z-10" 
                            style={{ left: `${((18-8)*4)/52*100}%`, width: `${((21-18)*4)/52*100}%` }} 
                            title="夜間時間帯（18:00-21:00）">
                       </div>
 
-                      {/* 15分単位の目盛り線 */}
                       {(() => {
                         const markers = [];
-                        // 日曜日の場合のみ時刻表示を追加
                         const isSunday = day.getDay() === 0;
                         
                         for (let hour = 8; hour <= 21; hour++) {
@@ -1312,7 +1376,6 @@ const PersonalSchedulePage: React.FC = () => {
                             const position = timeToPositionPercent(time);
                             const timeString = `${hour}:${String(minute).padStart(2, '0')}`;
                             
-                            // 1時間ごとの線は少し濃く、15分ごとの線は薄く
                             const isHourMark = minute === 0;
                             markers.push(
                               <div
@@ -1327,7 +1390,6 @@ const PersonalSchedulePage: React.FC = () => {
                               />
                             );
                             
-                            // 日曜日かつ1時間ごとに時刻を表示
                             if (isSunday && minute === 0) {
                               markers.push(
                                 <div
@@ -1336,7 +1398,7 @@ const PersonalSchedulePage: React.FC = () => {
                                   style={{ 
                                     left: `${position}%`,
                                     height: '100%',
-                                    paddingLeft: '8px' // ヘッダーと同じ左パディング
+                                    paddingLeft: '8px'
                                   }}
                                 >
                                   {hour}:00
@@ -1348,8 +1410,6 @@ const PersonalSchedulePage: React.FC = () => {
                         return markers;
                       })()}
 
-
-                      {/* スケジュールバー（メイン画面と同じスタイル） */}
                       {daySchedules.map((schedule, index) => {
                         let startHour: number;
                         let endHour: number;
@@ -1378,7 +1438,7 @@ const PersonalSchedulePage: React.FC = () => {
                           <div
                             key={`${schedule.id}-${schedule.layer}-${index}`}
                             data-layer={scheduleLayer}
-                            draggable={!isContract && !isHistorical} // メイン画面と同じドラッグ可能条件
+                            draggable={!isContract && !isHistorical}
                             className={`schedule-block absolute h-6 rounded text-white text-xs flex items-center justify-between px-2 group transition-all duration-200 ${
                               isContract || isHistorical ? 'cursor-default' : 'cursor-ew-resize hover:opacity-80'
                             } ${
@@ -1410,7 +1470,6 @@ const PersonalSchedulePage: React.FC = () => {
                             onDragStart={(e) => {
                               if (!isContract && !isHistorical) {
                                 console.log('ドラッグ開始:', schedule.id);
-                                // ゴーストエレメント位置調整用オフセットを計算（メイン画面と同じ）
                                 const scheduleElement = e.currentTarget as HTMLElement;
                                 const scheduleRect = scheduleElement.getBoundingClientRect();
                                 const mouseOffsetX = e.clientX - scheduleRect.left;
@@ -1428,7 +1487,6 @@ const PersonalSchedulePage: React.FC = () => {
                               setDragOffset(0);
                             }}
                             onMouseDown={(e) => {
-                              // ドラッグ不可の場合のみマウス処理（契約・履歴レイヤー）
                               if (isContract || isHistorical) {
                                 if (isContract) {
                                   console.log('契約レイヤー要素マウスダウン - ドラッグ許可');
@@ -1436,7 +1494,6 @@ const PersonalSchedulePage: React.FC = () => {
                                   console.log('履歴レイヤー要素マウスダウン');
                                 }
                               } else {
-                                // 調整レイヤーでもクリック選択は有効
                                 e.stopPropagation();
                               }
                             }}
@@ -1463,7 +1520,6 @@ const PersonalSchedulePage: React.FC = () => {
                         );
                       })}
 
-                      {/* ドラッグプレビュー（新規作成のみ、メイン画面と同じ） */}
                       {dragInfo && format(dragInfo.day, 'yyyy-MM-dd') === dayStr && (
                         <div 
                           className="absolute bg-indigo-200 bg-opacity-50 border-2 border-dashed border-indigo-500 rounded pointer-events-none z-30"
@@ -1476,9 +1532,10 @@ const PersonalSchedulePage: React.FC = () => {
                         />
                       )}
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -1592,6 +1649,7 @@ const ScheduleModal = ({ isOpen, onClose, staffList, onSave, scheduleToEdit, ini
       start: startTime,
       end: endTime,
       memo: memo,
+      date: initialData?.date || (scheduleToEdit ? (scheduleToEdit as any).date : undefined)
     };
 
     onSave(scheduleData);
@@ -1691,7 +1749,7 @@ const ScheduleModal = ({ isOpen, onClose, staffList, onSave, scheduleToEdit, ini
           </div>
 
           {/* メモ */}
-          {(selectedStatus === 'meeting' || selectedStatus === 'training') && (
+          {(selectedStatus === 'meeting' || selectedStatus === 'training' || selectedStatus === 'unplanned') && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 メモ

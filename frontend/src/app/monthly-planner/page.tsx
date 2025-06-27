@@ -258,7 +258,7 @@ const DroppableCell: React.FC<{
 
 // 月次プランナーのメインコンポーネント
 function MonthlyPlannerPageContent() {
-  const { user, token } = useAuth();
+  const { user, token, logout } = useAuth();
   
   // 基本状態
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -312,6 +312,10 @@ function MonthlyPlannerPageContent() {
   const [showApprovedDeleteModal, setShowApprovedDeleteModal] = useState(false);
   const [selectedApprovedPending, setSelectedApprovedPending] = useState<PendingSchedule | null>(null);
   const [unapprovalReason, setUnapprovalReason] = useState('');
+
+  // 編集モーダル状態
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [selectedPendingForEdit, setSelectedPendingForEdit] = useState<PendingSchedule | null>(null);
   
   // 部署・グループフィルター
   const [selectedDepartment, setSelectedDepartment] = useState<string>('all');
@@ -577,7 +581,7 @@ function MonthlyPlannerPageContent() {
     }
   }, [currentMonth, selectedCellForHighlight, pendingSchedules]);
 
-  // 承認モードでの予定クリック処理
+  // 予定クリック処理（承認モード・編集モード対応）
   const handleApprovalClick = useCallback((pending: PendingSchedule) => {
     if (pending.rejectedAt && !pending.approvedAt) {
       // 却下済み予定の場合
@@ -588,9 +592,15 @@ function MonthlyPlannerPageContent() {
       setSelectedApprovedPending(pending);
       setShowApprovedDeleteModal(true);
     } else if (!pending.approvedAt && !pending.rejectedAt) {
-      // 未承認予定の場合
-      setSelectedPendingForApproval(pending);
-      setShowApprovalModal(true);
+      if (isApprovalMode) {
+        // 承認モードの場合は承認モーダル表示
+        setSelectedPendingForApproval(pending);
+        setShowApprovalModal(true);
+      } else {
+        // 通常モードの場合は編集モーダル表示
+        setSelectedPendingForEdit(pending);
+        setShowEditModal(true);
+      }
     }
   }, [isApprovalMode]);
 
@@ -838,6 +848,67 @@ function MonthlyPlannerPageContent() {
     setSelectedCellForHighlight(null);
   }, [selectedCell, pendingSchedules, fetchPendingSchedules]);
 
+  // 編集モーダル用の削除処理
+  const handleEditDelete = useCallback(async () => {
+    if (!selectedPendingForEdit) return;
+
+    try {
+      const currentApiUrl = getApiUrl();
+      const response = await fetch(`${currentApiUrl}/api/schedules/pending/${selectedPendingForEdit.id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      if (response.ok) {
+        alert('未承認予定を削除しました');
+        await fetchPendingSchedules();
+      } else {
+        alert('削除に失敗しました');
+      }
+    } catch (error) {
+      console.error('Failed to delete pending:', error);
+      alert('削除に失敗しました');
+    }
+
+    setShowEditModal(false);
+    setSelectedPendingForEdit(null);
+  }, [selectedPendingForEdit, fetchPendingSchedules]);
+
+  // 編集モーダル用のプリセット更新処理
+  const handleEditUpdate = useCallback(async (preset: PresetSchedule) => {
+    if (!selectedPendingForEdit) return;
+
+    try {
+      const currentApiUrl = getApiUrl();
+      
+      const updateData = {
+        status: preset.status,
+        start: preset.start,
+        end: preset.end,
+        memo: `月次プランナー: ${preset.label}`
+      };
+
+      const response = await fetch(`${currentApiUrl}/api/schedules/pending/${selectedPendingForEdit.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updateData)
+      });
+
+      if (response.ok) {
+        alert(`未承認予定を${preset.label}に更新しました`);
+        await fetchPendingSchedules();
+      } else {
+        alert('更新に失敗しました');
+      }
+    } catch (error) {
+      console.error('Failed to update pending:', error);
+      alert('更新に失敗しました');
+    }
+
+    setShowEditModal(false);
+    setSelectedPendingForEdit(null);
+  }, [selectedPendingForEdit, fetchPendingSchedules]);
+
   // セル内のスケジュール取得関数
   const getCellPendings = useCallback((staffId: number, day: number) => {
     const year = currentMonth.getFullYear();
@@ -966,7 +1037,36 @@ function MonthlyPlannerPageContent() {
         <div className="px-6 py-3 border-b border-gray-200">
           <div className="flex items-center justify-between">
             <h1 className="text-lg font-semibold text-gray-900">月次プランナー</h1>
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-4">  
+              <span className="text-sm text-gray-600">
+                {user?.name || user?.email} ({user?.role === 'ADMIN' ? '管理者' : '一般ユーザー'})
+              </span>
+              <a
+                href="/"
+                className="text-sm bg-green-100 hover:bg-green-200 text-green-800 px-3 py-1 rounded border border-green-300 transition-colors"
+              >
+                📊 出社状況
+              </a>
+              <a
+                href="/personal"
+                className="text-sm bg-blue-100 hover:bg-blue-200 text-blue-800 px-3 py-1 rounded border border-blue-300 transition-colors"
+              >
+                📅 個人ページ
+              </a>
+              {user?.role === 'ADMIN' && (
+                <a
+                  href="/admin/pending-approval"
+                  className="text-sm bg-orange-100 hover:bg-orange-200 text-orange-800 px-3 py-1 rounded border border-orange-300 transition-colors"
+                >
+                  🔐 申請承認管理
+                </a>
+              )}
+              <button
+                onClick={logout}
+                className="text-sm bg-gray-100 hover:bg-gray-200 px-3 py-1 rounded border"
+              >
+                ログアウト
+              </button>
               {/* 承認モードトグル */}
               <label className="flex items-center space-x-2 text-sm">
                 <input
@@ -1499,6 +1599,76 @@ function MonthlyPlannerPageContent() {
           </div>
         </div>,
         document.body
+      )}
+
+      {/* 編集モーダル */}
+      {showEditModal && selectedPendingForEdit && (
+        createPortal(
+          <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+            <div className="bg-white rounded-lg shadow-lg max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+              <div className="p-6">
+                <h2 className="text-xl font-bold mb-4">未承認予定の編集</h2>
+                
+                {/* 現在の予定情報 */}
+                <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+                  <h3 className="font-medium mb-2">現在の予定</h3>
+                  <div className="text-sm text-gray-600">
+                    <p>スタッフ: {selectedPendingForEdit.staffName}</p>
+                    <p>日付: {selectedPendingForEdit.date}</p>
+                    <p>ステータス: {capitalizeStatus(selectedPendingForEdit.status)}</p>
+                    <p>時間: {selectedPendingForEdit.start}:00 - {selectedPendingForEdit.end}:00</p>
+                    <p>メモ: {selectedPendingForEdit.memo}</p>
+                  </div>
+                </div>
+
+                {/* プリセット選択 */}
+                <div className="mb-6">
+                  <h3 className="font-medium mb-3">新しい予定を選択</h3>
+                  <div className="grid grid-cols-2 gap-3">
+                    {presetSchedules.map((preset) => (
+                      <button
+                        key={preset.key}
+                        onClick={() => handleEditUpdate(preset)}
+                        className="p-3 border border-gray-300 rounded-lg hover:bg-gray-50 text-left"
+                        style={{ 
+                          borderColor: STATUS_COLORS[preset.status] || '#d1d5db',
+                          backgroundColor: `${STATUS_COLORS[preset.status] || '#f3f4f6'}20`
+                        }}
+                      >
+                        <div className="font-medium" style={{ color: STATUS_COLORS[preset.status] || '#374151' }}>
+                          {preset.label}
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          {preset.start}:00 - {preset.end}:00
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* アクションボタン */}
+                <div className="flex gap-3">
+                  <button
+                    onClick={handleEditDelete}
+                    className="flex-1 px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600"
+                  >
+                    クリア（削除）
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowEditModal(false);
+                      setSelectedPendingForEdit(null);
+                    }}
+                    className="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
+                  >
+                    キャンセル
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )
       )}
     </div>
   );

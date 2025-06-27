@@ -3840,7 +3840,7 @@ export default function FullMainApp() {
   const AuthHeader = () => (
     <div className="bg-white shadow-sm border-b border-gray-200 px-6 py-3 flex justify-between items-center">
       <h1 className="text-lg font-semibold text-gray-900">
-        出社状況管理ボード
+        出社状況
       </h1>
       <div className="flex items-center space-x-4">
         <span className="text-sm text-gray-600">
@@ -3863,7 +3863,7 @@ export default function FullMainApp() {
             href="/admin/pending-approval"
             className="text-sm bg-orange-100 hover:bg-orange-200 text-orange-800 px-3 py-1 rounded border border-orange-300 transition-colors"
           >
-            🔐 Pending承認
+            🔐 申請承認管理
           </a>
         )}
         <button
@@ -4056,7 +4056,7 @@ export default function FullMainApp() {
                           const supportBorderColor = getSupportBorderColor(staff);
                           return (
                           <div key={staff.id} 
-                               className={`staff-timeline-row px-2 pl-12 text-sm font-medium whitespace-nowrap h-[45px] ${isHistoricalMode ? 'cursor-default' : 'hover:bg-gray-50 cursor-pointer'} flex items-center`}
+                               className={`staff-timeline-row px-2 pl-12 text-sm font-medium whitespace-nowrap h-[45px] ${isHistoricalMode ? 'cursor-default' : 'hover:bg-gray-50 cursor-pointer'} flex items-center border-b border-gray-100`}
                                style={{
                                  border: supportBorderColor ? `2px solid ${supportBorderColor}` : undefined
                                }}
@@ -4145,12 +4145,12 @@ export default function FullMainApp() {
                     return markers;
                   })()}
                   {/* 早朝エリア（8:00-9:00）の背景強調 */}
-                  <div className="absolute top-0 bottom-0 bg-blue-50 opacity-30 z-10" 
+                  <div className="absolute top-0 bottom-0 bg-blue-50 opacity-30 z-0" 
                        style={{ left: `0%`, width: `${((9-8)*4)/52*100}%` }} 
                        title="早朝時間帯（8:00-9:00）">
                   </div>
                   {/* 夜間エリア（18:00-21:00）の背景強調 */}
-                  <div className="absolute top-0 bottom-0 bg-blue-50 opacity-30 z-10" 
+                  <div className="absolute top-0 bottom-0 bg-blue-50 opacity-30 z-0" 
                        style={{ left: `${((18-8)*4)/52*100}%`, width: `${((21-18)*4)/52*100}%` }} 
                        title="夜間時間帯（18:00-21:00）">
                   </div>
@@ -4173,7 +4173,9 @@ export default function FullMainApp() {
                               <div key={staff.id} 
                                    className="staff-timeline-row h-[45px] relative hover:bg-gray-50"
                                    style={{
-                                     backgroundColor: supportBorderColor ? hexToRgba(supportBorderColor, 0.5) : undefined
+                                     backgroundColor: supportBorderColor ? hexToRgba(supportBorderColor, 0.5) : undefined,
+                                     borderBottom: '1px solid #d1d5db',
+                                     zIndex: 1
                                    }}
                                    onMouseDown={(e) => handleTimelineMouseDown(e, staff)}
                                    onMouseLeave={() => {
@@ -4283,7 +4285,7 @@ export default function FullMainApp() {
                                            }
                                          }}
                                          onDragStart={(e) => {
-                                           if (isContract || !canEdit(schedule.staffId)) {
+                                           if (isContract || !canEdit(schedule.staffId) || (schedule as any).isApprovedPending) {
                                              e.preventDefault();
                                              return;
                                            }
@@ -4305,7 +4307,7 @@ export default function FullMainApp() {
                                            setDraggedSchedule(null);
                                            setDragOffset(0);
                                          }}
-                                         title={`${capitalizeStatus(schedule.status)}${schedule.memo ? ': ' + schedule.memo : ''} (${isContract ? 'レイヤー1:契約' : 'レイヤー2:調整'})`}>
+                                         title={`${capitalizeStatus(schedule.status)}${schedule.memo ? ': ' + schedule.memo : ''} (${isContract ? 'レイヤー1:契約' : (schedule as any).isApprovedPending ? 'レイヤー2:承認済み' : 'レイヤー2:調整'})`}>
                                       <span className="truncate">
                                         {capitalizeStatus(schedule.status)}
                                         {schedule.memo && (

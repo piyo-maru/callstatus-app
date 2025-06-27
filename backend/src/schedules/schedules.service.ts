@@ -54,7 +54,8 @@ export class SchedulesService {
           end: this.utcToJstDecimal(ls.end),
           memo: ls.memo || null,
           editable: ls.layer === 'adjustment', // 調整レイヤーのみ編集可能
-          layer: ls.layer // レイヤー情報を追加
+          layer: ls.layer, // レイヤー情報を追加
+          isApprovedPending: ls.isApprovedPending || false // 承認済みpending情報を追加
         };
       });
 
@@ -315,7 +316,35 @@ export class SchedulesService {
   }
 
   private async removeAdjustmentSchedule(id: number) {
-    // Adjustmentテーブルを使用
+    // まず対象レコードを確認
+    const existingRecord = await this.prisma.adjustment.findUnique({
+      where: { id }
+    });
+
+    if (!existingRecord) {
+      throw new NotFoundException(`スケジュールが見つかりません (ID: ${id})`);
+    }
+
+    // 承認済みpending予定の場合、特別な削除処理を実行
+    // 古いデータでは isPending が false になっているため approvedAt の存在で判定
+    if (existingRecord.approvedAt) {
+      console.log(`承認済みpending予定を削除: ID ${id}, isPending: ${existingRecord.isPending}`);
+      
+      // 関連する承認ログを先に削除
+      await this.prisma.pendingApprovalLog.deleteMany({
+        where: { adjustmentId: id }
+      });
+      
+      // 承認済みpending予定を削除
+      const deletedSchedule = await this.prisma.adjustment.delete({
+        where: { id }
+      });
+      
+      this.gateway.sendScheduleDeleted(id);
+      return deletedSchedule;
+    }
+
+    // 通常の削除処理
     const deletedSchedule = await this.prisma.adjustment.delete({
       where: { id },
     });

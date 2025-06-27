@@ -10,6 +10,7 @@ export interface LayeredSchedule {
   memo?: string;
   layer: 'contract' | 'adjustment';
   priority: number;
+  isApprovedPending?: boolean; // 承認済みpendingスケジュールフラグ
 }
 
 @Injectable()
@@ -169,9 +170,10 @@ export class LayerManagerService {
         end: adj.end,
         memo: adj.memo || undefined,
         layer: 'adjustment' as const,
-        priority: 3 // 個別調整は最高優先度
+        priority: 3, // 個別調整は最高優先度
+        isApprovedPending: adj.isPending && adj.approvedAt !== null // 承認済みpendingかどうか
       };
-      console.log(`Adjustment schedule created: ID ${adjustmentSchedule.id}, staffId ${adj.staffId}, database ID: ${adj.id}`);
+      console.log(`Adjustment schedule created: ID ${adjustmentSchedule.id}, staffId ${adj.staffId}, database ID: ${adj.id}, isApprovedPending: ${adjustmentSchedule.isApprovedPending}`);
       return adjustmentSchedule;
     });
   }
