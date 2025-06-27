@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useCallback, Fragment, useRef, forwardRef
 import { useAuth, UserRole } from './AuthProvider';
 import { createPortal } from 'react-dom';
 import { io, Socket } from 'socket.io-client';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 // ★★★ カレンダーライブラリをインポート ★★★
 import DatePicker, { registerLocale } from 'react-datepicker';
 import { ja } from 'date-fns/locale/ja';
@@ -13,17 +13,35 @@ import "react-datepicker/dist/react-datepicker.css";
 import { 
   timeToPositionPercent, 
   positionPercentToTime, 
-  generateTimeOptions,
-  STATUS_COLORS,
-  TIMELINE_CONFIG,
   capitalizeStatus
 } from './timeline/TimelineUtils';
+// ★★★ 分離されたモジュールのインポート ★★★
+import { 
+  Holiday, Staff, GeneralResponsibilityData, ReceptionResponsibilityData, 
+  ResponsibilityData, ScheduleFromDB, Schedule, DragInfo, 
+  ImportHistory, SnapshotHistory 
+} from './types/MainAppTypes';
+import { 
+  statusColors, displayStatusColors, departmentColors, teamColors, 
+  getApiUrl, availableStatuses, AVAILABLE_STATUSES 
+} from './constants/MainAppConstants';
+import { 
+  fetchHolidays, getDateColor, 
+  formatDateWithHoliday, checkSupportedCharacters, 
+  timeStringToHours 
+} from './utils/MainAppUtils';
+import { ConfirmationModal } from './modals/ConfirmationModal';
+import { ScheduleModal } from './modals/ScheduleModal';
+import { AssignmentModal } from './modals/AssignmentModal';
+import { ResponsibilityModal } from './modals/ResponsibilityModal';
+import { JsonUploadModal } from './modals/JsonUploadModal';
+import { CsvUploadModal } from './modals/CsvUploadModal';
 
 // ★★★ カレンダーの表示言語を日本語に設定 ★★★
 registerLocale('ja', ja);
 
 
-// --- 型定義 ---
+// Global type extension (still needed in this file)
 declare global {
   interface Window {
     APP_CONFIG?: {
@@ -32,269 +50,22 @@ declare global {
   }
 }
 
-type Holiday = {
-  date: string;
-  name: string;
-};
+// Moved constants to MainAppConstants.ts
 
-type Staff = {
-  id: number;
-  empNo?: string;  // データベーススキーマに存在するフィールド
-  name: string;
-  department: string;
-  group: string;
-  currentStatus: string;
-  isSupporting?: boolean;
-  originalDept?: string;
-  originalGroup?: string;
-  currentDept?: string;
-  currentGroup?: string;
-  supportInfo?: {
-    startDate: string;
-    endDate: string;
-    reason: string;
-  } | null;
-  responsibilities?: ResponsibilityData | null;
-  hasResponsibilities?: boolean;
-  isReception?: boolean;
-};
+// fetchHolidays moved to MainAppUtils.ts
 
-type GeneralResponsibilityData = {
-  fax: boolean;
-  subjectCheck: boolean;
-  custom: string;
-};
+// isWeekend moved to MainAppUtils.ts
 
-type ReceptionResponsibilityData = {
-  lunch: boolean;
-  fax: boolean;
-  cs: boolean;
-  custom: string;
-};
+// getHoliday moved to MainAppUtils.ts
 
-type ResponsibilityData = GeneralResponsibilityData | ReceptionResponsibilityData;
+// getDateColor moved to MainAppUtils.ts
 
-type ScheduleFromDB = {
-  id: number;
-  staffId: number;
-  status: string;
-  start: string;
-  end: string;
-  memo?: string;
-  layer?: 'contract' | 'adjustment';
-};
+// formatDateWithHoliday moved to MainAppUtils.ts
 
-type Schedule = {
-  id: number | string;
-  staffId: number;
-  status: string;
-  start: number;
-  end: number;
-  memo?: string;
-  layer?: 'contract' | 'adjustment' | 'historical';
-  isHistorical?: boolean;
-};
+// CharacterCheckResult type moved to MainAppTypes.ts
 
-type DragInfo = {
-  staff: Staff;
-  startX: number;
-  currentX: number;
-  rowRef: HTMLDivElement;
-};
-
-type ImportHistory = {
-  batchId: string;
-  importedAt: string;
-  recordCount: number;
-  staffCount: number;
-  staffList: string[];
-  dateRange: string;
-  canRollback: boolean;
-};
-
-type SnapshotHistory = {
-  id: number;
-  targetDate: string;
-  status: 'COMPLETED' | 'FAILED' | 'PENDING';
-  recordCount: number;
-  batchId: string;
-  startedAt: string;
-  completedAt?: string;
-  errorMessage?: string;
-};
-
-// --- 定数定義 ---
-// ステータス色は TimelineUtils.STATUS_COLORS を使用
-// 大文字小文字両対応のための拡張マップ
-const statusColors: { [key: string]: string } = {
-  ...STATUS_COLORS,
-  // 大文字バリエーション（後方互換性）
-  'Online': STATUS_COLORS.online,
-  'Remote': STATUS_COLORS.remote,
-  'Meeting': STATUS_COLORS.meeting,
-  'Training': STATUS_COLORS.training,
-  'Break': STATUS_COLORS.break,
-  'Off': STATUS_COLORS.off,
-  'Unplanned': STATUS_COLORS.unplanned,
-  'Night duty': STATUS_COLORS['night duty'],
-};
-
-// 表示用ステータスカラー（重複除去済み）
-const displayStatusColors: { [key: string]: string } = {
-  'online': '#22c55e',
-  'remote': '#10b981', 
-  'meeting': '#f59e0b',
-  'training': '#3b82f6',
-  'break': '#f97316',
-  'off': '#ef4444',
-  'unplanned': '#dc2626',
-  'night duty': '#4f46e5',
-};
-
-// capitalizeStatus は TimelineUtils から使用
-
-// 部署の色設定（より薄く調整）
-const departmentColors: { [key: string]: string } = {
-  "カスタマー・サポートセンター": "#ffebeb",
-  "カスタマーサポート部": "#f8f8f8",
-  "財務情報第一システムサポート課": "#ffebeb",
-  "財務情報第二システムサポート課": "#fcf2f8",
-  "税務情報システムサポート課": "#fff6e0",
-  "給与計算システムサポート課": "#f0f2f5",
-  "ＯＭＳ・テクニカルサポート課": "#f4fff2",
-  "一次受付サポート課": "#e3f2fd",
-  "ＴＡＳＫカスタマーサポート部": "#f1f7ed",
-  "コールセンター業務管理部": "#ebf5fc",
-  "総務部": "#e1f5fe",
-  "unknown": "#fdfdfd"
-};
-
-// グループの色設定（スタッフの背景色として使用、より薄く調整）
-const teamColors: { [key: string]: string } = {
-  "カスタマー・サポートセンター": "#f5f5f5",
-  "カスタマーサポート部": "#fafafa",
-  "財務情報第一システムサポート課": "#fdf6f0",
-  "財務会計グループ": "#fffaf6",
-  "ＦＸ２グループ": "#fff8f0",
-  "ＦＸ２・ＦＸ４クラウドグループ": "#fff4e6",
-  "業種別システムグループ": "#fffbf5",
-  "財務情報第二システムサポート課": "#fdf4f7",
-  "ＦＸクラウドグループ": "#fef7f9",
-  "ＳＸ・ＦＭＳグループ": "#fef9fc",
-  "税務情報システムサポート課": "#fcf9ed",
-  "税務情報第一システムグループ": "#fffded",
-  "税務情報第二システムグループ": "#fffef2",
-  "給与計算システムサポート課": "#f7f9fc",
-  "ＰＸ第一グループ": "#f6f2fc",
-  "ＰＸ第二グループ": "#f1ebf7",
-  "ＰＸ第三グループ": "#fbf9fe",
-  "ＯＭＳ・テクニカルサポート課": "#f6fcf5",
-  "ＯＭＳグループ": "#f4ffeb",
-  "ハードウェアグループ": "#f2f8ed",
-  "一次受付サポート課": "#f5fbff",
-  "一次受付グループ": "#f6f9fd",
-  "ＴＡＳＫカスタマーサポート部": "#f2f9f2",
-  "住民情報・福祉情報システム第一グループ": "#f0f7f0",
-  "住民情報・福祉情報システム第二グループ": "#f9fcf9",
-  "税務情報システムグループ": "#f5fbf9",
-  "住民サービス・内部情報システムサービス": "#f2fbfe",
-  "コールセンター業務管理部": "#f8fcfe",
-  "総務部": "#ecf9fe",
-  "unknown_team": "#fefefe"
-};
-// 設定ファイルからAPIのURLを取得する関数
-const getApiUrl = (): string => {
-  // バックエンドAPIのURLを正しく設定
-  if (typeof window !== 'undefined' && window.APP_CONFIG?.API_HOST) {
-    return window.APP_CONFIG.API_HOST;
-  }
-  const currentHost = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
-  return `http://${currentHost}:3002`;
-};
-const availableStatuses = ['online', 'remote', 'meeting', 'training', 'break', 'off', 'unplanned', 'night duty'];
-const AVAILABLE_STATUSES = ['online', 'remote', 'night duty'];
-
-// --- 祝日関連の関数 ---
-const fetchHolidays = async (): Promise<Holiday[]> => {
-  // CORS制限により外部祝日データは取得不可のため、内蔵データを使用
-  console.log('内蔵祝日データを使用します');
-  
-  // 2025年の祝日データ
-  return [
-      { date: '2025-01-01', name: '元日' },
-      { date: '2025-01-13', name: '成人の日' },
-      { date: '2025-02-11', name: '建国記念の日' },
-      { date: '2025-02-23', name: '天皇誕生日' },
-      { date: '2025-03-20', name: '春分の日' },
-      { date: '2025-04-29', name: '昭和の日' },
-      { date: '2025-05-03', name: '憲法記念日' },
-      { date: '2025-05-04', name: 'みどりの日' },
-      { date: '2025-05-05', name: 'こどもの日' },
-      { date: '2025-07-21', name: '海の日' },
-      { date: '2025-08-11', name: '山の日' },
-      { date: '2025-09-15', name: '敬老の日' },
-      { date: '2025-09-23', name: '秋分の日' },
-      { date: '2025-10-13', name: '体育の日' },
-      { date: '2025-11-03', name: '文化の日' },
-      { date: '2025-11-23', name: '勤労感謝の日' },
-    ];
-};
-
-const isWeekend = (date: Date): 'saturday' | 'sunday' | null => {
-  const day = date.getDay();
-  if (day === 6) return 'saturday';
-  if (day === 0) return 'sunday';
-  return null;
-};
-
-const getHoliday = (date: Date, holidays: Holiday[]): Holiday | null => {
-  // JST基準で日付文字列を生成
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  const dateStr = `${year}-${month}-${day}`;
-  return holidays.find(holiday => holiday.date === dateStr) || null;
-};
-
-const getDateColor = (date: Date, holidays: Holiday[]): string => {
-  const holiday = getHoliday(date, holidays);
-  if (holiday) return 'text-red-600'; // 祝日は赤色
-  
-  const weekend = isWeekend(date);
-  if (weekend === 'sunday') return 'text-red-600'; // 日曜日は赤色
-  if (weekend === 'saturday') return 'text-blue-600'; // 土曜日は青色
-  
-  return 'text-gray-700'; // 平日は通常色
-};
-
-const formatDateWithHoliday = (date: Date, holidays: Holiday[]): string => {
-  const holiday = getHoliday(date, holidays);
-  const baseFormat = date.toLocaleDateString('ja-JP', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    weekday: 'short'
-  });
-  
-  if (holiday) {
-    return `${baseFormat} (${holiday.name})`;
-  }
-  
-  return baseFormat;
-};
-
-// --- 文字チェック関数 ---
-type CharacterCheckResult = {
-  isValid: boolean;
-  errors: Array<{
-    field: string;
-    value: string;
-    invalidChars: string[];
-    position: number;
-  }>;
-};
-
-const checkSupportedCharacters = (data: Array<{name: string; dept: string; team: string}>): CharacterCheckResult => {
+// checkSupportedCharacters moved to MainAppUtils.ts
+/*
   // JIS第1-2水準漢字 + ひらがな + カタカナ + 英数字 + 基本記号 + 反復記号「々」+ 全角英数字の範囲
   const supportedCharsRegex = /^[\u4e00-\u9faf\u3040-\u309f\u30a0-\u30ff\u0020-\u007e\uff01-\uff9f\u3000\u301c\u2010-\u2015\u2018-\u201f\u2026\u2030\u203b\u2212\u2500-\u257f\u3005]*$/;
   
@@ -335,48 +106,17 @@ const checkSupportedCharacters = (data: Array<{name: string; dept: string; team:
     }
   });
   
-  return {
-    isValid: errors.length === 0,
-    errors
-  };
-};
+*/
 
 // タイムライン関数は TimelineUtils から使用
 // timeToPositionPercent, positionPercentToTime は共通化済み
 
-// --- 時刻変換ヘルパー関数 ---
-const timeStringToHours = (timeString: string): number => {
-    // ISO文字列をパースしてJST時刻の数値表現に変換
-    const date = new Date(timeString);
-    // JST時刻に変換（UTC + 9時間オフセット）
-    const jstDate = new Date(date.getTime() + 9 * 60 * 60 * 1000);
-    const hours = jstDate.getUTCHours();
-    const minutes = jstDate.getUTCMinutes();
-    return hours + minutes / 60;
-};
-
-const hoursToTimeString = (hours: number): string => {
-    // 数値時刻（例: 10.5）をUTC保存用のISO文字列に変換
-    const hour = Math.floor(hours);
-    const minute = Math.round((hours - hour) * 60);
-    
-    // 現在の日付を取得してJST時刻として設定
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth();
-    const day = now.getDate();
-    
-    // JST時刻をISO-8601形式のタイムゾーン付き文字列として構築
-    const jstIsoString = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00+09:00`;
-    
-    // JST文字列をパースしてUTC時刻のDateオブジェクトを作成
-    return new Date(jstIsoString).toISOString();
-};
+// timeStringToHours and hoursToTimeString moved to MainAppUtils.ts
 
 // generateTimeOptions は TimelineUtils から使用
 
-// --- 登録・編集モーダル ---
-const ScheduleModal = ({ isOpen, onClose, staffList, onSave, scheduleToEdit, initialData }: { 
+// ScheduleModal moved to ./modals/ScheduleModal.tsx
+/* 
     isOpen: boolean; 
     onClose: () => void; 
     staffList: Staff[]; 
@@ -498,33 +238,12 @@ const ScheduleModal = ({ isOpen, onClose, staffList, onSave, scheduleToEdit, ini
           <button type="button" onClick={handleSave} className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 border-transparent rounded-md hover:bg-indigo-700">保存</button>
         </div>
       </div>
-    </div>,
-    document.body
-  );
-};
+*/
 
-// --- 削除確認モーダル ---
-const ConfirmationModal = ({ isOpen, onClose, onConfirm, message }: { isOpen: boolean; onClose: () => void; onConfirm: () => void; message: string; }) => {
-    const [isClient, setIsClient] = useState(false);
-    useEffect(() => { setIsClient(true); }, []);
-    if (!isOpen || !isClient) return null;
-    return createPortal(
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-[9999] flex justify-center items-center">
-            <div className="bg-white rounded-lg p-6 shadow-xl w-full max-w-sm">
-                <h3 className="text-lg font-medium leading-6 text-gray-900">確認</h3>
-                <div className="mt-2"><p className="text-sm text-gray-500">{message}</p></div>
-                <div className="mt-6 flex justify-end space-x-2">
-                    <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">キャンセル</button>
-                    <button type="button" onClick={onConfirm} className="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700">削除</button>
-                </div>
-            </div>
-        </div>,
-        document.body
-    );
-};
+// ConfirmationModal moved to ./modals/ConfirmationModal.tsx
 
-// --- 支援設定モーダルコンポーネント ---
-const AssignmentModal = ({ isOpen, onClose, staff, staffList, onSave, onDelete }: {
+// AssignmentModal moved to ./modals/AssignmentModal.tsx
+/*
   isOpen: boolean;
   onClose: () => void;
   staff: Staff | null;
@@ -704,8 +423,9 @@ const AssignmentModal = ({ isOpen, onClose, staff, staffList, onSave, onDelete }
             </div>
           )}
         </div>
+/*
         <div className="mt-6 flex justify-between items-center">
-          {/* 削除ボタン（左側、既存の支援設定がある場合のみ表示） */}
+          // 削除ボタン（左側、既存の支援設定がある場合のみ表示）
           <div>
             {staff.isSupporting && onDelete && (
               <button
@@ -718,7 +438,7 @@ const AssignmentModal = ({ isOpen, onClose, staff, staffList, onSave, onDelete }
             )}
           </div>
           
-          {/* キャンセル・保存ボタン（右側） */}
+          // キャンセル・保存ボタン（右側）
           <div className="flex space-x-2">
             <button
               type="button"
@@ -737,501 +457,14 @@ const AssignmentModal = ({ isOpen, onClose, staff, staffList, onSave, onDelete }
           </div>
         </div>
       </div>
-    </div>,
-    document.body
-  );
-};
+// ... (remaining AssignmentModal code commented out)
+*/
 
-// --- 担当設定モーダルコンポーネント ---
-const ResponsibilityModal = ({ isOpen, onClose, staff, onSave }: {
-  isOpen: boolean;
-  onClose: () => void;
-  staff: Staff | null;
-  onSave: (data: { staffId: number; responsibilities: ResponsibilityData }) => void;
-}) => {
-  const [isClient, setIsClient] = useState(false);
-  
-  // 一般部署用のstate
-  const [fax, setFax] = useState(false);
-  const [subjectCheck, setSubjectCheck] = useState(false);
-  const [custom, setCustom] = useState('');
-  
-  // 受付部署用のstate
-  const [lunch, setLunch] = useState(false);
-  const [cs, setCs] = useState(false);
+// ResponsibilityModal moved to ./modals/ResponsibilityModal.tsx
 
-  useEffect(() => { setIsClient(true); }, []);
+// JsonUploadModal moved to ./modals/JsonUploadModal.tsx
 
-  useEffect(() => {
-    if (isOpen && staff) {
-      // 既存の担当設定があれば読み込み
-      if (staff.responsibilities) {
-        if (staff.isReception) {
-          const r = staff.responsibilities as ReceptionResponsibilityData;
-          setLunch(r.lunch || false);
-          setFax(r.fax || false);
-          setCs(r.cs || false);
-          setCustom(r.custom || '');
-        } else {
-          const r = staff.responsibilities as GeneralResponsibilityData;
-          setFax(r.fax || false);
-          setSubjectCheck(r.subjectCheck || false);
-          setCustom(r.custom || '');
-        }
-      } else {
-        // 新規設定の場合は全て初期化
-        setLunch(false);
-        setFax(false);
-        setCs(false);
-        setSubjectCheck(false);
-        setCustom('');
-      }
-    } else if (!isOpen) {
-      // モーダルが閉じられた時は全て初期化
-      setLunch(false);
-      setFax(false);
-      setCs(false);
-      setSubjectCheck(false);
-      setCustom('');
-    }
-  }, [isOpen, staff]);
-
-  if (!isOpen || !staff || !isClient) return null;
-
-  const handleSave = () => {
-    const responsibilities: ResponsibilityData = staff.isReception 
-      ? { lunch, fax, cs, custom }
-      : { fax, subjectCheck, custom };
-
-    onSave({
-      staffId: staff.id,
-      responsibilities
-    });
-    onClose();
-  };
-
-  const handleClear = () => {
-    if (confirm(`${staff.name}の担当設定をクリアしますか？`)) {
-      const responsibilities: ResponsibilityData = staff.isReception 
-        ? { lunch: false, fax: false, cs: false, custom: '' }
-        : { fax: false, subjectCheck: false, custom: '' };
-
-      onSave({
-        staffId: staff.id,
-        responsibilities
-      });
-      onClose();
-    }
-  };
-
-  return createPortal(
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-[9999] flex justify-center items-center">
-      <div className="bg-white rounded-lg shadow-xl w-96 max-w-md mx-4">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900">
-            担当設定 - {staff.name}
-          </h2>
-          <p className="text-sm text-gray-600 mt-1">
-            {staff.department} / {staff.group}
-          </p>
-        </div>
-        
-        <div className="px-6 py-4 space-y-4">
-          {staff.isReception ? (
-            // 受付部署用
-            <>
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  id="lunch"
-                  checked={lunch}
-                  onChange={(e) => setLunch(e.target.checked)}
-                  className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                />
-                <label htmlFor="lunch" className="ml-2 text-sm font-medium text-gray-700">
-                  昼当番
-                </label>
-              </div>
-              
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  id="fax"
-                  checked={fax}
-                  onChange={(e) => setFax(e.target.checked)}
-                  className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                />
-                <label htmlFor="fax" className="ml-2 text-sm font-medium text-gray-700">
-                  FAX当番
-                </label>
-              </div>
-              
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  id="cs"
-                  checked={cs}
-                  onChange={(e) => setCs(e.target.checked)}
-                  className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                />
-                <label htmlFor="cs" className="ml-2 text-sm font-medium text-gray-700">
-                  CS担当
-                </label>
-              </div>
-            </>
-          ) : (
-            // 一般部署用
-            <>
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  id="fax"
-                  checked={fax}
-                  onChange={(e) => setFax(e.target.checked)}
-                  className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                />
-                <label htmlFor="fax" className="ml-2 text-sm font-medium text-gray-700">
-                  FAX当番
-                </label>
-              </div>
-              
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  id="subjectCheck"
-                  checked={subjectCheck}
-                  onChange={(e) => setSubjectCheck(e.target.checked)}
-                  className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                />
-                <label htmlFor="subjectCheck" className="ml-2 text-sm font-medium text-gray-700">
-                  件名チェック担当
-                </label>
-              </div>
-            </>
-          )}
-          
-          {/* カスタム担当 */}
-          <div>
-            <label htmlFor="custom" className="block text-sm font-medium text-gray-700">
-              カスタム担当
-            </label>
-            <input
-              type="text"
-              id="custom"
-              value={custom}
-              onChange={(e) => setCustom(e.target.value)}
-              placeholder="カスタム担当を入力"
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-            />
-          </div>
-        </div>
-        
-        <div className="px-6 py-4 bg-gray-50 flex justify-between">
-          {/* クリアボタン（左側） */}
-          <button
-            type="button"
-            onClick={handleClear}
-            className="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700"
-          >
-            クリア
-          </button>
-          
-          {/* キャンセル・保存ボタン（右側） */}
-          <div className="flex space-x-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
-            >
-              キャンセル
-            </button>
-            <button
-              type="button"
-              onClick={handleSave}
-              className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md hover:bg-indigo-700"
-            >
-              保存
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>,
-    document.body
-  );
-};
-
-// --- JSONファイルアップロードモーダルコンポーネント ---
-const JsonUploadModal = ({ isOpen, onClose, onUpload }: {
-  isOpen: boolean;
-  onClose: () => void;
-  onUpload: (file: File) => void;
-}) => {
-  const [isClient, setIsClient] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [isDragOver, setIsDragOver] = useState(false);
-
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
-
-  if (!isOpen || !isClient) return null;
-
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      setSelectedFile(file);
-    }
-  };
-
-  const handleDragOver = (event: React.DragEvent) => {
-    event.preventDefault();
-    setIsDragOver(true);
-  };
-
-  const handleDragLeave = (event: React.DragEvent) => {
-    event.preventDefault();
-    setIsDragOver(false);
-  };
-
-  const handleDrop = (event: React.DragEvent) => {
-    event.preventDefault();
-    setIsDragOver(false);
-    const file = event.dataTransfer.files[0];
-    if (file && file.type === 'application/json') {
-      setSelectedFile(file);
-    } else {
-      alert('JSONファイルを選択してください');
-    }
-  };
-
-  const handleUpload = () => {
-    if (!selectedFile) {
-      alert('ファイルを選択してください');
-      return;
-    }
-
-    if (selectedFile.type !== 'application/json') {
-      alert('JSONファイルを選択してください');
-      return;
-    }
-
-    onUpload(selectedFile);
-  };
-
-  return createPortal(
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-[9998] flex justify-center items-center">
-      <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <h2 className="text-lg font-bold mb-4">スタッフデータ同期（JSON）</h2>
-        
-        <div className="mb-4">
-          <p className="text-sm text-gray-600 mb-2">
-            指定フォーマットのJSONファイルをアップロードして社員情報を一括投入します。
-          </p>
-          <p className="text-xs text-gray-500 mb-3">
-            フォーマット：{"{"} "employeeData": [{"{"} "name": "名前", "dept": "部署", "team": "グループ" {"}"}] {"}"}
-          </p>
-        </div>
-
-        <div 
-          className={`mb-4 border-2 border-dashed rounded-lg p-8 text-center ${
-            isDragOver ? 'border-indigo-500 bg-indigo-50' : 'border-gray-300'
-          }`}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-        >
-          {selectedFile ? (
-            <div>
-              <p className="text-sm font-medium text-gray-900">{selectedFile.name}</p>
-              <p className="text-xs text-gray-500">サイズ: {(selectedFile.size / 1024).toFixed(2)} KB</p>
-            </div>
-          ) : (
-            <div>
-              <p className="text-sm text-gray-600 mb-2">
-                JSONファイルをドラッグ&ドロップするか、クリックして選択
-              </p>
-              <input
-                type="file"
-                accept=".json,application/json"
-                onChange={handleFileSelect}
-                className="hidden"
-                id="jsonFile"
-              />
-              <label
-                htmlFor="jsonFile"
-                className="inline-block px-4 py-2 text-sm font-medium text-indigo-600 border border-indigo-600 rounded-md hover:bg-indigo-50 cursor-pointer"
-              >
-                ファイルを選択
-              </label>
-            </div>
-          )}
-        </div>
-
-        {selectedFile && (
-          <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
-            <p className="text-sm text-yellow-800">
-              <strong>注意:</strong> アップロードにより、既存のスタッフデータが更新・削除される場合があります。
-            </p>
-          </div>
-        )}
-
-        <div className="flex justify-end space-x-3">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 border border-gray-300 rounded-md hover:bg-gray-300"
-          >
-            キャンセル
-          </button>
-          <button
-            onClick={handleUpload}
-            disabled={!selectedFile}
-            className={`px-4 py-2 text-sm font-medium text-white rounded-md ${
-              selectedFile 
-                ? 'bg-indigo-600 hover:bg-indigo-700' 
-                : 'bg-gray-400 cursor-not-allowed'
-            }`}
-          >
-            同期実行
-          </button>
-        </div>
-      </div>
-    </div>,
-    document.body
-  );
-};
-
-// --- CSVファイルアップロードモーダルコンポーネント ---
-const CsvUploadModal = ({ isOpen, onClose, onUpload }: {
-  isOpen: boolean;
-  onClose: () => void;
-  onUpload: (file: File) => void;
-}) => {
-  const [isClient, setIsClient] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [isDragOver, setIsDragOver] = useState(false);
-
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
-
-  if (!isClient || !isOpen) return null;
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(true);
-  };
-
-  const handleDragLeave = () => {
-    setIsDragOver(false);
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(false);
-    const files = Array.from(e.dataTransfer.files);
-    const csvFile = files.find(file => file.name.endsWith('.csv') || file.type === 'text/csv');
-    if (csvFile) {
-      setSelectedFile(csvFile);
-    }
-  };
-
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setSelectedFile(file);
-    }
-  };
-
-  const handleUpload = () => {
-    if (!selectedFile) {
-      alert('ファイルを選択してください。');
-      return;
-    }
-
-    onUpload(selectedFile);
-  };
-
-  return createPortal(
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-[9998] flex justify-center items-center">
-      <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <h2 className="text-lg font-bold mb-4">スケジュールインポート（CSV）</h2>
-        
-        <div className="mb-4">
-          <p className="text-sm text-gray-600 mb-2">
-            指定フォーマットのCSVファイルをアップロードしてスケジュールデータを一括投入します。
-          </p>
-          <p className="text-xs text-gray-500 mb-3">
-            フォーマット: 日付,社員名,ステータス,開始時刻,終了時刻,メモ
-          </p>
-        </div>
-
-        <div 
-          className={`mb-4 border-2 border-dashed rounded-lg p-8 text-center ${
-            isDragOver ? 'border-indigo-500 bg-indigo-50' : 'border-gray-300'
-          }`}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-        >
-          {selectedFile ? (
-            <div>
-              <p className="text-sm font-medium text-gray-900">{selectedFile.name}</p>
-              <p className="text-xs text-gray-500">サイズ: {(selectedFile.size / 1024).toFixed(2)} KB</p>
-            </div>
-          ) : (
-            <div>
-              <p className="text-sm text-gray-600 mb-2">
-                CSVファイルをドラッグ&ドロップするか、クリックして選択
-              </p>
-              <input
-                type="file"
-                accept=".csv,text/csv"
-                onChange={handleFileSelect}
-                className="hidden"
-                id="csvFile"
-              />
-              <label
-                htmlFor="csvFile"
-                className="inline-block px-4 py-2 text-sm font-medium text-indigo-600 border border-indigo-600 rounded-md hover:bg-indigo-50 cursor-pointer"
-              >
-                ファイルを選択
-              </label>
-            </div>
-          )}
-        </div>
-
-        {selectedFile && (
-          <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
-            <p className="text-sm text-yellow-800">
-              <strong>注意:</strong> アップロードにより、既存のスケジュールデータが更新される場合があります。
-            </p>
-          </div>
-        )}
-
-        <div className="flex justify-end space-x-3">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 border border-gray-300 rounded-md hover:bg-gray-300"
-          >
-            キャンセル
-          </button>
-          <button
-            onClick={handleUpload}
-            disabled={!selectedFile}
-            className={`px-4 py-2 text-sm font-medium text-white rounded-md ${
-              selectedFile 
-                ? 'bg-gray-700 hover:bg-gray-800' 
-                : 'bg-gray-400 cursor-not-allowed'
-            }`}
-          >
-            インポート実行
-          </button>
-        </div>
-      </div>
-    </div>,
-    document.body
-  );
-};
+// CsvUploadModal moved to ./modals/CsvUploadModal.tsx
 
 // --- インポート履歴モーダルコンポーネント ---
 const ImportHistoryModal = ({ isOpen, onClose, onRollback, authenticatedFetch }: {
@@ -2461,7 +1694,7 @@ export default function FullMainApp() {
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSchedule, setEditingSchedule] = useState<Schedule | null>(null);
-  const [deletingScheduleId, setDeletingScheduleId] = useState<number | null>(null);
+  const [deletingScheduleId, setDeletingScheduleId] = useState<number | string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedDepartment, setSelectedDepartment] = useState('all');
   const [selectedGroup, setSelectedGroup] = useState('all');
