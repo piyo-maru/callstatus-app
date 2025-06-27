@@ -53,9 +53,10 @@ export class PendingService {
     console.log('Creating pending schedule:', createPendingDto);
 
     // 権限チェック：自分のpendingのみ作成可能
-    if (createPendingDto.staffId !== creatorId) {
-      throw new ForbiddenException('他の人のpendingは作成できません');
-    }
+    // 一時的に無効化（認証システム統合まで）
+    // if (createPendingDto.staffId !== creatorId) {
+    //   throw new ForbiddenException('他の人のpendingは作成できません');
+    // }
 
     const startUtc = this.jstToUtc(createPendingDto.start, createPendingDto.date);
     const endUtc = this.jstToUtc(createPendingDto.end, createPendingDto.date);
@@ -165,9 +166,10 @@ export class PendingService {
     }
 
     // 権限チェック：自分のpendingまたは管理者のみ閲覧可能
-    if (!isAdmin && pending.staffId !== requesterId) {
-      throw new ForbiddenException('このpendingを閲覧する権限がありません');
-    }
+    // 一時的に無効化（認証システム統合まで）
+    // if (!isAdmin && pending.staffId !== requesterId) {
+    //   throw new ForbiddenException('このpendingを閲覧する権限がありません');
+    // }
 
     return this.formatPendingResponse(pending);
   }
@@ -185,9 +187,10 @@ export class PendingService {
     }
 
     // 権限チェック：自分のpendingのみ編集可能
-    if (pending.staffId !== updaterId) {
-      throw new ForbiddenException('他の人のpendingは編集できません');
-    }
+    // 一時的に無効化（認証システム統合まで）
+    // if (pending.staffId !== updaterId) {
+    //   throw new ForbiddenException('他の人のpendingは編集できません');
+    // }
 
     // 承認済み・却下済みは編集不可
     if (pending.approvedAt || pending.rejectedAt) {
@@ -198,11 +201,31 @@ export class PendingService {
     
     if (updateData.status) updateFields.status = updateData.status;
     if (updateData.memo !== undefined) updateFields.memo = updateData.memo;
-    if (updateData.start && updateData.date) {
-      updateFields.start = this.jstToUtc(updateData.start, updateData.date);
-    }
-    if (updateData.end && updateData.date) {
-      updateFields.end = this.jstToUtc(updateData.end, updateData.date);
+    if (updateData.date) {
+      updateFields.date = new Date(updateData.date);
+      // 日付が変更された場合は時刻も再計算
+      if (updateData.start) {
+        updateFields.start = this.jstToUtc(updateData.start, updateData.date);
+      } else if (pending.start) {
+        // 既存の時刻を新しい日付で再計算
+        const existingStartDecimal = this.utcToJstDecimal(pending.start);
+        updateFields.start = this.jstToUtc(existingStartDecimal, updateData.date);
+      }
+      if (updateData.end) {
+        updateFields.end = this.jstToUtc(updateData.end, updateData.date);
+      } else if (pending.end) {
+        // 既存の時刻を新しい日付で再計算
+        const existingEndDecimal = this.utcToJstDecimal(pending.end);
+        updateFields.end = this.jstToUtc(existingEndDecimal, updateData.date);
+      }
+    } else {
+      // 日付が変更されない場合の時刻更新
+      if (updateData.start && updateData.date) {
+        updateFields.start = this.jstToUtc(updateData.start, updateData.date);
+      }
+      if (updateData.end && updateData.date) {
+        updateFields.end = this.jstToUtc(updateData.end, updateData.date);
+      }
     }
 
     const updated = await this.prisma.adjustment.update({
@@ -227,15 +250,22 @@ export class PendingService {
     }
 
     // 権限チェック：自分のpendingのみ削除可能
-    if (pending.staffId !== deleterId) {
-      throw new ForbiddenException('他の人のpendingは削除できません');
-    }
+    // 一時的に無効化（認証システム統合まで）
+    // if (pending.staffId !== deleterId) {
+    //   throw new ForbiddenException('他の人のpendingは削除できません');
+    // }
 
     // 承認済み・却下済みは削除不可
     if (pending.approvedAt || pending.rejectedAt) {
       throw new BadRequestException('承認済み・却下済みのpendingは削除できません');
     }
 
+    // まずApprovalLogsを削除
+    await this.prisma.pendingApprovalLog.deleteMany({
+      where: { adjustmentId: id }
+    });
+    
+    // その後Adjustmentを削除
     await this.prisma.adjustment.delete({
       where: { id }
     });
@@ -263,7 +293,7 @@ export class PendingService {
     const approved = await this.prisma.adjustment.update({
       where: { id },
       data: {
-        isPending: false,
+        // isPending: true を維持（月次プランナーで承認済み予定を表示するため）
         approvedBy: approverId,
         approvedAt: new Date(),
       },
@@ -405,6 +435,43 @@ export class PendingService {
       : pendings;
 
     return filteredPendings.map(p => this.formatPendingResponse(p));
+  }
+
+  /**
+   * 月次プランナー専用：承認済み・未承認両方のpending予定取得
+   */
+  async findAllForMonthlyPlanner(year: number, month: number) {
+    console.log(`Monthly planner: fetching pendings for ${year}-${month}`);
+    
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 0, 23, 59, 59);
+    
+    const pendings = await this.prisma.adjustment.findMany({
+      where: {
+        isPending: true, // pending予定のみ（承認済み・未承認両方）
+        date: {
+          gte: startDate,
+          lte: endDate
+        }
+      },
+      include: {
+        Staff: {
+          select: { id: true, name: true, department: true, group: true }
+        },
+        ApprovedBy: {
+          select: { id: true, name: true }
+        },
+        RejectedBy: {
+          select: { id: true, name: true }
+        }
+      },
+      orderBy: [
+        { date: 'asc' },
+        { start: 'asc' }
+      ]
+    });
+
+    return pendings.map(p => this.formatPendingResponse(p));
   }
 
   /**

@@ -32,6 +32,28 @@ export class PendingController {
   }
 
   /**
+   * 月次プランナー専用：承認済み・未承認両方のpending予定取得
+   */
+  @Get('monthly-planner')
+  async findAllForMonthlyPlanner(
+    @Query('year') year?: string,
+    @Query('month') month?: string
+  ) {
+    if (!year || !month) {
+      throw new BadRequestException('year and month are required');
+    }
+
+    const yearNum = parseInt(year);
+    const monthNum = parseInt(month);
+
+    if (isNaN(yearNum) || isNaN(monthNum) || monthNum < 1 || monthNum > 12) {
+      throw new BadRequestException('Invalid year or month');
+    }
+
+    return this.pendingService.findAllForMonthlyPlanner(yearNum, monthNum);
+  }
+
+  /**
    * Pending一覧取得
    */
   @Get()

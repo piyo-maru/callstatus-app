@@ -144,6 +144,13 @@ export class LayerManagerService {
         start: {
           gte: startOfDayUtc,
           lt: endOfDayUtc
+        },
+        // 承認済みの調整のみを取得（未承認pending予定は除外）
+        NOT: {
+          AND: [
+            { isPending: true },
+            { approvedAt: null }
+          ]
         }
       }
     });

@@ -37,31 +37,17 @@ type PendingSchedule = {
   rejectedBy?: { id: number; name: string };
   rejectedAt?: string;
   rejectionReason?: string;
-  approvalLogs?: any[];
   createdAt: string;
   updatedAt: string;
 };
 
-// 既存のスケジュールとpendingを統合した型
-type UnifiedSchedule = {
-  id: string;
-  staffId: number;
+// プリセット型定義
+type PresetSchedule = {
+  key: string;
+  label: string;
   status: string;
   start: number;
   end: number;
-  memo?: string;
-  isPending?: boolean;
-  pendingType?: string;
-  approvedBy?: any;
-  approvedAt?: string;
-  rejectedBy?: any;
-  rejectedAt?: string;
-  layer?: string;
-};
-
-type SelectedCell = {
-  staffId: number;
-  date: string;
 };
 
 // APIのURL取得
@@ -73,26 +59,218 @@ const getApiUrl = (): string => {
   return `http://${currentHost}:3002`;
 };
 
+// プリセット予定の定義
+const presetSchedules: PresetSchedule[] = [
+  { key: 'off', label: '休み', status: 'off', start: 9, end: 18 },
+  { key: 'morning-off', label: '午前休', status: 'off', start: 9, end: 13 },
+  { key: 'afternoon-off', label: '午後休', status: 'off', start: 13, end: 18 },
+  { key: 'night-duty', label: '夜間担当', status: 'night duty', start: 18, end: 21 },
+  { key: 'training', label: '研修', status: 'training', start: 9, end: 18 },
+  { key: 'meeting', label: '会議', status: 'meeting', start: 10, end: 12 },
+];
+
+// 色のコントラスト計算関数
+const getContrastColor = (backgroundColor: string, isTransparent: boolean = false): string => {
+  // 透明背景（申請中）の場合は元の色を使用
+  if (isTransparent) {
+    return backgroundColor || '#333333';
+  }
+  
+  // 背景色から明度を計算
+  if (!backgroundColor || !backgroundColor.includes('#')) {
+    return '#000000'; // デフォルトは黒文字
+  }
+  
+  const color = backgroundColor.replace('#', '');
+  if (color.length !== 6) {
+    return '#000000'; // 不正な色形式の場合は黒文字
+  }
+  
+  const r = parseInt(color.substr(0, 2), 16);
+  const g = parseInt(color.substr(2, 2), 16);
+  const b = parseInt(color.substr(4, 2), 16);
+  
+  // 明度計算（YIQ公式）
+  const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+  
+  // 明度が高い（明るい）色なら黒文字、低い（暗い）色なら白文字
+  return brightness > 150 ? '#000000' : '#ffffff';
+};
+
+// 承認状態スタイル取得関数
+const getPendingStyle = (pending: PendingSchedule, backgroundColor: string) => {
+  if (pending.approvedAt) {
+    // 承認済み: 塗りつぶし（現在のスタイル）
+    return {
+      backgroundColor,
+      opacity: 0.9,
+      border: '2px solid transparent'
+    };
+  } else if (pending.rejectedAt) {
+    // 却下済み: 薄い塗りつぶし
+    return {
+      backgroundColor,
+      opacity: 0.3,
+      border: '2px solid #ef4444'
+    };
+  } else {
+    // 申請中（承認待ち）: 枠のみ
+    return {
+      backgroundColor: 'transparent',
+      opacity: 1,
+      border: `2px dashed ${backgroundColor}`
+    };
+  }
+};
+
+// HTML5 Drag&Dropドラッグ可能なPending予定コンポーネント
+const DraggablePending: React.FC<{
+  pending: PendingSchedule;
+  backgroundColor: string;
+  textColor: string;
+  pendingStyle: any;
+  isTransparent: boolean;
+  onDragStart: (pending: PendingSchedule) => void;
+}> = ({ pending, backgroundColor, textColor, pendingStyle, isTransparent, onDragStart }) => {
+  const canDrag = !pending.approvedAt && !pending.rejectedAt; // 未承認のみドラッグ可能
+
+  const handleDragStart = (e: React.DragEvent) => {
+    if (!canDrag) {
+      e.preventDefault();
+      return;
+    }
+    e.dataTransfer.setData('application/json', JSON.stringify(pending));
+    e.dataTransfer.effectAllowed = 'move';
+    onDragStart(pending);
+  };
+
+  return (
+    <div
+      draggable={canDrag}
+      onDragStart={handleDragStart}
+      className={`w-full h-full rounded-md flex flex-col text-xs text-center pt-1 ${
+        canDrag ? 'cursor-move' : 'cursor-default'
+      }`}
+      style={pendingStyle}
+    >
+      {/* 予定種別 */}
+      <div 
+        className="font-medium leading-none mb-0.5"
+        style={{ color: textColor }}
+      >
+        {capitalizeStatus(pending.status)}
+        {pending.approvedAt && <span className="ml-1">✓</span>}
+      </div>
+      
+      {/* 時刻表示 */}
+      <div 
+        className="text-xs leading-none"
+        style={{ 
+          color: textColor, 
+          opacity: isTransparent ? 0.8 : 0.9 
+        }}
+      >
+        {String(pending.start).padStart(2, '0')}:00-{String(pending.end).padStart(2, '0')}:00
+      </div>
+    </div>
+  );
+};
+
+// HTML5 Drag&Dropドロップ可能なセルコンポーネント
+const DroppableCell: React.FC<{
+  staffId: number;
+  day: number;
+  children: React.ReactNode;
+  onDrop: (draggedPending: PendingSchedule, targetStaffId: number, targetDay: number) => void;
+  hasContract: boolean;
+}> = ({ staffId, day, children, onDrop, hasContract }) => {
+  const [isOver, setIsOver] = useState(false);
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setIsOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsOver(false);
+    
+    try {
+      const pendingData = e.dataTransfer.getData('application/json');
+      const draggedPending: PendingSchedule = JSON.parse(pendingData);
+      onDrop(draggedPending, staffId, day);
+    } catch (error) {
+      console.error('Failed to parse dropped data:', error);
+    }
+  };
+
+  return (
+    <div
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+      className={`w-24 border-r border-b cursor-pointer relative overflow-hidden ${
+        hasContract ? 'bg-green-50 hover:bg-green-100' : 'hover:bg-blue-50'
+      } ${
+        isOver ? 'bg-blue-100 border-blue-400 border-2' : ''
+      }`}
+      style={{
+        minHeight: '45px',
+      }}
+    >
+      {children}
+    </div>
+  );
+};
+
 // 月次プランナーのメインコンポーネント
-export default function MonthlyPlannerPage() {
+function MonthlyPlannerPageContent() {
   const { user, token } = useAuth();
   
   // 基本状態
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [draggedPending, setDraggedPending] = useState<PendingSchedule | null>(null);
+  
+  // 月ナビゲーション関数
+  const goToPreviousMonth = useCallback(() => {
+    const newMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1);
+    setCurrentMonth(newMonth);
+  }, [currentMonth]);
+  
+  const goToNextMonth = useCallback(() => {
+    const newMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1);
+    setCurrentMonth(newMonth);
+  }, [currentMonth]);
   
   // Pending関連状態
   const [pendingSchedules, setPendingSchedules] = useState<PendingSchedule[]>([]);
-  const [unifiedSchedules, setUnifiedSchedules] = useState<UnifiedSchedule[]>([]);
-  const [showApprovalMode, setShowApprovalMode] = useState(false);
   
-  // セル選択状態
-  const [selectedCells, setSelectedCells] = useState<SelectedCell[]>([]);
-  const [showPresetMenu, setShowPresetMenu] = useState(false);
-  const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 });
+  // 契約スケジュール状態（月次プランナーでは不要 - プリセット登録専用）
   
-  // 部署・グループフィルター（メイン画面と同様）
+  // モーダル状態
+  const [showModal, setShowModal] = useState(false);
+  const [selectedCell, setSelectedCell] = useState<{
+    staffId: number;
+    staffName: string;
+    day: number;
+    dateString: string;
+  } | null>(null);
+  
+  // セル選択状態（2段階操作用）
+  const [selectedCellForHighlight, setSelectedCellForHighlight] = useState<{
+    staffId: number;
+    day: number;
+  } | null>(null);
+  
+  // 部署・グループフィルター
   const [selectedDepartment, setSelectedDepartment] = useState<string>('all');
   const [selectedGroup, setSelectedGroup] = useState<string>('all');
   
@@ -101,16 +279,6 @@ export default function MonthlyPlannerPage() {
     departments: any[];
     groups: any[];
   }>({ departments: [], groups: [] });
-
-  // プリセット予定の定義
-  const presetSchedules = [
-    { key: 'off', label: '休み', status: 'off', start: 9, end: 18 },
-    { key: 'morning-off', label: '午前休', status: 'off', start: 9, end: 13 },
-    { key: 'afternoon-off', label: '午後休', status: 'off', start: 13, end: 18 },
-    { key: 'night-duty', label: '夜間担当', status: 'night duty', start: 18, end: 21 },
-    { key: 'training', label: '研修', status: 'training', start: 9, end: 18 },
-    { key: 'meeting', label: '会議', status: 'meeting', start: 10, end: 12 },
-  ];
 
   // 月の日数を取得
   const daysInMonth = useMemo(() => {
@@ -124,7 +292,7 @@ export default function MonthlyPlannerPage() {
     return Array.from({ length: daysInMonth }, (_, i) => i + 1);
   }, [daysInMonth]);
 
-  // 部署・グループマップ（パフォーマンス最適化）
+  // 部署・グループマップ
   const departmentMap = useMemo(() => {
     const map = new Map<string, any>();
     departmentSettings.departments.forEach(dept => map.set(dept.name, dept));
@@ -141,7 +309,7 @@ export default function MonthlyPlannerPage() {
     return map;
   }, [staffList]);
 
-  // フィルタリングされたスタッフリスト（メイン画面と同様）
+  // フィルタリングされたスタッフリスト
   const filteredStaffList = useMemo(() => {
     return staffList.filter(staff => {
       const departmentMatch = selectedDepartment === 'all' || staff.department === selectedDepartment;
@@ -150,9 +318,9 @@ export default function MonthlyPlannerPage() {
     });
   }, [staffList, selectedDepartment, selectedGroup]);
 
-  // 部署とグループの一覧をソート済みで取得（メイン画面と同様）
+  // 部署とグループの一覧をソート済みで取得
   const sortedDepartments = useMemo(() => {
-    const uniqueDepts = [...new Set(staffList.map(s => s.department))];
+    const uniqueDepts = Array.from(new Set(staffList.map(s => s.department)));
     return uniqueDepts.sort((a, b) => {
       const settingA = departmentMap.get(a);
       const settingB = departmentMap.get(b);
@@ -169,7 +337,7 @@ export default function MonthlyPlannerPage() {
     const filteredStaff = staffList.filter(s => {
       return selectedDepartment === 'all' || s.department === selectedDepartment;
     });
-    const uniqueGroups = [...new Set(filteredStaff.map(s => s.group))];
+    const uniqueGroups = Array.from(new Set(filteredStaff.map(s => s.group)));
     
     return uniqueGroups.sort((a, b) => {
       const staffA = groupToStaffMap.get(a);
@@ -190,12 +358,11 @@ export default function MonthlyPlannerPage() {
     });
   }, [staffList, selectedDepartment, groupToStaffMap, departmentMap]);
 
-  // スタッフを部署・グループごとにグループ化してソート（メイン画面と完全に同じロジック）
+  // スタッフを部署・グループごとにグループ化してソート
   const groupedStaffForDisplay = useMemo(() => {
     const grouped: { [department: string]: { [group: string]: Staff[] } } = {};
     
     filteredStaffList.forEach(staff => {
-      // メイン画面と同様：支援中でも元の部署/グループの位置に表示
       const department = staff.department;
       const group = staff.group;
       if (!grouped[department]) grouped[department] = {};
@@ -203,11 +370,10 @@ export default function MonthlyPlannerPage() {
       grouped[department][group].push(staff);
     });
 
-    // 各グループ内のスタッフをempNo順でソート（メイン画面と同じ）
+    // 各グループ内のスタッフをempNo順でソート
     Object.keys(grouped).forEach(department => {
       Object.keys(grouped[department]).forEach(group => {
         grouped[department][group].sort((a, b) => {
-          // empNoがない場合は後ろに配置
           if (!a.empNo && !b.empNo) return a.id - b.id;
           if (!a.empNo) return 1;
           if (!b.empNo) return -1;
@@ -219,7 +385,7 @@ export default function MonthlyPlannerPage() {
     return grouped;
   }, [filteredStaffList]);
 
-  // 部署・グループの背景色計算（メイン画面と同様）
+  // 部署・グループの背景色計算
   const departmentColors = useMemo(() => {
     const colors: { [key: string]: string } = {};
     departmentSettings.departments.forEach(dept => {
@@ -240,7 +406,7 @@ export default function MonthlyPlannerPage() {
     return colors;
   }, [departmentSettings.groups]);
 
-  // ソート関数（メイン画面と完全に同じロジック）
+  // ソート関数
   const sortByDisplayOrder = useCallback((entries: [string, any][], type: 'department' | 'group') => {
     return entries.sort((a, b) => {
       const aName = a[0];
@@ -252,7 +418,6 @@ export default function MonthlyPlannerPage() {
       const aOrder = aSettings?.displayOrder || 0;
       const bOrder = bSettings?.displayOrder || 0;
       
-      // displayOrderで比較、同じ場合は名前順
       if (aOrder !== bOrder) {
         return aOrder - bOrder;
       }
@@ -266,7 +431,6 @@ export default function MonthlyPlannerPage() {
       const currentApiUrl = getApiUrl();
       const response = await fetch(`${currentApiUrl}/api/staff`, {
         headers: {
-          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });
@@ -279,13 +443,12 @@ export default function MonthlyPlannerPage() {
     }
   }, [token]);
 
-  // 部署・グループ設定を取得（メイン画面と同様）
+  // 部署・グループ設定を取得
   const fetchDepartmentSettings = useCallback(async () => {
     try {
       const currentApiUrl = getApiUrl();
       const response = await fetch(`${currentApiUrl}/api/department-settings`, {
         headers: {
-          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });
@@ -298,219 +461,311 @@ export default function MonthlyPlannerPage() {
     }
   }, [token]);
 
-  // セルクリック処理
-  const handleCellClick = useCallback((staffId: number, day: number, event: React.MouseEvent) => {
-    const year = currentMonth.getFullYear();
-    const month = currentMonth.getMonth() + 1;
-    const dateString = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    
-    const cellKey = { staffId, date: dateString };
-    
-    if (event.ctrlKey || event.metaKey) {
-      // Ctrl/Cmd+クリックで複数選択
-      setSelectedCells(prev => {
-        const exists = prev.some(cell => cell.staffId === staffId && cell.date === dateString);
-        if (exists) {
-          return prev.filter(cell => !(cell.staffId === staffId && cell.date === dateString));
-        } else {
-          return [...prev, cellKey];
-        }
-      });
-    } else {
-      // 通常クリックで単一選択
-      setSelectedCells([cellKey]);
-    }
-  }, [currentMonth]);
-
-  // プリセットメニュー表示
-  const showPresetMenuHandler = useCallback((event: React.MouseEvent) => {
-    if (selectedCells.length === 0) return;
-    
-    event.preventDefault();
-    event.stopPropagation();
-    
-    setMenuPosition({ x: event.clientX, y: event.clientY });
-    setShowPresetMenu(true);
-  }, [selectedCells]);
-
-  // Pending取得関数
+  // Pending取得関数（月次プランナー専用API使用）
   const fetchPendingSchedules = useCallback(async () => {
     try {
       const currentApiUrl = getApiUrl();
       const year = currentMonth.getFullYear();
       const month = currentMonth.getMonth() + 1;
       
-      // 当月のpendingを取得
-      const response = await fetch(`${currentApiUrl}/api/schedules/pending`, {
+      const response = await fetch(`${currentApiUrl}/api/schedules/pending/monthly-planner?year=${year}&month=${month}`, {
         headers: {
-          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });
       
       if (response.ok) {
         const data: PendingSchedule[] = await response.json();
-        // 当月のpendingのみフィルター
-        const monthlyPendings = data.filter(pending => {
-          const pendingDate = new Date(pending.date);
-          return pendingDate.getFullYear() === year && pendingDate.getMonth() + 1 === month;
-        });
-        setPendingSchedules(monthlyPendings);
+        console.log(`Monthly planner: fetched ${data.length} pending schedules for ${year}-${month}`);
+        setPendingSchedules(data);
+      } else {
+        console.error('Failed to fetch pending schedules:', response.status);
       }
     } catch (error) {
       console.error('Failed to fetch pending schedules:', error);
     }
-  }, [currentMonth, token]);
+  }, [currentMonth]);
 
-  // 統合スケジュール取得関数（将来的にunified APIを使用）
-  const fetchUnifiedSchedules = useCallback(async () => {
-    try {
-      const currentApiUrl = getApiUrl();
+  // 契約レイヤースケジュール取得無効化（最軽量）
+  const fetchContractSchedules = useCallback(async () => {
+    // 月次プランナーはプリセット登録専用なので契約背景色は不要
+    // パフォーマンス優先で契約データ取得を無効化
+    console.log('Contract schedules: Disabled for monthly planner performance');
+  }, []);
+
+  // セルクリック処理（2段階操作）
+  const handleCellClick = useCallback((staff: Staff, day: number) => {
+    const currentSelection = selectedCellForHighlight;
+    
+    // 同じセルを再度クリックした場合はモーダルを表示
+    if (currentSelection && 
+        currentSelection.staffId === staff.id && 
+        currentSelection.day === day) {
       const year = currentMonth.getFullYear();
       const month = currentMonth.getMonth() + 1;
+      const dateString = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
       
-      // 月の全日程分を取得
-      const daysInMonth = new Date(year, month, 0).getDate();
-      const schedulePromises = [];
-      
-      for (let day = 1; day <= daysInMonth; day++) {
-        const dateString = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-        schedulePromises.push(
-          fetch(`${currentApiUrl}/api/schedules/layered?date=${dateString}`, {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            }
-          }).then(res => res.ok ? res.json() : null)
-        );
+      // 承認済み予定があるセルでは編集を制限
+      const approvedPending = pendingSchedules.find(pending => {
+        const pendingDate = new Date(pending.date).toISOString().split('T')[0];
+        return pending.staffId === staff.id && 
+               pendingDate === dateString &&
+               pending.approvedAt;
+      });
+
+      if (approvedPending) {
+        alert('承認済み予定があるため編集できません。');
+        return;
       }
       
-      const results = await Promise.all(schedulePromises);
-      const allSchedules: UnifiedSchedule[] = [];
-      
-      results.forEach((result, index) => {
-        if (result && result.schedules) {
-          const day = index + 1;
-          const dateString = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-          
-          result.schedules.forEach((schedule: any) => {
-            allSchedules.push({
-              ...schedule,
-              date: dateString,
-              isPending: false,
-              layer: schedule.layer || 'adjustment'
-            });
-          });
-        }
+      setSelectedCell({
+        staffId: staff.id,
+        staffName: staff.name,
+        day,
+        dateString
       });
-      
-      setUnifiedSchedules(allSchedules);
-    } catch (error) {
-      console.error('Failed to fetch unified schedules:', error);
+      setShowModal(true);
+    } else {
+      // 初回クリックまたは別のセルクリック時は選択状態にする
+      setSelectedCellForHighlight({
+        staffId: staff.id,
+        day
+      });
     }
-  }, [currentMonth, token]);
+  }, [currentMonth, selectedCellForHighlight, pendingSchedules]);
 
-  // プリセット適用（Pending作成に変更）
-  const applyPreset = useCallback(async (preset: typeof presetSchedules[0]) => {
-    if (selectedCells.length === 0) return;
+  // プリセット適用
+  const applyPreset = useCallback(async (preset: PresetSchedule) => {
+    if (!selectedCell) return;
+
+    // 該当セルに承認済み予定があるかチェック
+    const approvedPending = pendingSchedules.find(pending => {
+      const pendingDate = new Date(pending.date).toISOString().split('T')[0];
+      return pending.staffId === selectedCell.staffId && 
+             pendingDate === selectedCell.dateString &&
+             pending.approvedAt;
+    });
+
+    if (approvedPending) {
+      alert('承認済み予定があるため編集できません。');
+      return;
+    }
+
+    // 該当セルに既存のpending予定があるかチェック
+    const existingPending = pendingSchedules.find(pending => {
+      const pendingDate = new Date(pending.date).toISOString().split('T')[0];
+      return pending.staffId === selectedCell.staffId && 
+             pendingDate === selectedCell.dateString &&
+             !pending.approvedAt && 
+             !pending.rejectedAt;
+    });
+
+    if (existingPending) {
+      alert('このマスには既にpending予定が設定されています。先に既存の予定を削除してください。');
+      return;
+    }
 
     try {
       const currentApiUrl = getApiUrl();
       
-      // 選択されたセルに対してPendingを作成
-      const createPromises = selectedCells.map(async (cell) => {
-        const pendingData = {
-          staffId: cell.staffId,
-          date: cell.date,
-          status: preset.status,
-          start: preset.start,
-          end: preset.end,
-          memo: `月次プランナー: ${preset.label}`,
-          pendingType: 'monthly-planner' as const
-        };
+      const pendingData = {
+        staffId: selectedCell.staffId,
+        date: selectedCell.dateString,
+        status: preset.status,
+        start: preset.start,
+        end: preset.end,
+        memo: `月次プランナー: ${preset.label}`,
+        pendingType: 'monthly-planner' as const
+      };
 
-        const response = await fetch(`${currentApiUrl}/api/schedules/pending`, {
-          method: 'POST',
-          headers: { 
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json' 
-          },
-          body: JSON.stringify(pendingData)
-        });
-
-        return response.ok;
+      const response = await fetch(`${currentApiUrl}/api/schedules/pending`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json' 
+        },
+        body: JSON.stringify(pendingData)
       });
 
-      const results = await Promise.all(createPromises);
-      const successCount = results.filter(Boolean).length;
-      
-      if (successCount > 0) {
-        alert(`${successCount}件のPending予定を作成しました（承認待ち）`);
-        // Pendingデータを再取得
+      if (response.ok) {
+        alert(`${preset.label}のPending予定を作成しました（承認待ち）`);
         await fetchPendingSchedules();
+      } else {
+        alert('Pending予定の作成に失敗しました');
       }
     } catch (error) {
       console.error('Failed to create pending:', error);
       alert('Pending予定の作成に失敗しました');
     }
 
-    setSelectedCells([]);
-    setShowPresetMenu(false);
-  }, [selectedCells, token, fetchPendingSchedules]);
+    setShowModal(false);
+    setSelectedCell(null);
+    setSelectedCellForHighlight(null);
+  }, [selectedCell, pendingSchedules, fetchPendingSchedules]);
 
-  // セル内のスケジュール取得関数
-  const getCellSchedules = useCallback((staffId: number, day: number) => {
-    const year = currentMonth.getFullYear();
-    const month = currentMonth.getMonth() + 1;
-    const dateString = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    
-    // Pendingスケジュールを取得
-    const pendings = pendingSchedules.filter(pending => 
-      pending.staffId === staffId && pending.date === dateString
-    );
-    
-    // 通常のスケジュールを取得
-    const activeSchedules = unifiedSchedules.filter(schedule => 
-      schedule.staffId === staffId && schedule.date === dateString
-    );
-    
-    return { pendings, activeSchedules };
-  }, [currentMonth, pendingSchedules, unifiedSchedules]);
+  // 予定クリア
+  const clearSchedule = useCallback(async () => {
+    if (!selectedCell) return;
 
-  // セルの選択状態判定
-  const isCellSelected = useCallback((staffId: number, day: number) => {
-    const year = currentMonth.getFullYear();
-    const month = currentMonth.getMonth() + 1;
-    const dateString = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    
-    return selectedCells.some(cell => cell.staffId === staffId && cell.date === dateString);
-  }, [selectedCells, currentMonth]);
+    // 該当セルのpendingを削除
+    const cellPendings = pendingSchedules.filter(pending => {
+      const pendingDate = new Date(pending.date).toISOString().split('T')[0];
+      return pending.staffId === selectedCell.staffId && pendingDate === selectedCell.dateString;
+    });
 
-  // Pending削除関数
-  const deletePending = useCallback(async (pendingId: number) => {
-    if (!confirm('このPending予定を削除しますか？')) return;
-    
+    if (cellPendings.length === 0) {
+      alert('削除する予定がありません');
+      setShowModal(false);
+      return;
+    }
+
+    // 承認済み予定があるかチェック
+    const approvedPendings = cellPendings.filter(pending => pending.approvedAt);
+    const deletablePendings = cellPendings.filter(pending => !pending.approvedAt && !pending.rejectedAt);
+
+    if (approvedPendings.length > 0) {
+      alert('承認済み予定があるため削除できません。');
+      setShowModal(false);
+      return;
+    }
+
+    if (deletablePendings.length === 0) {
+      alert('削除可能な予定がありません');
+      setShowModal(false);
+      return;
+    }
+
+    if (!confirm(`${deletablePendings.length}件のPending予定を削除しますか？`)) return;
+
     try {
       const currentApiUrl = getApiUrl();
-      const response = await fetch(`${currentApiUrl}/api/schedules/pending/${pendingId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
       
-      if (response.ok) {
-        alert('Pending予定を削除しました');
-        await fetchPendingSchedules();
-      } else {
-        alert('削除に失敗しました');
+      for (const pending of deletablePendings) {
+        await fetch(`${currentApiUrl}/api/schedules/pending/${pending.id}`, {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
       }
+
+      alert('Pending予定を削除しました');
+      await fetchPendingSchedules();
     } catch (error) {
       console.error('Failed to delete pending:', error);
       alert('削除に失敗しました');
     }
-  }, [token, fetchPendingSchedules]);
+
+    setShowModal(false);
+    setSelectedCell(null);
+    setSelectedCellForHighlight(null);
+  }, [selectedCell, pendingSchedules, fetchPendingSchedules]);
+
+  // セル内のスケジュール取得関数
+  const getCellPendings = useCallback((staffId: number, day: number) => {
+    const year = currentMonth.getFullYear();
+    const month = currentMonth.getMonth() + 1;
+    const dateString = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    
+    return pendingSchedules.filter(pending => {
+      const pendingDate = new Date(pending.date).toISOString().split('T')[0];
+      return pending.staffId === staffId && pendingDate === dateString;
+    });
+  }, [currentMonth, pendingSchedules]);
+
+  // セルにpending予定があるかチェック（未承認のみ）
+  const hasPendingInCell = useCallback((staffId: number, day: number) => {
+    const year = currentMonth.getFullYear();
+    const month = currentMonth.getMonth() + 1;
+    const dateString = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    
+    return pendingSchedules.some(pending => {
+      const pendingDate = new Date(pending.date).toISOString().split('T')[0];
+      return pending.staffId === staffId && 
+             pendingDate === dateString &&
+             !pending.approvedAt && 
+             !pending.rejectedAt;
+    });
+  }, [currentMonth, pendingSchedules]);
+
+  // 契約スケジュール有無判定関数
+  const hasContractSchedule = useCallback((staffId: number, day: number) => {
+    // 軽量な契約判定：曜日ベースでの基本判定
+    const year = currentMonth.getFullYear();
+    const month = currentMonth.getMonth() + 1;
+    const date = new Date(year, month - 1, day);
+    const dayOfWeek = date.getDay(); // 0=日曜, 6=土曜
+    
+    // 基本的に平日は契約勤務あり、土日は契約勤務なし
+    // （将来的には実際の契約データを参照可能）
+    return dayOfWeek >= 1 && dayOfWeek <= 5; // 月〜金のみ
+  }, [currentMonth]);
+
+  // Pending予定のドラッグ&ドロップ処理
+  const handlePendingDrop = useCallback(async (draggedPending: PendingSchedule, targetStaffId: number, targetDay: number) => {
+    if (draggedPending.staffId !== targetStaffId) {
+      // 異なるスタッフには移動不可
+      alert('同じスタッフの予定のみ移動できます');
+      return;
+    }
+
+    const year = currentMonth.getFullYear();
+    const month = currentMonth.getMonth() + 1;
+    const targetDateString = `${year}-${String(month).padStart(2, '0')}-${String(targetDay).padStart(2, '0')}`;
+    
+    // 元の日付と同じ場合は何もしない
+    const originalDate = new Date(draggedPending.date).toISOString().split('T')[0];
+    if (originalDate === targetDateString) {
+      return;
+    }
+
+    try {
+      const currentApiUrl = getApiUrl();
+      
+      // 移動先に承認済み予定があるかチェック
+      const approvedPendings = pendingSchedules.filter(p => {
+        const pDate = new Date(p.date).toISOString().split('T')[0];
+        return p.staffId === targetStaffId && pDate === targetDateString && p.approvedAt;
+      });
+
+      if (approvedPendings.length > 0) {
+        alert('承認済み予定があるため移動できません。');
+        return;
+      }
+      
+      // 移動先に既存のpending予定があるかチェック
+      const targetPendings = pendingSchedules.filter(p => {
+        const pDate = new Date(p.date).toISOString().split('T')[0];
+        return p.staffId === targetStaffId && pDate === targetDateString && !p.approvedAt && !p.rejectedAt;
+      });
+
+      if (targetPendings.length > 0) {
+        // 重複拒否：1つのマスには1つのpending予定のみ
+        alert(`${targetDay}日には既にpending予定が設定されています。先に既存の予定を削除してください。`);
+        return;
+      }
+
+      // ドラッグされた予定を新しい日付に移動
+      const response = await fetch(`${currentApiUrl}/api/schedules/pending/${draggedPending.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          date: targetDateString
+        })
+      });
+
+      if (response.ok) {
+        alert('予定を移動しました');
+        await fetchPendingSchedules();
+      } else {
+        alert('予定の移動に失敗しました');
+      }
+    } catch (error) {
+      console.error('Failed to move pending:', error);
+      alert('予定の移動に失敗しました');
+    }
+  }, [currentMonth, pendingSchedules, fetchPendingSchedules]);
 
   // 初期データ取得
   useEffect(() => {
@@ -518,107 +773,82 @@ export default function MonthlyPlannerPage() {
     fetchDepartmentSettings();
   }, [fetchStaffData, fetchDepartmentSettings]);
 
-  // 月が変更された時にpendingとスケジュールデータを取得
+  // 月が変更された時にpendingデータを取得（契約データ無効化）
   useEffect(() => {
     if (staffList.length > 0) {
       fetchPendingSchedules();
-      fetchUnifiedSchedules();
     }
-  }, [currentMonth, staffList, fetchPendingSchedules, fetchUnifiedSchedules]);
-
-  // メニューを閉じる
-  useEffect(() => {
-    const handleClickOutside = () => {
-      setShowPresetMenu(false);
-    };
-
-    if (showPresetMenu) {
-      document.addEventListener('click', handleClickOutside);
-      return () => document.removeEventListener('click', handleClickOutside);
-    }
-  }, [showPresetMenu]);
+  }, [currentMonth, staffList, fetchPendingSchedules]);
 
   return (
     <div className="h-screen flex flex-col bg-gray-50">
-      {/* ヘッダー */}
-      <div className="bg-white shadow-sm border-b p-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <h1 className="text-xl font-bold text-gray-900">📅 月次プランナー</h1>
-            <DatePicker
-              selected={currentMonth}
-              onChange={(date: Date | null) => date && setCurrentMonth(date)}
-              dateFormat="yyyy年MM月"
-              showMonthYearPicker
-              locale="ja"
-              className="px-3 py-2 border border-gray-300 rounded-md text-sm"
-            />
+      {/* ヘッダー - 個人ページと同じレイアウト */}
+      <div className="bg-white border-b border-gray-200">
+        {/* タイトル行 */}
+        <div className="px-6 py-3 border-b border-gray-200">
+          <div className="flex items-center justify-between">
+            <h1 className="text-lg font-semibold text-gray-900">月次プランナー</h1>
+            <div className="text-sm text-gray-600">
+              トグル
+            </div>
           </div>
-
-          <div className="flex items-center space-x-4">
-            {/* 承認モード切り替え */}
-            <button
-              onClick={() => setShowApprovalMode(!showApprovalMode)}
-              className={`px-3 py-1 text-sm rounded ${
-                showApprovalMode 
-                  ? 'bg-orange-600 text-white hover:bg-orange-700' 
-                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-              }`}
-            >
-              {showApprovalMode ? '承認モード ON' : '承認モード OFF'}
-            </button>
-            
-            {selectedCells.length > 0 && (
-              <div className="flex items-center space-x-2">
-                <span className="text-sm text-gray-600">
-                  {selectedCells.length}セル選択中
-                </span>
-                <button
-                  onClick={showPresetMenuHandler}
-                  className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
-                >
-                  Pending作成
-                </button>
-                <button
-                  onClick={() => setSelectedCells([])}
-                  className="px-3 py-1 bg-gray-500 text-white text-sm rounded hover:bg-gray-600"
-                >
-                  選択解除
-                </button>
-              </div>
-            )}
+        </div>
+        
+        {/* ナビゲーション行 */}
+        <div className="px-6 py-3 flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <div className="inline-flex rounded-md shadow-sm" role="group">
+              <button 
+                type="button" 
+                onClick={goToPreviousMonth}
+                className="px-2 py-1 text-xs font-medium text-gray-900 bg-white border border-gray-200 rounded-l-lg hover:bg-gray-100 h-7"
+              >
+                &lt;
+              </button>
+              <button 
+                type="button" 
+                onClick={() => setCurrentMonth(new Date())}
+                className="px-2 py-1 text-xs font-medium text-gray-900 bg-white border-t border-b border-gray-200 hover:bg-gray-100 h-7"
+              >
+                今月
+              </button>
+              <button 
+                type="button" 
+                onClick={goToNextMonth}
+                className="px-2 py-1 text-xs font-medium text-gray-900 bg-white border border-gray-200 rounded-r-lg hover:bg-gray-100 h-7"
+              >
+                &gt;
+              </button>
+            </div>
+            <h2 className="text-lg font-semibold text-gray-900">
+              {currentMonth.getFullYear()}年{currentMonth.getMonth() + 1}月
+            </h2>
           </div>
         </div>
 
-        {/* フィルター（メイン画面と同様） */}
-        <div className="mt-4 flex flex-wrap gap-4">
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">部署</label>
-            <select
-              value={selectedDepartment}
-              onChange={(e) => setSelectedDepartment(e.target.value)}
-              className="px-2 py-1 text-xs border border-gray-300 rounded"
-            >
-              <option value="all">すべて</option>
-              {sortedDepartments.map(dept => (
-                <option key={dept} value={dept}>{dept}</option>
-              ))}
-            </select>
-          </div>
+        {/* フィルター行 */}
+        <div className="px-6 py-3 border-t border-gray-200 flex items-center space-x-6">
+          <select
+            value={selectedDepartment}
+            onChange={(e) => setSelectedDepartment(e.target.value)}
+            className="px-2 py-1 text-sm border-0 bg-transparent text-gray-700"
+          >
+            <option value="all">すべての部署</option>
+            {sortedDepartments.map(dept => (
+              <option key={dept} value={dept}>{dept}</option>
+            ))}
+          </select>
           
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">グループ</label>
-            <select
-              value={selectedGroup}
-              onChange={(e) => setSelectedGroup(e.target.value)}
-              className="px-2 py-1 text-xs border border-gray-300 rounded"
-            >
-              <option value="all">すべて</option>
-              {sortedGroups.map(group => (
-                <option key={group} value={group}>{group}</option>
-              ))}
-            </select>
-          </div>
+          <select
+            value={selectedGroup}
+            onChange={(e) => setSelectedGroup(e.target.value)}
+            className="px-2 py-1 text-sm border-0 bg-transparent text-gray-700"
+          >
+            <option value="all">すべてのグループ</option>
+            {sortedGroups.map(group => (
+              <option key={group} value={group}>{group}</option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -632,7 +862,7 @@ export default function MonthlyPlannerPage() {
           ) : (
             <div className="min-w-max">
               <div className="flex">
-                {/* 左側：スタッフ一覧（メイン画面と同様の階層構造） */}
+                {/* 左側：スタッフ一覧 */}
                 <div className="min-w-fit max-w-[400px] sticky left-0 z-20 bg-white border-r border-gray-200">
                   {/* ヘッダー */}
                   <div className="px-2 py-3 bg-gray-100 font-bold text-gray-600 text-sm text-center border-b whitespace-nowrap">
@@ -657,7 +887,7 @@ export default function MonthlyPlannerPage() {
                             >
                               {group}
                             </h4>
-                            {staffInGroup.map(staff => (
+                            {staffInGroup.map((staff: any) => (
                               <div 
                                 key={staff.id} 
                                 className="px-2 pl-12 text-sm font-medium whitespace-nowrap h-[45px] hover:bg-gray-50 flex items-center border-b"
@@ -681,14 +911,30 @@ export default function MonthlyPlannerPage() {
                   {/* 日付ヘッダー */}
                   <div className="sticky top-0 z-10 bg-gray-100 border-b">
                     <div className="flex">
-                      {dateArray.map(day => (
-                        <div
-                          key={day}
-                          className="w-20 px-2 py-3 text-center font-bold text-xs border-r"
-                        >
-                          {day}日
-                        </div>
-                      ))}
+                      {dateArray.map(day => {
+                        const year = currentMonth.getFullYear();
+                        const month = currentMonth.getMonth();
+                        const date = new Date(year, month, day);
+                        const dayOfWeek = date.getDay();
+                        const dayNames = ['日', '月', '火', '水', '木', '金', '土'];
+                        const getTextColor = () => {
+                          if (dayOfWeek === 0) return 'text-red-600'; // 日曜日は赤
+                          if (dayOfWeek === 6) return 'text-blue-600'; // 土曜日は青
+                          return 'text-gray-800'; // 平日は通常色
+                        };
+                        
+                        return (
+                          <div
+                            key={day}
+                            className={`w-24 px-2 py-2 text-center font-bold text-xs border-r ${getTextColor()}`}
+                          >
+                            <div>{day}日</div>
+                            <div className="text-xs font-normal">
+                              ({dayNames[dayOfWeek]})
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
 
@@ -700,7 +946,7 @@ export default function MonthlyPlannerPage() {
                           {/* 部署ヘッダー行 */}
                           <div className="flex h-[33px]">
                             {dateArray.map(day => (
-                              <div key={day} className="w-20 border-r border-b bg-gray-50"></div>
+                              <div key={day} className="w-24 border-r border-b bg-gray-50"></div>
                             ))}
                           </div>
                           
@@ -709,97 +955,56 @@ export default function MonthlyPlannerPage() {
                               {/* グループヘッダー行 */}
                               <div className="flex h-[33px]">
                                 {dateArray.map(day => (
-                                  <div key={day} className="w-20 border-r border-b bg-gray-50"></div>
+                                  <div key={day} className="w-24 border-r border-b bg-gray-50"></div>
                                 ))}
                               </div>
                               
                               {/* スタッフ行 */}
-                              {staffInGroup.map(staff => (
+                              {staffInGroup.map((staff: any) => (
                                 <div key={staff.id} className="flex h-[45px]">
                                   {dateArray.map(day => {
-                                    const isSelected = isCellSelected(staff.id, day);
-                                    const { pendings, activeSchedules } = getCellSchedules(staff.id, day);
-                                    const hasPending = pendings.length > 0;
-                                    const hasActive = activeSchedules.length > 0;
+                                    const pendings = getCellPendings(staff.id, day);
+                                    const hasContract = hasContractSchedule(staff.id, day);
                                     
                                     return (
-                                      <div
+                                      <DroppableCell
                                         key={day}
-                                        onClick={(e) => handleCellClick(staff.id, day, e)}
-                                        className={`
-                                          w-20 border-r border-b cursor-pointer relative overflow-hidden
-                                          ${isSelected ? 'bg-blue-100 border-blue-300' : 'hover:bg-gray-100'}
-                                        `}
+                                        staffId={staff.id}
+                                        day={day}
+                                        onDrop={handlePendingDrop}
+                                        hasContract={hasContract}
                                       >
-                                        {/* アクティブなスケジュール表示 */}
-                                        {activeSchedules.map((schedule, index) => (
-                                          <div
-                                            key={`active-${index}`}
-                                            className="absolute inset-0 text-xs flex items-center justify-center"
-                                            style={{ 
-                                              backgroundColor: STATUS_COLORS[schedule.status],
-                                              opacity: schedule.layer === 'contract' ? 0.3 : 0.7,
-                                              zIndex: schedule.layer === 'contract' ? 1 : 2
-                                            }}
-                                          >
-                                            <span className="text-white font-medium">
-                                              {capitalizeStatus(schedule.status)}
-                                            </span>
-                                          </div>
-                                        ))}
-
-                                        {/* Pendingスケジュール表示（最前面） */}
-                                        {pendings.map((pending, index) => (
-                                          <div key={`pending-${pending.id}`} className="relative">
-                                            {/* Pending予定の背景 */}
-                                            <div
-                                              className="absolute inset-0 border-2 border-dashed border-orange-400 bg-orange-50 opacity-70"
-                                              style={{ 
-                                                backgroundColor: STATUS_COLORS[pending.status],
-                                                zIndex: 10
-                                              }}
-                                            />
+                                        <div
+                                          onClick={() => handleCellClick(staff, day)}
+                                          className={`w-full h-full relative cursor-pointer ${
+                                            selectedCellForHighlight?.staffId === staff.id && 
+                                            selectedCellForHighlight?.day === day
+                                              ? 'ring-2 ring-blue-500 ring-inset bg-blue-50'
+                                              : 'hover:bg-gray-100'
+                                          }`}
+                                        >
+                                          {/* Pendingスケジュール表示 */}
+                                          {pendings.map((pending) => {
+                                            const backgroundColor = STATUS_COLORS[pending.status] || '#f3f4f6';
+                                            const pendingStyle = getPendingStyle(pending, backgroundColor);
+                                            const isTransparent = pendingStyle.backgroundColor === 'transparent';
+                                            const textColor = getContrastColor(backgroundColor, isTransparent);
                                             
-                                            {/* 承認待ちラベル */}
-                                            <div className="absolute top-0 right-0 bg-orange-500 text-white text-xs px-1 rounded-bl z-20">
-                                              承認待ち
-                                            </div>
-                                            
-                                            {/* Pending内容表示 */}
-                                            <div className="absolute inset-0 text-xs flex items-center justify-center z-15">
-                                              <span className="text-gray-800 font-medium">
-                                                {capitalizeStatus(pending.status)}
-                                              </span>
-                                            </div>
-                                            
-                                            {/* 削除ボタン（承認モード時のみ表示） */}
-                                            {showApprovalMode && (
-                                              <button
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  deletePending(pending.id);
-                                                }}
-                                                className="absolute top-1 left-1 bg-red-500 text-white text-xs w-4 h-4 rounded-full flex items-center justify-center hover:bg-red-600 z-30"
-                                                title="Pending削除"
-                                              >
-                                                ×
-                                              </button>
-                                            )}
-                                          </div>
-                                        ))}
-                                        
-                                        {/* セル内の時刻表示（pendingまたはactiveがある場合） */}
-                                        {(hasPending || hasActive) && (
-                                          <div className="absolute bottom-0 left-0 text-xs text-gray-600 bg-white bg-opacity-75 px-1 z-25">
-                                            {pendings.length > 0 
-                                              ? `${pendings[0].start}:00-${pendings[0].end}:00`
-                                              : hasActive && activeSchedules[0]
-                                              ? `${Math.floor(activeSchedules[0].start)}:${String(Math.round((activeSchedules[0].start % 1) * 60)).padStart(2, '0')}-${Math.floor(activeSchedules[0].end)}:${String(Math.round((activeSchedules[0].end % 1) * 60)).padStart(2, '0')}`
-                                              : ''
-                                            }
-                                          </div>
-                                        )}
-                                      </div>
+                                            return (
+                                              <div key={`pending-${pending.id}`} className="absolute inset-1 flex items-center justify-center z-10">
+                                                <DraggablePending
+                                                  pending={pending}
+                                                  backgroundColor={backgroundColor}
+                                                  textColor={textColor}
+                                                  pendingStyle={pendingStyle}
+                                                  isTransparent={isTransparent}
+                                                  onDragStart={setDraggedPending}
+                                                />
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      </DroppableCell>
                                     );
                                   })}
                                 </div>
@@ -821,35 +1026,82 @@ export default function MonthlyPlannerPage() {
         </div>
       </div>
 
-      {/* プリセットメニュー */}
-      {showPresetMenu && typeof window !== 'undefined' && createPortal(
-        <div
-          className="fixed bg-white shadow-lg border rounded-md py-2 z-50"
-          style={{
-            left: menuPosition.x,
-            top: menuPosition.y,
-            minWidth: '160px'
-          }}
-        >
-          <div className="px-3 py-1 text-xs font-medium text-gray-500 border-b">
-            Pending予定を作成
+      {/* プリセット選択モーダル */}
+      {showModal && selectedCell && typeof window !== 'undefined' && createPortal(
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-lg max-w-md w-full mx-4">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-medium text-gray-900">
+                  予定登録
+                </h3>
+                <button
+                  onClick={() => {
+                    setShowModal(false);
+                    setSelectedCellForHighlight(null);
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  ×
+                </button>
+              </div>
+
+              <div className="mb-4">
+                <p className="text-sm text-gray-600">
+                  <span className="font-medium">{selectedCell.staffName}</span> さんの
+                  <span className="font-medium">{selectedCell.day}日</span> の予定
+                </p>
+              </div>
+
+              <div className="space-y-3 mb-6">
+                <h4 className="text-sm font-medium text-gray-700">プリセット予定を選択</h4>
+                {presetSchedules.map(preset => (
+                  <button
+                    key={preset.key}
+                    onClick={() => applyPreset(preset)}
+                    className="w-full text-left px-4 py-3 border border-gray-200 rounded-md hover:bg-gray-50 flex items-center"
+                  >
+                    <div
+                      className="w-4 h-4 rounded mr-3"
+                      style={{ backgroundColor: STATUS_COLORS[preset.status] }}
+                    />
+                    <div className="flex-1">
+                      <div className="font-medium">{preset.label}</div>
+                      <div className="text-sm text-gray-500">
+                        {preset.start}:00 - {preset.end}:00
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex space-x-3">
+                <button
+                  onClick={clearSchedule}
+                  className="flex-1 px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600"
+                >
+                  予定クリア
+                </button>
+                <button
+                  onClick={() => {
+                    setShowModal(false);
+                    setSelectedCellForHighlight(null);
+                  }}
+                  className="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
+                >
+                  キャンセル
+                </button>
+              </div>
+            </div>
           </div>
-          {presetSchedules.map(preset => (
-            <button
-              key={preset.key}
-              onClick={() => applyPreset(preset)}
-              className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 flex items-center"
-            >
-              <div
-                className="w-3 h-3 rounded mr-2"
-                style={{ backgroundColor: STATUS_COLORS[preset.status] }}
-              />
-              {preset.label}
-            </button>
-          ))}
         </div>,
         document.body
       )}
     </div>
   );
+}
+
+// メインコンポーネント
+export default function MonthlyPlannerPage() {
+  return <MonthlyPlannerPageContent />;
 }
