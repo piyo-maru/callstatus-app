@@ -391,31 +391,43 @@ const MonthlyPlannerPage: React.FC = () => {
           
           {/* 月間ナビゲーション */}
           <div className="px-6 py-4 flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <div className="inline-flex rounded-md shadow-sm" role="group">
-                <button 
-                  onClick={() => handleMonthChange('prev')} 
-                  className="px-3 py-2 text-sm font-medium text-gray-900 bg-white border border-gray-200 rounded-l-lg hover:bg-gray-100"
-                >
-                  ← 前月
-                </button>
-                <button 
-                  onClick={() => setSelectedMonth(new Date())} 
-                  className="px-3 py-2 text-sm font-medium text-gray-900 bg-white border-t border-b border-gray-200 hover:bg-gray-100"
-                >
-                  今月
-                </button>
-                <button 
-                  onClick={() => handleMonthChange('next')} 
-                  className="px-3 py-2 text-sm font-medium text-gray-900 bg-white border border-gray-200 rounded-r-lg hover:bg-gray-100"
-                >
-                  次月 →
-                </button>
+            <div className="flex items-center justify-between w-full">
+              <div className="flex items-center space-x-4">
+                <div className="inline-flex rounded-md shadow-sm" role="group">
+                  <button 
+                    onClick={() => handleMonthChange('prev')} 
+                    className="px-3 py-2 text-sm font-medium text-gray-900 bg-white border border-gray-200 rounded-l-lg hover:bg-gray-100"
+                  >
+                    ← 前月
+                  </button>
+                  <button 
+                    onClick={() => setSelectedMonth(new Date())} 
+                    className="px-3 py-2 text-sm font-medium text-gray-900 bg-white border-t border-b border-gray-200 hover:bg-gray-100"
+                  >
+                    今月
+                  </button>
+                  <button 
+                    onClick={() => handleMonthChange('next')} 
+                    className="px-3 py-2 text-sm font-medium text-gray-900 bg-white border border-gray-200 rounded-r-lg hover:bg-gray-100"
+                  >
+                    次月 →
+                  </button>
+                </div>
+                
+                <h2 className="text-lg font-semibold text-gray-900">
+                  {format(selectedMonth, 'yyyy年M月', { locale: ja })}
+                </h2>
               </div>
-              
-              <h2 className="text-lg font-semibold text-gray-900">
-                {format(selectedMonth, 'yyyy年M月', { locale: ja })}
-              </h2>
+
+              {/* 承認モードボタン - 管理者のみ表示 */}
+              {user?.role === 'ADMIN' && (
+                <a
+                  href="/admin/pending-approval"
+                  className="inline-flex items-center px-4 py-2 text-sm font-medium text-orange-800 bg-orange-100 border border-orange-300 rounded-md hover:bg-orange-200 transition-colors"
+                >
+                  🔐 申請承認管理
+                </a>
+              )}
             </div>
 
             {/* 選択状態とアクション */}
