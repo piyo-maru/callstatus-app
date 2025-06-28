@@ -106,6 +106,23 @@ const PersonalSchedulePage: React.FC = () => {
 
   // スクロール位置管理のためのref
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  
+  // スクロール同期のためのref
+  const topScrollRef = useRef<HTMLDivElement>(null);
+  const bottomScrollRef = useRef<HTMLDivElement>(null);
+
+  // スクロール同期ハンドラー
+  const handleTopScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    if (bottomScrollRef.current) {
+      bottomScrollRef.current.scrollLeft = e.currentTarget.scrollLeft;
+    }
+  };
+  
+  const handleBottomScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    if (topScrollRef.current) {
+      topScrollRef.current.scrollLeft = e.currentTarget.scrollLeft;
+    }
+  };
   const [savedScrollPosition, setSavedScrollPosition] = useState<number>(0);
   
   // モーダル関連の状態
@@ -338,16 +355,16 @@ const PersonalSchedulePage: React.FC = () => {
 
   // スクロール位置保存・復元関数
   const saveScrollPosition = useCallback(() => {
-    if (scrollContainerRef.current) {
-      setSavedScrollPosition(scrollContainerRef.current.scrollLeft);
+    if (bottomScrollRef.current) {
+      setSavedScrollPosition(bottomScrollRef.current.scrollLeft);
     }
   }, []);
 
   const restoreScrollPosition = useCallback(() => {
-    if (scrollContainerRef.current && savedScrollPosition > 0) {
+    if (bottomScrollRef.current && savedScrollPosition > 0) {
       setTimeout(() => {
-        if (scrollContainerRef.current) {
-          scrollContainerRef.current.scrollLeft = savedScrollPosition;
+        if (bottomScrollRef.current) {
+          bottomScrollRef.current.scrollLeft = savedScrollPosition;
         }
       }, 50); // DOM更新後に復元
     }
@@ -1531,7 +1548,7 @@ const PersonalSchedulePage: React.FC = () => {
             {/* 右側：タイムライン列（メイン画面と同じ構造） */}
             <div className="flex-1 flex flex-col">
               {/* 上部スクロールバー */}
-              <div className="overflow-x-auto border-b">
+              <div className="overflow-x-auto border-b" ref={topScrollRef} onScroll={handleTopScroll}>
                 <div className="min-w-[1300px] h-[17px]"></div>
               </div>
               {/* ヘッダー行 */}
@@ -1557,7 +1574,7 @@ const PersonalSchedulePage: React.FC = () => {
               </div>
               
               {/* タイムライン行（各日付のスケジュール） */}
-              <div ref={scrollContainerRef} className="overflow-x-auto">
+              <div ref={bottomScrollRef} className="overflow-x-auto" onScroll={handleBottomScroll}>
                 <div className="min-w-[1300px]">
                   {monthDays.map((day) => {
                     const dayStr = format(day, 'yyyy-MM-dd');

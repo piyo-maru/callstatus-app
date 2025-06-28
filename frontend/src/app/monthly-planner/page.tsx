@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useAuth } from '../components/AuthProvider';
 import { createPortal } from 'react-dom';
 import { STATUS_COLORS, capitalizeStatus } from '../components/timeline/TimelineUtils';
@@ -398,6 +398,23 @@ function MonthlyPlannerPageContent() {
     departments: any[];
     groups: any[];
   }>({ departments: [], groups: [] });
+
+  // スクロール同期のためのref
+  const topScrollRef = useRef<HTMLDivElement>(null);
+  const bottomScrollRef = useRef<HTMLDivElement>(null);
+
+  // スクロール同期ハンドラー
+  const handleTopScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    if (bottomScrollRef.current) {
+      bottomScrollRef.current.scrollLeft = e.currentTarget.scrollLeft;
+    }
+  };
+  
+  const handleBottomScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    if (topScrollRef.current) {
+      topScrollRef.current.scrollLeft = e.currentTarget.scrollLeft;
+    }
+  };
 
   // 月の日数を取得
   const daysInMonth = useMemo(() => {
@@ -1322,16 +1339,17 @@ function MonthlyPlannerPageContent() {
 
       {/* メインコンテンツ */}
       <div className="max-w-none mx-auto">
-        <div className="overflow-auto">
-          {isLoading ? (
-            <div className="flex items-center justify-center h-64">
-              <div className="text-gray-500">読み込み中...</div>
-            </div>
-          ) : (
-            <div className="min-w-max">
-              <div className="flex">
-                {/* 左側：スタッフ一覧 */}
-                <div className="min-w-fit max-w-[400px] sticky left-0 z-20 bg-white border-r border-gray-200">
+        {isLoading ? (
+          <div className="flex items-center justify-center h-64">
+            <div className="text-gray-500">読み込み中...</div>
+          </div>
+        ) : (
+          <div className="bg-white shadow rounded-lg relative">
+            <div className="flex">
+              {/* 左側：スタッフ一覧 */}
+              <div className="min-w-fit max-w-[400px] sticky left-0 z-20 bg-white border-r border-gray-200">
+                  {/* 上部スクロールバー用のスペーサー */}
+                  <div className="h-[17px] bg-gray-50 border-b"></div>
                   {/* ヘッダー */}
                   <div className="px-2 py-2 bg-gray-100 font-bold text-gray-600 text-xs text-center border-b whitespace-nowrap">
                     部署 / グループ / スタッフ名
@@ -1376,39 +1394,46 @@ function MonthlyPlannerPageContent() {
 
                 {/* 右側：日付グリッド */}
                 <div className="flex-1 flex flex-col">
+                  {/* 上部スクロールバー */}
+                  <div className="overflow-x-auto border-b" ref={topScrollRef} onScroll={handleTopScroll}>
+                    <div className="min-w-fit h-[17px]" style={{ width: `${dateArray.length * 96}px` }}></div>
+                  </div>
                   {/* 日付ヘッダー */}
-                  <div className="sticky top-0 z-10 bg-gray-100 border-b">
-                    <div className="flex">
-                      {dateArray.map(day => {
-                        const year = currentMonth.getFullYear();
-                        const month = currentMonth.getMonth();
-                        const date = new Date(year, month, day);
-                        const dayOfWeek = date.getDay();
-                        const dayNames = ['日', '月', '火', '水', '木', '金', '土'];
-                        const getTextColor = () => {
-                          // 祝日判定：祝日は赤色
-                          const holiday = getHoliday(date, holidays);
-                          if (holiday) return 'text-red-600';
+                  <div className="sticky top-0 z-10 bg-gray-100 border-b overflow-hidden">
+                    <div className="min-w-fit" style={{ width: `${dateArray.length * 96}px` }}>
+                      <div className="flex">
+                        {dateArray.map(day => {
+                          const year = currentMonth.getFullYear();
+                          const month = currentMonth.getMonth();
+                          const date = new Date(year, month, day);
+                          const dayOfWeek = date.getDay();
+                          const dayNames = ['日', '月', '火', '水', '木', '金', '土'];
+                          const getTextColor = () => {
+                            // 祝日判定：祝日は赤色
+                            const holiday = getHoliday(date, holidays);
+                            if (holiday) return 'text-red-600';
+                            
+                            if (dayOfWeek === 0) return 'text-red-600'; // 日曜日は赤
+                            if (dayOfWeek === 6) return 'text-blue-600'; // 土曜日は青
+                            return 'text-gray-800'; // 平日は通常色
+                          };
                           
-                          if (dayOfWeek === 0) return 'text-red-600'; // 日曜日は赤
-                          if (dayOfWeek === 6) return 'text-blue-600'; // 土曜日は青
-                          return 'text-gray-800'; // 平日は通常色
-                        };
-                        
-                        return (
-                          <div
-                            key={day}
-                            className={`w-24 px-2 py-2 text-center font-bold text-xs border-r ${getTextColor()}`}
-                          >
-                            {day}日({dayNames[dayOfWeek]})
-                          </div>
-                        );
-                      })}
+                          return (
+                            <div
+                              key={day}
+                              className={`w-24 px-2 py-2 text-center font-bold text-xs border-r ${getTextColor()}`}
+                            >
+                              {day}日({dayNames[dayOfWeek]})
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   </div>
 
                   {/* セルグリッド */}
-                  <div className="flex-1">
+                  <div className="overflow-x-auto" ref={bottomScrollRef} onScroll={handleBottomScroll}>
+                    <div className="min-w-fit" style={{ width: `${dateArray.length * 96}px` }}>
                     {Object.keys(groupedStaffForDisplay).length > 0 ? (
                       sortByDisplayOrder(Object.entries(groupedStaffForDisplay), 'department').map(([department, groups]) => (
                         <div key={department}>
@@ -1511,12 +1536,12 @@ function MonthlyPlannerPageContent() {
                         <div className="text-gray-500">表示対象のスタッフがいません。</div>
                       </div>
                     )}
+                    </div>
                   </div>
                 </div>
-              </div>
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       {/* プリセット選択モーダル */}
