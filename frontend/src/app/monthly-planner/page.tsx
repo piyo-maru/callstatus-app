@@ -1208,11 +1208,11 @@ function MonthlyPlannerPageContent() {
   }, [currentMonth, staffList, fetchPendingSchedules, fetchResponsibilityData]);
 
   return (
-    <div className="h-screen flex flex-col bg-gray-50">
+    <div className="min-h-screen bg-gray-50 p-4">
       {/* ヘッダー - 個人ページと同じレイアウト */}
-      <div className="bg-white border-b border-gray-200">
+      <div className="bg-white rounded-lg shadow-sm mb-4">
         {/* タイトル行 */}
-        <div className="px-6 py-3 border-b border-gray-200">
+        <div className="px-6 py-3 border-b">
           <div className="flex items-center justify-between">
             <h1 className="text-lg font-semibold text-gray-900">月次プランナー</h1>
             <div className="flex items-center space-x-4">  
@@ -1321,8 +1321,8 @@ function MonthlyPlannerPageContent() {
       </div>
 
       {/* メインコンテンツ */}
-      <div className="flex-1 overflow-hidden">
-        <div className="h-full overflow-auto">
+      <div className="max-w-none mx-auto">
+        <div className="overflow-auto">
           {isLoading ? (
             <div className="flex items-center justify-center h-64">
               <div className="text-gray-500">読み込み中...</div>

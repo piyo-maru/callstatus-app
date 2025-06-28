@@ -3071,32 +3071,34 @@ export default function FullMainApp() {
 
   // 認証ヘッダーコンポーネント
   const AuthHeader = () => (
-    <div className="bg-white shadow-sm border-b border-gray-200 px-6 py-3 flex justify-between items-center">
-      <h1 className="text-lg font-semibold text-gray-900">
-        出社状況
-      </h1>
-      <div className="flex items-center space-x-4">
-        <span className="text-sm text-gray-600">
-          {user?.name || user?.email} ({user?.role === 'ADMIN' ? '管理者' : '一般ユーザー'})
-        </span>
-        <a
-          href="/personal"
-          className="text-sm bg-blue-100 hover:bg-blue-200 text-blue-800 px-3 py-1 rounded border border-blue-300 transition-colors"
-        >
-          👤 個人ページ
-        </a>
-        <a
-          href="/monthly-planner"
-          className="text-sm bg-purple-100 hover:bg-purple-200 text-purple-800 px-3 py-1 rounded border border-purple-300 transition-colors"
-        >
-          📅 月次プランナー
-        </a>
-        <button
-          onClick={logout}
-          className="text-sm bg-gray-100 hover:bg-gray-200 px-3 py-1 rounded border"
-        >
-          ログアウト
-        </button>
+    <div className="bg-white rounded-lg shadow-sm mb-4">
+      <div className="px-6 py-3 flex justify-between items-center">
+        <h1 className="text-lg font-semibold text-gray-900">
+          出社状況
+        </h1>
+        <div className="flex items-center space-x-4">
+          <span className="text-sm text-gray-600">
+            {user?.name || user?.email} ({user?.role === 'ADMIN' ? '管理者' : '一般ユーザー'})
+          </span>
+          <a
+            href="/personal"
+            className="text-sm bg-blue-100 hover:bg-blue-200 text-blue-800 px-3 py-1 rounded border border-blue-300 transition-colors"
+          >
+            👤 個人ページ
+          </a>
+          <a
+            href="/monthly-planner"
+            className="text-sm bg-purple-100 hover:bg-purple-200 text-purple-800 px-3 py-1 rounded border border-purple-300 transition-colors"
+          >
+            📅 月次プランナー
+          </a>
+          <button
+            onClick={logout}
+            className="text-sm bg-gray-100 hover:bg-gray-200 px-3 py-1 rounded border"
+          >
+            ログアウト
+          </button>
+        </div>
       </div>
     </div>
   );
