@@ -118,3 +118,27 @@ export type CharacterCheckResult = {
     position: number;
   }>;
 };
+
+// 部署・グループ設定型
+export type DepartmentGroupSetting = {
+  id: number;
+  type: 'department' | 'group';
+  name: string;
+  shortName?: string;
+  backgroundColor?: string;
+  displayOrder?: number;
+};
+
+// 表示設定型
+export type DisplaySettings = {
+  viewMode: 'normal' | 'compact';
+  maskingEnabled: boolean;
+  timeRange?: 'standard' | 'extended';
+};
+
+// 統一設定モーダルのプロパティ型
+export type UnifiedSettingsData = {
+  displaySettings: DisplaySettings;
+  presets: any[];
+  departmentGroups?: DepartmentGroupSetting[];
+};

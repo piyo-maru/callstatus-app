@@ -54,8 +54,9 @@ async function bootstrap() {
   
   app.enableCors({
     origin: (origin, callback) => {
-      // 開発環境では全てのオリジンを許可
-      if (!origin || origins.includes(origin)) {
+      // 開発環境では全てのオリジンを許可（originがundefinedの場合も含む）
+      console.log('CORS request from origin:', origin);
+      if (!origin || origins.includes(origin) || origin.startsWith('http://10.99.129.21:')) {
         callback(null, true);
       } else {
         console.log('CORS blocked origin:', origin);

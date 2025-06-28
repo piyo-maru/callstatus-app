@@ -17,6 +17,10 @@ import {
 // 祝日関連のインポート
 import { Holiday } from './types/MainAppTypes';
 import { fetchHolidays, getHoliday, getDateColor, formatDateWithHoliday } from './utils/MainAppUtils';
+// 統一プリセットシステム
+import { usePresetSettings } from '../hooks/usePresetSettings';
+import { UnifiedPreset } from './types/PresetTypes';
+import { UnifiedSettingsModal } from './modals/UnifiedSettingsModal';
 
 interface Schedule {
   id: number | string;
@@ -83,6 +87,10 @@ const availableStatuses = ['online', 'remote', 'meeting', 'training', 'break', '
 
 const PersonalSchedulePage: React.FC = () => {
   const { user, loading: authLoading, logout } = useAuth();
+  
+  // 統一プリセットシステム
+  const { getPresetsForPage } = usePresetSettings();
+  
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [currentStaff, setCurrentStaff] = useState<Staff | null>(null);
@@ -103,6 +111,7 @@ const PersonalSchedulePage: React.FC = () => {
     return false;
   });
   const [holidays, setHolidays] = useState<Holiday[]>([]);
+  const [isUnifiedSettingsOpen, setIsUnifiedSettingsOpen] = useState(false);
 
   // スクロール位置管理のためのref
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -142,55 +151,74 @@ const PersonalSchedulePage: React.FC = () => {
   } | null>(null);
   const [dragOffset, setDragOffset] = useState<number>(0); // ドラッグオフセット（メイン画面と同じ）
 
-  // プリセット予定（指定された内容）
-  const presetSchedules: PresetSchedule[] = [
-    { 
-      id: 'remote-work', 
-      name: '在宅勤務', 
-      displayName: '在宅勤務',
-      timeDisplay: '09:00-18:00',
-      schedules: [{ status: 'remote', startTime: 9, endTime: 18 }]
-    },
-    { 
-      id: 'night-duty', 
-      name: '夜間', 
-      displayName: '夜間',
-      timeDisplay: '18:00-21:00 + 調整',
-      schedules: [
-        { status: 'night duty', startTime: 18, endTime: 21 },
-        { status: 'off', startTime: 9, endTime: 13 },
-        { status: 'break', startTime: 17, endTime: 18 }
-      ]
-    },
-    { 
-      id: 'vacation', 
-      name: '休暇', 
-      displayName: '休暇',
-      timeDisplay: '09:00-18:00',
-      schedules: [{ status: 'off', startTime: 9, endTime: 18 }]
-    },
-    { 
-      id: 'morning-off', 
-      name: '午前休', 
-      displayName: '午前休',
-      timeDisplay: '09:00-13:00',
-      schedules: [{ status: 'off', startTime: 9, endTime: 13 }]
-    },
-    { 
-      id: 'afternoon-off', 
-      name: '午後休', 
-      displayName: '午後休',
-      timeDisplay: '12:00-18:00',
-      schedules: [{ status: 'off', startTime: 12, endTime: 18 }]
-    },
-    { 
-      id: 'early-leave', 
-      name: '早退', 
-      displayName: '早退',
-      timeDisplay: '12:00-18:00',
-      schedules: [{ status: 'unplanned', startTime: 12, endTime: 18 }]
-    }
-  ];
+  // プリセット予定（統一プリセットシステムから取得）
+  const presetSchedules: PresetSchedule[] = useMemo(() => {
+    const unifiedPresets = getPresetsForPage('personalPage');
+    return unifiedPresets.map(preset => ({
+      id: preset.id,
+      name: preset.name,
+      displayName: preset.displayName,
+      timeDisplay: preset.schedules.length === 1 
+        ? `${preset.schedules[0].startTime.toString().padStart(2, '0')}:00-${preset.schedules[0].endTime.toString().padStart(2, '0')}:00`
+        : `${preset.schedules[0].startTime.toString().padStart(2, '0')}:00-${preset.schedules[preset.schedules.length - 1].endTime.toString().padStart(2, '0')}:00 + 調整`,
+      schedules: preset.schedules.map(schedule => ({
+        status: schedule.status,
+        startTime: schedule.startTime,
+        endTime: schedule.endTime,
+        memo: schedule.memo
+      }))
+    }));
+  }, [getPresetsForPage]);
+
+  // 旧プリセット定義（統一プリセットシステムに移行済み）
+  // const presetSchedules: PresetSchedule[] = [
+  //   { 
+  //     id: 'remote-work', 
+  //     name: '在宅勤務', 
+  //     displayName: '在宅勤務',
+  //     timeDisplay: '09:00-18:00',
+  //     schedules: [{ status: 'remote', startTime: 9, endTime: 18 }]
+  //   },
+  //   { 
+  //     id: 'night-duty', 
+  //     name: '夜間', 
+  //     displayName: '夜間',
+  //     timeDisplay: '18:00-21:00 + 調整',
+  //     schedules: [
+  //       { status: 'night duty', startTime: 18, endTime: 21 },
+  //       { status: 'off', startTime: 9, endTime: 13 },
+  //       { status: 'break', startTime: 17, endTime: 18 }
+  //     ]
+  //   },
+  //   { 
+  //     id: 'vacation', 
+  //     name: '休暇', 
+  //     displayName: '休暇',
+  //     timeDisplay: '09:00-18:00',
+  //     schedules: [{ status: 'off', startTime: 9, endTime: 18 }]
+  //   },
+  //   { 
+  //     id: 'morning-off', 
+  //     name: '午前休', 
+  //     displayName: '午前休',
+  //     timeDisplay: '09:00-13:00',
+  //     schedules: [{ status: 'off', startTime: 9, endTime: 13 }]
+  //   },
+  //   { 
+  //     id: 'afternoon-off', 
+  //     name: '午後休', 
+  //     displayName: '午後休',
+  //     timeDisplay: '12:00-18:00',
+  //     schedules: [{ status: 'off', startTime: 12, endTime: 18 }]
+  //   },
+  //   { 
+  //     id: 'early-leave', 
+  //     name: '早退', 
+  //     displayName: '早退',
+  //     timeDisplay: '12:00-18:00',
+  //     schedules: [{ status: 'unplanned', startTime: 12, endTime: 18 }]
+  //   }
+  // ];
 
   // 月間の日付リストを生成
   const monthDays = useMemo(() => {
@@ -216,16 +244,39 @@ const PersonalSchedulePage: React.FC = () => {
 
   // 認証付きfetch
   const authenticatedFetch = useCallback(async (url: string, options: RequestInit = {}) => {
+    const headers: Record<string, string> = {
+      ...options.headers as Record<string, string>,
+    };
+
+    // FormDataを使用する場合はContent-Typeを設定しない（ブラウザが自動設定）
+    if (!(options.body instanceof FormData)) {
+      headers['Content-Type'] = 'application/json';
+    }
+
+    // useAuthからのtokenを使用
     const token = localStorage.getItem('access_token');
-    return fetch(url, {
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const response = await fetch(url, {
       ...options,
-      headers: {
-        ...options.headers,
-        'Authorization': token ? `Bearer ${token}` : '',
-        'Content-Type': 'application/json',
-      },
+      headers,
     });
-  }, []);
+
+    // 401エラーの場合はログアウト
+    if (response.status === 401) {
+      logout();
+      throw new Error('認証が必要です');
+    }
+
+    return response;
+  }, [logout]);
+
+  // 権限チェック関数
+  const canManage = useCallback(() => {
+    return user?.role === 'ADMIN';
+  }, [user?.role]);
 
   // 担当設定データ取得関数
   const fetchResponsibilityData = useCallback(async (dateString: string) => {
@@ -1335,9 +1386,16 @@ const PersonalSchedulePage: React.FC = () => {
               </h2>
             </div>
             
-            {/* 表示切替トグルボタン */}
+            {/* 表示切替トグルボタンと設定ボタン */}
             <div className="flex items-center space-x-3">
-              <span className="text-sm text-gray-600">表示:</span>
+              {canManage() && (
+                <button
+                  onClick={() => setIsUnifiedSettingsOpen(true)}
+                  className="px-3 py-1 text-xs font-medium text-white bg-gray-600 border border-transparent rounded-md hover:bg-gray-700 h-7"
+                >
+                  ⚙️ 設定
+                </button>
+              )}
               <div className="flex items-center space-x-2">
                 <span className={`text-xs ${!isCompactMode ? 'text-gray-900 font-medium' : 'text-gray-500'}`}>
                   標準
@@ -1862,6 +1920,14 @@ const PersonalSchedulePage: React.FC = () => {
           existingData={responsibilityData[`${currentStaff.id}-${format(selectedDateForResponsibility, 'yyyy-MM-dd')}`] || null}
         />
       )}
+
+      {/* 統合設定モーダル */}
+      <UnifiedSettingsModal
+        isOpen={isUnifiedSettingsOpen}
+        onClose={() => setIsUnifiedSettingsOpen(false)}
+        authenticatedFetch={authenticatedFetch}
+        staffList={currentStaff ? [currentStaff] : []}
+      />
     </div>
   );
 };

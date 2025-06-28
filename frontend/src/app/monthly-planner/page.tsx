@@ -10,6 +10,10 @@ import { format } from 'date-fns';
 import "react-datepicker/dist/react-datepicker.css";
 import { fetchHolidays, getHoliday } from '../components/utils/MainAppUtils';
 import { Holiday } from '../components/types/MainAppTypes';
+import { usePresetSettings } from '../hooks/usePresetSettings';
+import { UnifiedPreset } from '../components/types/PresetTypes';
+import { convertToLegacyFormat } from '../components/constants/PresetSchedules';
+import { UnifiedSettingsModal } from '../components/modals/UnifiedSettingsModal';
 
 registerLocale('ja', ja);
 
@@ -62,15 +66,15 @@ const getApiUrl = (): string => {
   return `http://${currentHost}:3002`;
 };
 
-// プリセット予定の定義
-const presetSchedules: PresetSchedule[] = [
-  { key: 'off', label: '休み', status: 'off', start: 9, end: 18 },
-  { key: 'morning-off', label: '午前休', status: 'off', start: 9, end: 13 },
-  { key: 'afternoon-off', label: '午後休', status: 'off', start: 13, end: 18 },
-  { key: 'night-duty', label: '夜間担当', status: 'night duty', start: 18, end: 21 },
-  { key: 'training', label: '研修', status: 'training', start: 9, end: 18 },
-  { key: 'meeting', label: '会議', status: 'meeting', start: 10, end: 12 },
-];
+// プリセット予定の定義（統一プリセットシステムに移行済み）
+// const presetSchedules: PresetSchedule[] = [
+//   { key: 'off', label: '休み', status: 'off', start: 9, end: 18 },
+//   { key: 'morning-off', label: '午前休', status: 'off', start: 9, end: 13 },
+//   { key: 'afternoon-off', label: '午後休', status: 'off', start: 13, end: 18 },
+//   { key: 'night-duty', label: '夜間担当', status: 'night duty', start: 18, end: 21 },
+//   { key: 'training', label: '研修', status: 'training', start: 9, end: 18 },
+//   { key: 'meeting', label: '会議', status: 'meeting', start: 10, end: 12 },
+// ];
 
 // 担当設定関連の型定義
 type GeneralResponsibilityData = {
@@ -317,6 +321,49 @@ const DroppableCell: React.FC<{
 function MonthlyPlannerPageContent() {
   const { user, token, logout } = useAuth();
   
+  // API呼び出し用の認証付きfetch関数
+  const authenticatedFetch = useCallback(async (url: string, options: RequestInit = {}) => {
+    const headers: Record<string, string> = {
+      ...options.headers as Record<string, string>,
+    };
+
+    // FormDataを使用する場合はContent-Typeを設定しない（ブラウザが自動設定）
+    if (!(options.body instanceof FormData)) {
+      headers['Content-Type'] = 'application/json';
+    }
+
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const response = await fetch(url, {
+      ...options,
+      headers,
+    });
+
+    // 401エラーの場合はログアウト
+    if (response.status === 401) {
+      logout();
+      throw new Error('認証が必要です');
+    }
+
+    return response;
+  }, [token, logout]);
+  
+  // 権限チェック関数
+  const canManage = useCallback(() => {
+    return user?.role === 'ADMIN';
+  }, [user?.role]);
+  
+  // 統一プリセットシステム
+  const { getPresetsForPage } = usePresetSettings();
+  
+  // 月次プランナー用のプリセットを取得し、レガシー形式に変換
+  const monthlyPlannerPresets = useMemo(() => {
+    const unifiedPresets = getPresetsForPage('monthlyPlanner');
+    return unifiedPresets.map(preset => convertToLegacyFormat(preset)) as PresetSchedule[];
+  }, [getPresetsForPage]);
+  
   // 基本状態
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [staffList, setStaffList] = useState<Staff[]>([]);
@@ -342,6 +389,7 @@ function MonthlyPlannerPageContent() {
   
   // モーダル状態
   const [showModal, setShowModal] = useState(false);
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [selectedCell, setSelectedCell] = useState<{
     staffId: number;
     staffName: string;
@@ -1297,18 +1345,28 @@ function MonthlyPlannerPageContent() {
             </h2>
           </div>
 
-          {/* 承認モードトグル - 月表示の右側 */}
-          <label className="flex items-center space-x-2 text-sm">
-            <input
-              type="checkbox"
-              checked={isApprovalMode}
-              onChange={(e) => setIsApprovalMode(e.target.checked)}
-              className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
-            />
-            <span className={`font-medium ${isApprovalMode ? 'text-blue-600' : 'text-gray-600'}`}>
-              承認モード
-            </span>
-          </label>
+          {/* 承認モードトグルと設定ボタン */}
+          <div className="flex items-center space-x-4">
+            {canManage() && (
+              <button
+                onClick={() => setIsSettingsModalOpen(true)}
+                className="px-3 py-1 text-xs font-medium text-white bg-gray-600 border border-transparent rounded-md hover:bg-gray-700 h-7"
+              >
+                ⚙️ 設定
+              </button>
+            )}
+            <label className="flex items-center space-x-2 text-sm">
+              <input
+                type="checkbox"
+                checked={isApprovalMode}
+                onChange={(e) => setIsApprovalMode(e.target.checked)}
+                className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+              />
+              <span className={`font-medium ${isApprovalMode ? 'text-blue-600' : 'text-gray-600'}`}>
+                承認モード
+              </span>
+            </label>
+          </div>
         </div>
 
         {/* フィルター行 */}
@@ -1573,7 +1631,7 @@ function MonthlyPlannerPageContent() {
 
               <div className="space-y-3 mb-6">
                 <h4 className="text-sm font-medium text-gray-700">プリセット予定を選択</h4>
-                {presetSchedules.map(preset => (
+                {monthlyPlannerPresets.map(preset => (
                   <button
                     key={preset.key}
                     onClick={() => applyPreset(preset)}
@@ -1889,7 +1947,7 @@ function MonthlyPlannerPageContent() {
                 <div className="mb-6">
                   <h3 className="font-medium mb-3">新しい予定を選択</h3>
                   <div className="grid grid-cols-2 gap-3">
-                    {presetSchedules.map((preset) => (
+                    {monthlyPlannerPresets.map((preset) => (
                       <button
                         key={preset.key}
                         onClick={() => handleEditUpdate(preset)}
@@ -1934,6 +1992,14 @@ function MonthlyPlannerPageContent() {
           document.body
         )
       )}
+
+      {/* 統一設定モーダル */}
+      <UnifiedSettingsModal
+        isOpen={isSettingsModalOpen}
+        onClose={() => setIsSettingsModalOpen(false)}
+        authenticatedFetch={authenticatedFetch}
+        staffList={staffList}
+      />
     </div>
   );
 }

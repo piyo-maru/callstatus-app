@@ -85,8 +85,23 @@ export const getApiUrl = (): string => {
   if (typeof window !== 'undefined' && window.APP_CONFIG?.API_HOST) {
     return window.APP_CONFIG.API_HOST;
   }
-  const currentHost = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
-  return `http://${currentHost}:3002`;
+  
+  // api-config.tsの統一ロジックを使用
+  if (typeof window === 'undefined') {
+    return 'http://localhost:3002';
+  }
+  
+  const hostname = window.location.hostname;
+  
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    return 'http://localhost:3002'; // デフォルト
+  }
+  
+  if (hostname === '10.99.129.21') {
+    return `http://${hostname}:3003`; // 外部アクセス用ポート
+  }
+  
+  return `http://${hostname}:3002`;
 };
 
 // 利用可能なステータス定義

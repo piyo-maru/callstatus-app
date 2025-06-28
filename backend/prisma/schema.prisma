@@ -113,6 +113,9 @@ model Staff {
   ApprovedAdjustments Adjustment[]         @relation("ApprovedAdjustments")
   RejectedAdjustments Adjustment[]         @relation("RejectedAdjustments")
   ApprovalActions     PendingApprovalLog[] @relation("ApprovalActions")
+  
+  // プリセット設定リレーション
+  UserPresetSettings  UserPresetSettings?
 }
 
 model TemporaryAssignment {
@@ -337,4 +340,55 @@ model PendingApprovalLog {
   @@index([adjustmentId])
   @@index([actorId])
   @@map("pending_approval_logs")
+}
+
+// ユーザープリセット設定関連モデル（統一プリセットシステム用）
+model UserPresetSettings {
+  id                 Int          @id @default(autoincrement())
+  staffId            Int          @unique
+  pagePresetSettings Json         @default("{}")  // ページ別プリセット設定（monthlyPlanner, personalPage）
+  lastModified       DateTime     @default(now())
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  
+  Staff              Staff        @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  UserPresets        UserPreset[]
+  
+  @@map("user_preset_settings")
+}
+
+model UserPreset {
+  id                   Int                   @id @default(autoincrement())
+  userPresetSettingsId Int
+  presetId             String                // 'standard-work', 'remote-work'等の一意ID
+  name                 String
+  displayName          String
+  description          String?
+  category             String                // 'general', 'time-off', 'special', 'night-duty'
+  isActive             Boolean               @default(true)
+  customizable         Boolean               @default(true)
+  isDefault            Boolean               @default(false)
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  UserPresetSettings   UserPresetSettings    @relation(fields: [userPresetSettingsId], references: [id], onDelete: Cascade)
+  UserPresetSchedules  UserPresetSchedule[]
+  
+  @@unique([userPresetSettingsId, presetId])
+  @@map("user_presets")
+}
+
+model UserPresetSchedule {
+  id           Int        @id @default(autoincrement())
+  userPresetId Int
+  status       String     // 'online', 'remote', 'off'等
+  startTime    Decimal    @db.Decimal(4, 2)  // 9.5 = 9:30
+  endTime      Decimal    @db.Decimal(4, 2)
+  memo         String?
+  sortOrder    Int        @default(0)
+  createdAt    DateTime   @default(now())
+  
+  UserPreset   UserPreset @relation(fields: [userPresetId], references: [id], onDelete: Cascade)
+  
+  @@map("user_preset_schedules")
 }

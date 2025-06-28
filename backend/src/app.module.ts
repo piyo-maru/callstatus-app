@@ -11,6 +11,7 @@ import { DepartmentSettingsModule } from './department-settings/department-setti
 import { SnapshotsModule } from './snapshots/snapshots.module';
 import { PendingModule } from './pending/pending.module';
 import { ContractsModule } from './contracts/contracts.module';
+import { PresetSettingsModule } from './preset-settings/preset-settings.module';
 // 一時的に無効化（コンパイルエラー回避）
 // import { AssignmentsModule } from './assignments/assignments.module';
 // import { ContractModule } from './contract/contract.module';
@@ -30,6 +31,7 @@ import { ContractsModule } from './contracts/contracts.module';
     SnapshotsModule,
     PendingModule,
     ContractsModule,
+    PresetSettingsModule,
     // 他のすべてのモジュールを一時的に無効化（コンパイルエラー回避）
     // AuthModule, 
     // AuditModule, 

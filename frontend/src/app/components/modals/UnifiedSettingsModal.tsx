@@ -1,0 +1,1241 @@
+// 統一設定モーダル - 全ページで共通利用
+
+'use client';
+
+import { useState, useCallback, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
+import { useAuth, UserRole } from '../AuthProvider';
+import { usePresetSettings } from '../../hooks/usePresetSettings';
+import { UnifiedPreset, PresetCategory, PresetEditFormData } from '../types/PresetTypes';
+import { DepartmentGroupSetting, SnapshotHistory, ImportHistory, DisplaySettings } from '../types/MainAppTypes';
+import { displayStatusColors } from '../constants/MainAppConstants';
+import { capitalizeStatus } from '../timeline/TimelineUtils';
+import { getApiUrl } from '../constants/MainAppConstants';
+import { PresetEditModal } from './PresetEditModal';
+
+interface UnifiedSettingsModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSettingsChange?: (settings: any) => void;
+  // 子モーダル制御用のprops
+  setIsCsvUploadModalOpen?: (open: boolean) => void;
+  setIsJsonUploadModalOpen?: (open: boolean) => void;
+  setIsImportHistoryModalOpen?: (open: boolean) => void;
+  // 認証機能
+  authenticatedFetch?: (url: string, options?: RequestInit) => Promise<Response>;
+  staffList?: any[];
+}
+
+type TabType = 'display' | 'presets' | 'import' | 'departments' | 'snapshots';
+
+export function UnifiedSettingsModal({ 
+  isOpen, 
+  onClose, 
+  onSettingsChange,
+  setIsCsvUploadModalOpen,
+  setIsJsonUploadModalOpen,
+  setIsImportHistoryModalOpen,
+  authenticatedFetch,
+  staffList
+}: UnifiedSettingsModalProps) {
+  const { user } = useAuth();
+  const [activeTab, setActiveTab] = useState<TabType>('display');
+  
+  // 表示設定の状態
+  const [viewMode, setViewMode] = useState<'normal' | 'compact'>('normal');
+  const [maskingEnabled, setMaskingEnabled] = useState(false);
+  const [timeRange, setTimeRange] = useState<'standard' | 'extended'>('standard');
+  
+  // 管理機能の状態
+  const [departments, setDepartments] = useState<DepartmentGroupSetting[]>([]);
+  const [groups, setGroups] = useState<DepartmentGroupSetting[]>([]);
+  const [isLoadingDepartments, setIsLoadingDepartments] = useState(false);
+  const [isSavingDepartments, setIsSavingDepartments] = useState(false);
+  const [snapshotHistory, setSnapshotHistory] = useState<SnapshotHistory[]>([]);
+  const [isLoadingSnapshots, setIsLoadingSnapshots] = useState(false);
+  const [snapshotError, setSnapshotError] = useState<string | null>(null);
+  
+  // プリセット編集モーダルの状態
+  const [isPresetEditModalOpen, setIsPresetEditModalOpen] = useState(false);
+  const [editingPreset, setEditingPreset] = useState<UnifiedPreset | null>(null);
+  const [editMode, setEditMode] = useState<'create' | 'edit' | 'duplicate'>('create');
+  
+  const {
+    presets,
+    categories,
+    filteredPresets,
+    setFilter,
+    filter,
+    addPreset,
+    updatePreset,
+    deletePreset,
+    togglePreset,
+    getPresetsForPage,
+    updatePagePresetSettings,
+    getPagePresetSettings,
+    saveSettings,
+    resetToDefaults,
+    isLoading,
+    isDirty
+  } = usePresetSettings();
+
+  // 管理者権限チェック
+  const isAdmin = user?.role === 'ADMIN';
+  const canManage = isAdmin;
+
+  // タブリスト（既存設定モーダルと同じ構成）
+  const tabs = useMemo(() => [
+    { id: 'display' as TabType, name: '表示設定', icon: '🎨' },
+    { id: 'presets' as TabType, name: 'プリセット設定', icon: '⚡' },
+    ...(canManage ? [
+      { id: 'import' as TabType, name: 'インポート', icon: '📥' },
+      { id: 'departments' as TabType, name: '部署・グループ設定', icon: '🏢' },
+      { id: 'snapshots' as TabType, name: '過去表示設定', icon: '📜' }
+    ] : [])
+  ], [canManage]);
+
+  // 設定保存とモーダルクローズ
+  const handleSaveAndClose = useCallback(async () => {
+    if (isDirty) {
+      await saveSettings();
+    }
+    
+    // 親コンポーネントに設定変更を通知
+    if (onSettingsChange) {
+      onSettingsChange({
+        displaySettings: {
+          viewMode,
+          maskingEnabled,
+          timeRange
+        },
+        presets: filteredPresets,
+        departmentGroups: departments
+      });
+    }
+    
+    onClose();
+  }, [isDirty, saveSettings, onSettingsChange, viewMode, maskingEnabled, filteredPresets, onClose]);
+
+  // localStorage から設定を読み込み
+  useEffect(() => {
+    const savedViewMode = localStorage.getItem('callstatus-viewMode') as 'normal' | 'compact' || 'normal';
+    const savedMaskingEnabled = localStorage.getItem('callstatus-maskingEnabled') === 'true';
+    
+    setViewMode(savedViewMode);
+    setMaskingEnabled(savedMaskingEnabled);
+  }, []);
+
+  // 設定変更時にlocalStorageに保存
+  const handleViewModeChange = useCallback((newViewMode: 'normal' | 'compact') => {
+    setViewMode(newViewMode);
+    localStorage.setItem('callstatus-viewMode', newViewMode);
+  }, []);
+
+  const handleMaskingToggle = useCallback(() => {
+    const newMaskingEnabled = !maskingEnabled;
+    setMaskingEnabled(newMaskingEnabled);
+    localStorage.setItem('callstatus-maskingEnabled', newMaskingEnabled.toString());
+  }, [maskingEnabled]);
+
+  // プリセット有効/無効切替
+  const handleTogglePreset = useCallback((presetId: string) => {
+    togglePreset(presetId);
+  }, [togglePreset]);
+
+  // プリセット編集モーダルの操作
+  const handleCreatePreset = useCallback(() => {
+    setEditingPreset(null);
+    setEditMode('create');
+    setIsPresetEditModalOpen(true);
+  }, []);
+
+  const handleEditPreset = useCallback((preset: UnifiedPreset) => {
+    setEditingPreset(preset);
+    setEditMode('edit');
+    setIsPresetEditModalOpen(true);
+  }, []);
+
+  const handleDuplicatePreset = useCallback((preset: UnifiedPreset) => {
+    setEditingPreset(preset);
+    setEditMode('duplicate');
+    setIsPresetEditModalOpen(true);
+  }, []);
+
+  const handleDeletePreset = useCallback((presetId: string) => {
+    const preset = presets.find(p => p.id === presetId);
+    if (!preset) return;
+
+    if (preset.isDefault) {
+      alert('デフォルトプリセットは削除できません');
+      return;
+    }
+
+    if (confirm(`プリセット「${preset.displayName}」を削除しますか？`)) {
+      deletePreset(presetId);
+    }
+  }, [presets, deletePreset]);
+
+  const handleSavePreset = useCallback((presetData: PresetEditFormData) => {
+    if (editMode === 'create' || editMode === 'duplicate') {
+      addPreset({
+        ...presetData,
+        name: presetData.name || `custom-${Date.now()}`,
+        isDefault: false // 新規作成・複製時は常にカスタムプリセット
+      });
+    } else if (editMode === 'edit' && editingPreset) {
+      updatePreset(editingPreset.id, presetData);
+    }
+    setIsPresetEditModalOpen(false);
+    setEditingPreset(null);
+  }, [editMode, editingPreset, addPreset, updatePreset]);
+
+  const handleClosePresetEditModal = useCallback(() => {
+    setIsPresetEditModalOpen(false);
+    setEditingPreset(null);
+  }, []);
+
+  // スナップショット履歴取得
+  const fetchSnapshotHistory = useCallback(async () => {
+    if (!canManage || !authenticatedFetch) return;
+    
+    setIsLoadingSnapshots(true);
+    setSnapshotError(null);
+    
+    try {
+      const currentApiUrl = getApiUrl();
+      const response = await authenticatedFetch(`${currentApiUrl}/api/admin/snapshots/history`);
+      
+      if (!response.ok) {
+        throw new Error(`スナップショット履歴取得に失敗: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      setSnapshotHistory(data);
+    } catch (error) {
+      console.error('スナップショット履歴取得エラー:', error);
+      setSnapshotError(error instanceof Error ? error.message : 'エラーが発生しました');
+    } finally {
+      setIsLoadingSnapshots(false);
+    }
+  }, [canManage, authenticatedFetch]);
+
+  // 手動スナップショット作成
+  const createManualSnapshot = async (targetDate: string) => {
+    if (!canManage || !authenticatedFetch) return;
+    
+    try {
+      const currentApiUrl = getApiUrl();
+      const response = await authenticatedFetch(`${currentApiUrl}/api/admin/snapshots/manual/${targetDate}`, {
+        method: 'POST'
+      });
+      
+      if (!response.ok) {
+        throw new Error(`手動スナップショット作成に失敗: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      alert(`手動スナップショット作成完了\n対象日: ${targetDate}\n件数: ${result.recordCount}件`);
+      
+      // 履歴を再取得
+      await fetchSnapshotHistory();
+    } catch (error) {
+      console.error('手動スナップショット作成エラー:', error);
+      alert('手動スナップショット作成に失敗しました: ' + (error instanceof Error ? error.message : String(error)));
+    }
+  };
+
+  // スナップショットロールバック
+  const rollbackSnapshot = async (batchId: string, targetDate: string) => {
+    if (!canManage || !authenticatedFetch) return;
+    
+    if (!confirm(`${targetDate}のスナップショットデータを削除します。\nこの操作は取り消せません。実行しますか？`)) {
+      return;
+    }
+    
+    try {
+      const currentApiUrl = getApiUrl();
+      const response = await authenticatedFetch(`${currentApiUrl}/api/admin/snapshots/rollback/${batchId}`, {
+        method: 'DELETE'
+      });
+      
+      if (!response.ok) {
+        throw new Error(`スナップショット削除に失敗: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      alert(`スナップショット削除完了\n削除件数: ${result.deletedCount}件`);
+      
+      // 履歴を再取得
+      await fetchSnapshotHistory();
+    } catch (error) {
+      console.error('スナップショット削除エラー:', error);
+      alert('スナップショット削除に失敗しました: ' + (error instanceof Error ? error.message : String(error)));
+    }
+  };
+
+  // 部署・グループ設定取得
+  const fetchDepartmentSettings = useCallback(async () => {
+    if (!canManage || !authenticatedFetch) return;
+    
+    setIsLoadingDepartments(true);
+    try {
+      const currentApiUrl = getApiUrl();
+      const response = await authenticatedFetch(`${currentApiUrl}/api/department-settings`);
+      if (response.ok) {
+        const data = await response.json();
+        setDepartments(data.departments || []);
+        setGroups(data.groups || []);
+      }
+    } catch (error) {
+      console.error('Failed to fetch department settings:', error);
+    } finally {
+      setIsLoadingDepartments(false);
+    }
+  }, [canManage, authenticatedFetch]);
+
+  // 部署・グループの自動取得
+  const handleAutoGenerateDepartments = useCallback(async () => {
+    if (!canManage || !authenticatedFetch) return;
+    
+    setIsLoadingDepartments(true);
+    try {
+      const currentApiUrl = getApiUrl();
+      const response = await authenticatedFetch(`${currentApiUrl}/api/department-settings/auto-generate`);
+      if (response.ok) {
+        const result = await response.json();
+        alert(`${result.generated}個の新しい設定が生成されました`);
+        await fetchDepartmentSettings();
+      }
+    } catch (error) {
+      console.error('Failed to auto-generate settings:', error);
+      alert('部署・グループの取得に失敗しました');
+    } finally {
+      setIsLoadingDepartments(false);
+    }
+  }, [canManage, authenticatedFetch, fetchDepartmentSettings]);
+
+  // 部署・グループ設定保存
+  const handleSaveDepartments = useCallback(async () => {
+    if (!canManage || !authenticatedFetch) return;
+    
+    setIsSavingDepartments(true);
+    try {
+      const currentApiUrl = getApiUrl();
+      const allSettings = [...departments, ...groups];
+      const response = await authenticatedFetch(`${currentApiUrl}/api/department-settings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(allSettings.map(item => ({
+          type: item.type,
+          name: item.name,
+          shortName: item.shortName,
+          backgroundColor: item.backgroundColor,
+          displayOrder: item.displayOrder || 0
+        })))
+      });
+      
+      if (response.ok) {
+        alert('設定を保存しました');
+        await fetchDepartmentSettings();
+      }
+    } catch (error) {
+      console.error('Failed to save settings:', error);
+      alert('保存に失敗しました');
+    } finally {
+      setIsSavingDepartments(false);
+    }
+  }, [canManage, authenticatedFetch, departments, groups, fetchDepartmentSettings]);
+
+  // 部署設定の更新関数
+  const updateDepartmentShortName = useCallback((id: number, shortName: string) => {
+    setDepartments(prev => prev.map(d => d.id === id ? { ...d, shortName } : d));
+  }, []);
+
+  const updateDepartmentBackgroundColor = useCallback((id: number, backgroundColor: string) => {
+    setDepartments(prev => prev.map(d => d.id === id ? { ...d, backgroundColor } : d));
+  }, []);
+
+  const updateDepartmentDisplayOrder = useCallback((id: number, displayOrder: number) => {
+    setDepartments(prev => prev.map(d => d.id === id ? { ...d, displayOrder } : d));
+  }, []);
+
+  // グループ設定の更新関数
+  const updateGroupShortName = useCallback((id: number, shortName: string) => {
+    setGroups(prev => prev.map(g => g.id === id ? { ...g, shortName } : g));
+  }, []);
+
+  const updateGroupBackgroundColor = useCallback((id: number, backgroundColor: string) => {
+    setGroups(prev => prev.map(g => g.id === id ? { ...g, backgroundColor } : g));
+  }, []);
+
+  const updateGroupDisplayOrder = useCallback((id: number, displayOrder: number) => {
+    setGroups(prev => prev.map(g => g.id === id ? { ...g, displayOrder } : g));
+  }, []);
+
+  // ソート関数
+  const sortDepartmentsByOrder = useCallback((departments: DepartmentGroupSetting[]) => {
+    return departments.sort((a, b) => {
+      const orderA = a.displayOrder || 0;
+      const orderB = b.displayOrder || 0;
+      
+      if (orderA !== orderB) {
+        return orderA - orderB;
+      }
+      
+      return a.name.localeCompare(b.name);
+    });
+  }, []);
+
+  const sortGroupsByDepartment = useCallback((groups: DepartmentGroupSetting[]) => {
+    return groups.sort((a, b) => {
+      const staffA = staffList?.find(staff => staff.group === a.name);
+      const staffB = staffList?.find(staff => staff.group === b.name);
+      
+      const deptA = staffA?.department || '';
+      const deptB = staffB?.department || '';
+      
+      const deptSettingA = departments.find(d => d.name === deptA);
+      const deptSettingB = departments.find(d => d.name === deptB);
+      
+      const deptOrderA = deptSettingA?.displayOrder || 0;
+      const deptOrderB = deptSettingB?.displayOrder || 0;
+      
+      if (deptOrderA !== deptOrderB) {
+        return deptOrderA - deptOrderB;
+      }
+      
+      if (deptA !== deptB) {
+        return deptA.localeCompare(deptB);
+      }
+      
+      const groupOrderA = a.displayOrder || 0;
+      const groupOrderB = b.displayOrder || 0;
+      
+      if (groupOrderA !== groupOrderB) {
+        return groupOrderA - groupOrderB;
+      }
+      
+      return a.name.localeCompare(b.name);
+    });
+  }, [staffList, departments]);
+
+  // 部署・グループ設定タブが開かれた時にデータを取得
+  useEffect(() => {
+    if (activeTab === 'departments' && canManage) {
+      fetchDepartmentSettings();
+    }
+  }, [activeTab, canManage, fetchDepartmentSettings]);
+
+  // スナップショットタブが開かれた時に履歴を取得
+  useEffect(() => {
+    if (activeTab === 'snapshots' && canManage) {
+      fetchSnapshotHistory();
+    }
+  }, [activeTab, canManage, fetchSnapshotHistory]);
+
+  // モーダルの外側クリックでクローズ
+  const handleBackdropClick = useCallback((e: React.MouseEvent) => {
+    if (e.target === e.currentTarget) {
+      handleSaveAndClose();
+    }
+  }, [handleSaveAndClose]);
+
+  // ESCキーでクローズ
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        handleSaveAndClose();
+      }
+    };
+    
+    if (isOpen) {
+      document.addEventListener('keydown', handleKeyDown);
+      return () => document.removeEventListener('keydown', handleKeyDown);
+    }
+  }, [isOpen, handleSaveAndClose]);
+
+  // モーダルが開かれていない場合は何も表示しない
+  if (!isOpen) return null;
+
+  const modalContent = (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onClick={handleBackdropClick}>
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        {/* ヘッダー */}
+        <div className="flex justify-between items-center p-6 border-b">
+          <h2 className="text-xl font-semibold text-gray-900">設定</h2>
+          <button
+            onClick={handleSaveAndClose}
+            className="text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {/* タブナビゲーション */}
+        <div className="flex border-b">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === tab.id
+                  ? 'border-blue-500 text-blue-600 bg-blue-50'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <span className="mr-2">{tab.icon}</span>
+              {tab.name}
+            </button>
+          ))}
+        </div>
+
+        {/* タブコンテンツ */}
+        <div className="flex-1 overflow-y-auto p-6">
+          {/* 表示設定タブ */}
+          {activeTab === 'display' && (
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-lg font-medium text-gray-900 mb-4">表示設定</h3>
+                
+                {/* ビューモード設定 */}
+                <div className="mb-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    ビューモード
+                  </label>
+                  <div className="flex space-x-4">
+                    <label className="flex items-center">
+                      <input
+                        type="radio"
+                        name="viewMode"
+                        value="normal"
+                        checked={viewMode === 'normal'}
+                        onChange={(e) => handleViewModeChange(e.target.value as 'normal' | 'compact')}
+                        className="mr-2"
+                      />
+                      通常表示
+                    </label>
+                    <label className="flex items-center">
+                      <input
+                        type="radio"
+                        name="viewMode"
+                        value="compact"
+                        checked={viewMode === 'compact'}
+                        onChange={(e) => handleViewModeChange(e.target.value as 'normal' | 'compact')}
+                        className="mr-2"
+                      />
+                      コンパクト表示
+                    </label>
+                  </div>
+                </div>
+
+                {/* マスキング設定 */}
+                <div className="mb-6">
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={maskingEnabled}
+                      onChange={handleMaskingToggle}
+                      className="mr-2"
+                    />
+                    <span className="text-sm font-medium text-gray-700">
+                      個人情報マスキングを有効にする
+                    </span>
+                  </label>
+                  <p className="text-xs text-gray-500 mt-1">
+                    スタッフ名や個人的な情報を「***」で表示します
+                  </p>
+                </div>
+
+                {/* ステータス色設定 */}
+                <div className="border border-gray-200 rounded-lg p-4">
+                  <h4 className="font-medium text-gray-900 mb-3">🎨 ステータス色設定</h4>
+                  <div className="grid grid-cols-2 gap-4">
+                    {Object.entries(displayStatusColors).map(([status, color]) => (
+                      <div key={status} className="flex items-center space-x-2">
+                        <div className="w-4 h-4 rounded" style={{ backgroundColor: color }}></div>
+                        <span className="text-sm">{capitalizeStatus(status)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* プリセット設定タブ */}
+          {activeTab === 'presets' && (
+            <div className="space-y-6">
+              <div className="flex justify-between items-center">
+                <h3 className="text-lg font-medium text-gray-900">プリセット設定</h3>
+                <div className="flex space-x-2">
+                  <button
+                    onClick={handleCreatePreset}
+                    className="px-3 py-1 text-sm bg-green-500 text-white rounded hover:bg-green-600 transition-colors"
+                  >
+                    + 新規作成
+                  </button>
+                  <button
+                    onClick={resetToDefaults}
+                    className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors"
+                    disabled={isLoading}
+                  >
+                    デフォルトに戻す
+                  </button>
+                  <button
+                    onClick={saveSettings}
+                    className={`px-3 py-1 text-sm rounded transition-colors ${
+                      isDirty 
+                        ? 'bg-blue-500 text-white hover:bg-blue-600' 
+                        : 'bg-gray-100 text-gray-500 cursor-not-allowed'
+                    }`}
+                    disabled={!isDirty || isLoading}
+                  >
+                    {isLoading ? '保存中...' : '保存'}
+                  </button>
+                </div>
+              </div>
+
+              {/* カテゴリ別プリセット表示 */}
+              {categories.map((category) => {
+                const categoryPresets = filteredPresets.filter(p => p.category === category.id);
+                if (categoryPresets.length === 0) return null;
+
+                return (
+                  <div key={category.id} className="border rounded-lg p-4">
+                    <h4 className="font-medium text-gray-900 mb-3 flex items-center">
+                      <span className="mr-2">{category.icon}</span>
+                      {category.displayName}
+                      <span className="ml-2 text-xs text-gray-500">({categoryPresets.length})</span>
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {categoryPresets.map((preset) => (
+                        <div
+                          key={preset.id}
+                          className={`border rounded p-3 ${
+                            preset.isActive ? 'border-green-200 bg-green-50' : 'border-gray-200 bg-gray-50'
+                          }`}
+                        >
+                          <div className="flex justify-between items-start">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <h5 className="font-medium text-sm text-gray-900">{preset.displayName}</h5>
+                                {preset.isDefault && (
+                                  <span className="px-2 py-0.5 text-xs bg-blue-100 text-blue-700 rounded">
+                                    デフォルト
+                                  </span>
+                                )}
+                              </div>
+                              {preset.description && (
+                                <p className="text-xs text-gray-600 mt-1">{preset.description}</p>
+                              )}
+                              <div className="text-xs text-gray-500 mt-2">
+                                {preset.schedules.map((schedule, idx) => (
+                                  <span key={idx} className="inline-block mr-2">
+                                    {schedule.startTime}:00-{schedule.endTime}:00 ({schedule.status})
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                            <div className="flex items-center space-x-2 ml-2">
+                              {/* 操作ボタン */}
+                              <div className="flex space-x-1">
+                                <button
+                                  onClick={() => handleEditPreset(preset)}
+                                  className="text-blue-600 hover:text-blue-800 text-xs px-2 py-1 rounded hover:bg-blue-50"
+                                  title="編集"
+                                >
+                                  ✏️
+                                </button>
+                                <button
+                                  onClick={() => handleDuplicatePreset(preset)}
+                                  className="text-gray-600 hover:text-gray-800 text-xs px-2 py-1 rounded hover:bg-gray-50"
+                                  title="複製"
+                                >
+                                  📋
+                                </button>
+                                {!preset.isDefault && (
+                                  <button
+                                    onClick={() => handleDeletePreset(preset.id)}
+                                    className="text-red-600 hover:text-red-800 text-xs px-2 py-1 rounded hover:bg-red-50"
+                                    title="削除"
+                                  >
+                                    🗑️
+                                  </button>
+                                )}
+                              </div>
+                              {/* 有効/無効チェックボックス */}
+                              <label className="flex items-center">
+                                <input
+                                  type="checkbox"
+                                  checked={preset.isActive}
+                                  onChange={() => handleTogglePreset(preset.id)}
+                                  className="text-blue-600 rounded"
+                                />
+                              </label>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* ページ別プリセット適用設定 */}
+              <div className="mt-8 p-4 bg-gray-50 rounded-lg">
+                <h4 className="font-medium text-gray-900 mb-4">📱 ページ別プリセット適用設定</h4>
+                <p className="text-sm text-gray-600 mb-4">
+                  各ページで利用できるプリセットを個別に設定できます
+                </p>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* 月次プランナー設定 */}
+                  <div className="bg-white p-4 rounded border">
+                    <h5 className="font-medium text-gray-800 mb-3 flex items-center">
+                      📅 月次プランナー
+                      <span className="ml-2 text-xs text-gray-500">
+                        ({getPresetsForPage('monthlyPlanner').length}個有効)
+                      </span>
+                    </h5>
+                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                      {presets.filter(p => p.isActive).map((preset) => {
+                        const isEnabled = getPagePresetSettings('monthlyPlanner').enabledPresetIds.includes(preset.id);
+                        const isDefault = getPagePresetSettings('monthlyPlanner').defaultPresetId === preset.id;
+                        return (
+                          <div key={preset.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                            <div className="flex items-center">
+                              <input
+                                type="checkbox"
+                                checked={isEnabled}
+                                onChange={(e) => {
+                                  const currentSettings = getPagePresetSettings('monthlyPlanner');
+                                  const newEnabledIds = e.target.checked
+                                    ? [...currentSettings.enabledPresetIds, preset.id]
+                                    : currentSettings.enabledPresetIds.filter(id => id !== preset.id);
+                                  updatePagePresetSettings(
+                                    'monthlyPlanner', 
+                                    newEnabledIds,
+                                    newEnabledIds.includes(currentSettings.defaultPresetId || '') 
+                                      ? currentSettings.defaultPresetId 
+                                      : newEnabledIds[0]
+                                  );
+                                }}
+                                className="mr-2"
+                              />
+                              <span className="text-sm">{preset.displayName}</span>
+                              {isDefault && (
+                                <span className="ml-2 px-2 py-0.5 text-xs bg-blue-100 text-blue-700 rounded">
+                                  デフォルト
+                                </span>
+                              )}
+                            </div>
+                            {isEnabled && (
+                              <button
+                                onClick={() => {
+                                  const currentSettings = getPagePresetSettings('monthlyPlanner');
+                                  updatePagePresetSettings(
+                                    'monthlyPlanner',
+                                    currentSettings.enabledPresetIds,
+                                    preset.id
+                                  );
+                                }}
+                                className={`text-xs px-2 py-1 rounded ${
+                                  isDefault
+                                    ? 'bg-blue-500 text-white'
+                                    : 'bg-gray-200 text-gray-700 hover:bg-blue-200'
+                                }`}
+                              >
+                                {isDefault ? 'デフォルト' : 'デフォルトに設定'}
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* 個人ページ設定 */}
+                  <div className="bg-white p-4 rounded border">
+                    <h5 className="font-medium text-gray-800 mb-3 flex items-center">
+                      👤 個人ページ
+                      <span className="ml-2 text-xs text-gray-500">
+                        ({getPresetsForPage('personalPage').length}個有効)
+                      </span>
+                    </h5>
+                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                      {presets.filter(p => p.isActive).map((preset) => {
+                        const isEnabled = getPagePresetSettings('personalPage').enabledPresetIds.includes(preset.id);
+                        const isDefault = getPagePresetSettings('personalPage').defaultPresetId === preset.id;
+                        return (
+                          <div key={preset.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                            <div className="flex items-center">
+                              <input
+                                type="checkbox"
+                                checked={isEnabled}
+                                onChange={(e) => {
+                                  const currentSettings = getPagePresetSettings('personalPage');
+                                  const newEnabledIds = e.target.checked
+                                    ? [...currentSettings.enabledPresetIds, preset.id]
+                                    : currentSettings.enabledPresetIds.filter(id => id !== preset.id);
+                                  updatePagePresetSettings(
+                                    'personalPage', 
+                                    newEnabledIds,
+                                    newEnabledIds.includes(currentSettings.defaultPresetId || '') 
+                                      ? currentSettings.defaultPresetId 
+                                      : newEnabledIds[0]
+                                  );
+                                }}
+                                className="mr-2"
+                              />
+                              <span className="text-sm">{preset.displayName}</span>
+                              {isDefault && (
+                                <span className="ml-2 px-2 py-0.5 text-xs bg-blue-100 text-blue-700 rounded">
+                                  デフォルト
+                                </span>
+                              )}
+                            </div>
+                            {isEnabled && (
+                              <button
+                                onClick={() => {
+                                  const currentSettings = getPagePresetSettings('personalPage');
+                                  updatePagePresetSettings(
+                                    'personalPage',
+                                    currentSettings.enabledPresetIds,
+                                    preset.id
+                                  );
+                                }}
+                                className={`text-xs px-2 py-1 rounded ${
+                                  isDefault
+                                    ? 'bg-blue-500 text-white'
+                                    : 'bg-gray-200 text-gray-700 hover:bg-blue-200'
+                                }`}
+                              >
+                                {isDefault ? 'デフォルト' : 'デフォルトに設定'}
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded">
+                  <p className="text-sm text-blue-700">
+                    💡 <strong>設定のポイント:</strong>
+                  </p>
+                  <ul className="text-xs text-blue-600 mt-1 ml-4 list-disc">
+                    <li>月次プランナー: 管理者向けの勤務パターン（標準勤務、休暇系）</li>
+                    <li>個人ページ: 個人利用向けのパターン（在宅、会議、研修含む）</li>
+                    <li>各ページで異なるプリセットを有効化できます</li>
+                    <li>デフォルトプリセットは新規作成時に自動選択されます</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* インポート機能タブ（管理者のみ） */}
+          {activeTab === 'import' && canManage && (
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-lg font-medium text-gray-900 mb-4">📋 データインポート</h3>
+                
+                {/* CSVスケジュールインポート */}
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="font-medium text-blue-900">📅 スケジュールインポート</h4>
+                      <p className="text-sm text-blue-700 mt-1">
+                        CSVファイルから月次スケジュールを一括インポート
+                      </p>
+                    </div>
+                    <button 
+                      onClick={() => {
+                        if (setIsCsvUploadModalOpen) {
+                          setIsCsvUploadModalOpen(true);
+                          onClose();
+                        }
+                      }} 
+                      className="px-4 py-2 bg-gray-700 text-white rounded-md hover:bg-gray-800"
+                    >
+                      インポート実行
+                    </button>
+                  </div>
+                </div>
+
+                {/* 社員情報インポート */}
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="font-medium text-green-900">👥 社員情報インポート</h4>
+                      <p className="text-sm text-green-700 mt-1">
+                        JSONファイルから社員マスタを一括インポート
+                      </p>
+                    </div>
+                    <button 
+                      onClick={() => {
+                        if (setIsJsonUploadModalOpen) {
+                          setIsJsonUploadModalOpen(true);
+                          onClose();
+                        }
+                      }} 
+                      className="px-4 py-2 bg-gray-700 text-white rounded-md hover:bg-gray-800"
+                    >
+                      インポート実行
+                    </button>
+                  </div>
+                </div>
+
+                {/* インポート履歴 */}
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="font-medium text-gray-900">📊 インポート履歴</h4>
+                      <p className="text-sm text-gray-700 mt-1">
+                        過去のインポート実績とロールバック操作
+                      </p>
+                    </div>
+                    <button 
+                      onClick={() => {
+                        if (setIsImportHistoryModalOpen) {
+                          setIsImportHistoryModalOpen(true);
+                          onClose();
+                        }
+                      }} 
+                      className="px-4 py-2 bg-gray-700 text-white rounded-md hover:bg-gray-800"
+                    >
+                      履歴確認
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 部署・グループ設定タブ（管理者のみ） */}
+          {activeTab === 'departments' && canManage && (
+            <div className="space-y-6">
+              <div className="flex justify-between items-center">
+                <h3 className="text-lg font-medium text-gray-900">🏢 部署・グループ設定</h3>
+                <div className="space-x-2">
+                  <button
+                    onClick={handleAutoGenerateDepartments}
+                    disabled={isLoadingDepartments}
+                    className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    🔄 部署・グループの取得
+                  </button>
+                  <button
+                    onClick={handleSaveDepartments}
+                    disabled={isSavingDepartments}
+                    className="px-3 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+                  >
+                    💾 保存
+                  </button>
+                </div>
+              </div>
+
+              {isLoadingDepartments ? (
+                <div className="text-center py-8">読み込み中...</div>
+              ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* 部署設定 */}
+                  <div>
+                    <h4 className="font-medium text-gray-900 mb-3">部署設定 ({departments.length})</h4>
+                    <div className="border border-gray-200 rounded-lg">
+                      <table className="w-full text-sm">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-3 py-2 text-left">部署名</th>
+                            <th className="px-3 py-2 text-left">短縮名</th>
+                            <th className="px-3 py-2 text-left">背景色</th>
+                            <th className="px-3 py-2 text-left">表示順</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {sortDepartmentsByOrder([...departments]).map((dept) => (
+                            <tr key={dept.id} className="border-t border-gray-200">
+                              <td className="px-3 py-2 text-xs">{dept.name}</td>
+                              <td className="px-3 py-2">
+                                <input
+                                  type="text"
+                                  value={dept.shortName || ''}
+                                  onChange={(e) => updateDepartmentShortName(dept.id, e.target.value)}
+                                  className="w-full px-2 py-1 text-xs border border-gray-300 rounded"
+                                  maxLength={8}
+                                />
+                              </td>
+                              <td className="px-3 py-2">
+                                <input
+                                  type="color"
+                                  value={dept.backgroundColor || '#ffffff'}
+                                  onChange={(e) => updateDepartmentBackgroundColor(dept.id, e.target.value)}
+                                  className="w-8 h-6 border border-gray-300 rounded"
+                                />
+                              </td>
+                              <td className="px-3 py-2">
+                                <input
+                                  type="number"
+                                  value={dept.displayOrder || 0}
+                                  onChange={(e) => updateDepartmentDisplayOrder(dept.id, parseInt(e.target.value) || 0)}
+                                  className="w-16 px-2 py-1 text-xs border border-gray-300 rounded"
+                                  min="0"
+                                  step="10"
+                                />
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* グループ設定 */}
+                  <div>
+                    <h4 className="font-medium text-gray-900 mb-3">グループ設定 ({groups.length})</h4>
+                    <div className="border border-gray-200 rounded-lg">
+                      <table className="w-full text-sm">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-3 py-2 text-left">グループ名</th>
+                            <th className="px-3 py-2 text-left">短縮名</th>
+                            <th className="px-3 py-2 text-left">背景色</th>
+                            <th className="px-3 py-2 text-left">表示順</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {sortGroupsByDepartment([...groups]).map((group) => (
+                            <tr key={group.id} className="border-t border-gray-200">
+                              <td className="px-3 py-2 text-xs" style={{
+                                backgroundColor: departments.find(d => d.name === (staffList?.find(staff => staff.group === group.name)?.department))?.backgroundColor || '#f9fafb'
+                              }}>
+                                {group.name}
+                              </td>
+                              <td className="px-3 py-2 text-xs">
+                                <input
+                                  type="text"
+                                  value={group.shortName || ''}
+                                  onChange={(e) => updateGroupShortName(group.id, e.target.value)}
+                                  className="w-full px-2 py-1 text-xs border border-gray-300 rounded"
+                                  maxLength={8}
+                                />
+                              </td>
+                              <td className="px-3 py-2">
+                                <input
+                                  type="color"
+                                  value={group.backgroundColor || '#ffffff'}
+                                  onChange={(e) => updateGroupBackgroundColor(group.id, e.target.value)}
+                                  className="w-8 h-6 border border-gray-300 rounded"
+                                />
+                              </td>
+                              <td className="px-3 py-2 text-xs">
+                                <input
+                                  type="number"
+                                  value={group.displayOrder || 0}
+                                  onChange={(e) => updateGroupDisplayOrder(group.id, parseInt(e.target.value) || 0)}
+                                  className="w-16 px-2 py-1 text-xs border border-gray-300 rounded"
+                                  min="0"
+                                  step="10"
+                                />
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* スナップショット管理タブ（管理者のみ） */}
+          {activeTab === 'snapshots' && canManage && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-medium text-gray-900">📜 過去表示設定・スナップショット管理</h3>
+                <button 
+                  onClick={fetchSnapshotHistory}
+                  disabled={isLoadingSnapshots}
+                  className="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
+                >
+                  {isLoadingSnapshots ? '更新中...' : '🔄 履歴更新'}
+                </button>
+              </div>
+              
+              {/* スナップショット管理説明 */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <h4 className="font-medium text-blue-900 mb-2">📋 スナップショット機能について</h4>
+                <div className="text-sm text-blue-700 space-y-1">
+                  <p>• 毎日深夜0:05に前日分のスナップショットが自動作成されます</p>
+                  <p>• 過去データ閲覧時は、スナップショット作成済みの日付のみ表示可能です</p>
+                  <p>• 手動でスナップショットを作成することも可能です</p>
+                  <p>• 不要なスナップショットデータは削除できます（復旧不可）</p>
+                </div>
+              </div>
+
+              {/* 手動スナップショット作成 */}
+              <div className="border border-gray-200 rounded-lg p-4">
+                <h4 className="font-medium text-gray-900 mb-3">🔧 手動スナップショット作成</h4>
+                <div className="space-y-3">
+                  <p className="text-sm text-gray-600">
+                    指定した日付のスナップショットを手動で作成できます。既存のスナップショットがある場合は上書きされます。
+                  </p>
+                  <div className="flex gap-2">
+                    <input 
+                      type="date" 
+                      id="manualSnapshotDate"
+                      className="border border-gray-300 rounded px-3 py-2 text-sm"
+                      max={new Date().toISOString().split('T')[0]}
+                    />
+                    <button 
+                      onClick={() => {
+                        const dateInput = document.getElementById('manualSnapshotDate') as HTMLInputElement;
+                        if (dateInput.value) {
+                          createManualSnapshot(dateInput.value);
+                        } else {
+                          alert('日付を選択してください');
+                        }
+                      }}
+                      className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 text-sm"
+                    >
+                      📸 スナップショット作成
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* エラー表示 */}
+              {snapshotError && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                  <div className="flex">
+                    <div className="flex-shrink-0">
+                      <span className="text-red-600">❌</span>
+                    </div>
+                    <div className="ml-3">
+                      <h4 className="text-sm font-medium text-red-800">エラーが発生しました</h4>
+                      <p className="mt-1 text-sm text-red-700">{snapshotError}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* スナップショット履歴一覧 */}
+              <div className="border border-gray-200 rounded-lg">
+                <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
+                  <h4 className="font-medium text-gray-900">📊 スナップショット実行履歴（過去30日）</h4>
+                </div>
+                
+                <div className="overflow-x-auto">
+                  {isLoadingSnapshots ? (
+                    <div className="p-8 text-center text-gray-500">
+                      <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500 mr-2"></div>
+                      スナップショット履歴を読み込み中...
+                    </div>
+                  ) : snapshotHistory.length === 0 ? (
+                    <div className="p-8 text-center text-gray-500">
+                      📝 スナップショット履歴がありません
+                    </div>
+                  ) : (
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">対象日</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ステータス</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">件数</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">作成日時</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">完了日時</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {snapshotHistory.map((snapshot) => (
+                          <tr key={snapshot.id} className="hover:bg-gray-50">
+                            <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                              {snapshot.targetDate}
+                            </td>
+                            <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                snapshot.status === 'COMPLETED' ? 'bg-green-100 text-green-800' :
+                                snapshot.status === 'FAILED' ? 'bg-red-100 text-red-800' :
+                                'bg-yellow-100 text-yellow-800'
+                              }`}>
+                                {snapshot.status === 'COMPLETED' ? '✅ 完了' :
+                                 snapshot.status === 'FAILED' ? '❌ 失敗' : '⏳ 処理中'}
+                              </span>
+                            </td>
+                            <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+                              {snapshot.recordCount.toLocaleString()}件
+                            </td>
+                            <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+                              {new Date(snapshot.startedAt).toLocaleString('ja-JP')}
+                            </td>
+                            <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+                              {snapshot.completedAt ? new Date(snapshot.completedAt).toLocaleString('ja-JP') : '-'}
+                            </td>
+                            <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+                              {snapshot.status === 'COMPLETED' && (
+                                <button
+                                  onClick={() => rollbackSnapshot(snapshot.batchId, snapshot.targetDate)}
+                                  className="text-red-600 hover:text-red-900 text-sm font-medium"
+                                >
+                                  🗑️ 削除
+                                </button>
+                              )}
+                              {snapshot.status === 'FAILED' && snapshot.errorMessage && (
+                                <span className="text-red-600 text-xs" title={snapshot.errorMessage}>
+                                  ⚠️ エラー詳細
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* フッター */}
+        <div className="flex justify-between items-center p-6 border-t bg-gray-50">
+          <div className="text-sm text-gray-500">
+            {isDirty && <span className="text-orange-600">⚠️ 未保存の変更があります</span>}
+          </div>
+          <div className="flex space-x-3">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 text-sm text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50 transition-colors"
+            >
+              キャンセル
+            </button>
+            <button
+              onClick={handleSaveAndClose}
+              className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+              disabled={isLoading}
+            >
+              {isLoading ? '保存中...' : '保存して閉じる'}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* プリセット編集モーダル */}
+      <PresetEditModal
+        isOpen={isPresetEditModalOpen}
+        onClose={handleClosePresetEditModal}
+        onSave={handleSavePreset}
+        preset={editingPreset}
+        mode={editMode}
+      />
+    </div>
+  );
+
+  // ポータルを使用してモーダルをbody直下に描画
+  return typeof window !== 'undefined' ? createPortal(modalContent, document.body) : null;
+}
