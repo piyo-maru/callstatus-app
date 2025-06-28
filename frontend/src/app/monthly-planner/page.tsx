@@ -8,6 +8,8 @@ import DatePicker, { registerLocale } from 'react-datepicker';
 import { ja } from 'date-fns/locale/ja';
 import { format } from 'date-fns';
 import "react-datepicker/dist/react-datepicker.css";
+import { fetchHolidays, getHoliday } from '../components/utils/MainAppUtils';
+import { Holiday } from '../components/types/MainAppTypes';
 
 registerLocale('ja', ja);
 
@@ -320,6 +322,7 @@ function MonthlyPlannerPageContent() {
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [draggedPending, setDraggedPending] = useState<PendingSchedule | null>(null);
+  const [holidays, setHolidays] = useState<Holiday[]>([]);
   
   // 月ナビゲーション関数
   const goToPreviousMonth = useCallback(() => {
@@ -1042,10 +1045,14 @@ function MonthlyPlannerPageContent() {
     const date = new Date(year, month - 1, day);
     const dayOfWeek = date.getDay(); // 0=日曜, 6=土曜
     
+    // 祝日判定：祝日は契約データ無効
+    const holiday = getHoliday(date, holidays);
+    if (holiday) return false;
+    
     // 基本的に平日は契約勤務あり、土日は契約勤務なし
     // （将来的には実際の契約データを参照可能）
     return dayOfWeek >= 1 && dayOfWeek <= 5; // 月〜金のみ
-  }, [currentMonth]);
+  }, [currentMonth, holidays]);
 
   // Pending予定のドラッグ&ドロップ処理
   const handlePendingDrop = useCallback(async (draggedPending: PendingSchedule, targetStaffId: number, targetDay: number) => {
@@ -1179,6 +1186,17 @@ function MonthlyPlannerPageContent() {
   useEffect(() => {
     fetchStaffData();
     fetchDepartmentSettings();
+    
+    // 祝日データ取得
+    const loadHolidays = async () => {
+      try {
+        const holidayData = await fetchHolidays();
+        setHolidays(holidayData);
+      } catch (error) {
+        console.error('祝日データの取得に失敗しました:', error);
+      }
+    };
+    loadHolidays();
   }, [fetchStaffData, fetchDepartmentSettings]);
 
   // 月が変更された時にpendingデータと担当設定データを取得（契約データ無効化）
@@ -1211,7 +1229,7 @@ function MonthlyPlannerPageContent() {
                 href="/personal"
                 className="text-sm bg-blue-100 hover:bg-blue-200 text-blue-800 px-3 py-1 rounded border border-blue-300 transition-colors"
               >
-                📅 個人ページ
+                👤 個人ページ
               </a>
               {user?.role === 'ADMIN' && (
                 <a
@@ -1368,6 +1386,10 @@ function MonthlyPlannerPageContent() {
                         const dayOfWeek = date.getDay();
                         const dayNames = ['日', '月', '火', '水', '木', '金', '土'];
                         const getTextColor = () => {
+                          // 祝日判定：祝日は赤色
+                          const holiday = getHoliday(date, holidays);
+                          if (holiday) return 'text-red-600';
+                          
                           if (dayOfWeek === 0) return 'text-red-600'; // 日曜日は赤
                           if (dayOfWeek === 6) return 'text-blue-600'; // 土曜日は青
                           return 'text-gray-800'; // 平日は通常色

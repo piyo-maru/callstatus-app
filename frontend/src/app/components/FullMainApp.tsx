@@ -26,7 +26,7 @@ import {
   getApiUrl, availableStatuses, AVAILABLE_STATUSES 
 } from './constants/MainAppConstants';
 import { 
-  fetchHolidays, getDateColor, 
+  fetchHolidays, getHoliday, getDateColor, 
   formatDateWithHoliday, checkSupportedCharacters, 
   timeStringToHours 
 } from './utils/MainAppUtils';
@@ -3083,7 +3083,7 @@ export default function FullMainApp() {
           href="/personal"
           className="text-sm bg-blue-100 hover:bg-blue-200 text-blue-800 px-3 py-1 rounded border border-blue-300 transition-colors"
         >
-          📅 個人ページ
+          👤 個人ページ
         </a>
         <a
           href="/monthly-planner"
@@ -3091,14 +3091,6 @@ export default function FullMainApp() {
         >
           📅 月次プランナー
         </a>
-        {user?.role === 'ADMIN' && (
-          <a
-            href="/admin/pending-approval"
-            className="text-sm bg-orange-100 hover:bg-orange-200 text-orange-800 px-3 py-1 rounded border border-orange-300 transition-colors"
-          >
-            🔐 申請承認管理
-          </a>
-        )}
         <button
           onClick={logout}
           className="text-sm bg-gray-100 hover:bg-gray-200 px-3 py-1 rounded border"
@@ -3281,10 +3273,10 @@ export default function FullMainApp() {
               {Object.keys(groupedStaffForGantt).length > 0 ? (
                 sortByDisplayOrder(Object.entries(groupedStaffForGantt), 'department').map(([department, groups]) => (
                   <div key={department} className="department-group">
-                    <h3 className="px-2 min-h-[33px] text-sm font-bold whitespace-nowrap flex items-center" style={{backgroundColor: departmentColors[department] || '#f5f5f5'}}>{department}</h3>
+                    <h3 className="px-2 min-h-[33px] text-sm font-bold whitespace-nowrap flex items-center" style={{backgroundColor: getHoliday(displayDate, holidays) ? '#f5f5f5' : (departmentColors[department] || '#f5f5f5')}}>{department}</h3>
                     {sortByDisplayOrder(Object.entries(groups), 'group').map(([group, staffInGroup]) => (
                       <div key={group}>
-                        <h4 className="px-2 pl-6 min-h-[33px] text-xs font-semibold whitespace-nowrap flex items-center" style={{backgroundColor: teamColors[group] || '#f5f5f5'}}>{group}</h4>
+                        <h4 className="px-2 pl-6 min-h-[33px] text-xs font-semibold whitespace-nowrap flex items-center" style={{backgroundColor: getHoliday(displayDate, holidays) ? '#f5f5f5' : (teamColors[group] || '#f5f5f5')}}>{group}</h4>
                         {staffInGroup.map((staff: any) => {
                           const supportBorderColor = getSupportBorderColor(staff);
                           return (
@@ -3396,10 +3388,10 @@ export default function FullMainApp() {
                   {Object.keys(groupedStaffForGantt).length > 0 ? (
                     sortByDisplayOrder(Object.entries(groupedStaffForGantt), 'department').map(([department, groups]) => (
                       <div key={department} className="department-group">
-                        <div className="min-h-[33px]" style={{backgroundColor: departmentColors[department] || '#f5f5f5'}}></div>
+                        <div className="min-h-[33px]" style={{backgroundColor: getHoliday(displayDate, holidays) ? '#f5f5f5' : (departmentColors[department] || '#f5f5f5')}}></div>
                         {sortByDisplayOrder(Object.entries(groups), 'group').map(([group, staffInGroup]) => (
                           <div key={group}>
-                            <div className="min-h-[33px]" style={{backgroundColor: teamColors[group] || '#f5f5f5'}}></div>
+                            <div className="min-h-[33px]" style={{backgroundColor: getHoliday(displayDate, holidays) ? '#f5f5f5' : (teamColors[group] || '#f5f5f5')}}></div>
                             {staffInGroup.map((staff: any) => {
                               const supportBorderColor = getSupportBorderColor(staff);
                               return (
@@ -3456,7 +3448,18 @@ export default function FullMainApp() {
                                        }
                                      }
                                    }}>
-                                {schedules.filter(s => s.staffId === staff.id).sort((a, b) => {
+                                {schedules.filter(s => {
+                                  if (s.staffId !== staff.id) return false;
+                                  
+                                  // 祝日判定：契約データは祝日に表示しない
+                                  const scheduleLayer = s.layer || 'adjustment';
+                                  if (scheduleLayer === 'contract') {
+                                    const holiday = getHoliday(displayDate, holidays);
+                                    if (holiday) return false; // 祝日なら契約データを非表示
+                                  }
+                                  
+                                  return true;
+                                }).sort((a, b) => {
                                   // レイヤー順: contract(1) < adjustment(2)
                                   const layerOrder: { [key: string]: number } = { contract: 1, adjustment: 2 };
                                   const aLayer = (a as any).layer || 'adjustment';

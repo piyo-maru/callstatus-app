@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
-export default function RequestInitialSetupPage() {
+function RequestInitialSetupForm() {
   const [email, setEmail] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState('');
@@ -122,5 +122,13 @@ export default function RequestInitialSetupPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function RequestInitialSetupPage() {
+  return (
+    <Suspense fallback={<div>読み込み中...</div>}>
+      <RequestInitialSetupForm />
+    </Suspense>
   );
 }

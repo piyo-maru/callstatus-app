@@ -6,12 +6,20 @@ const nextConfig = {
     serverComponentsExternalPackages: [],
     // 開発環境でのバンドル問題を回避
     turbo: undefined,
+    // メモリ効率向上のための設定
+    ...(process.env.NODE_ENV === 'development' && {
+      cpus: 1,
+      memoryBasedWorkersCount: false,
+    }),
   },
-  // 開発環境でのWebpackキャッシュを無効化して問題を回避
+  // メモリ効率を考慮したWebpack設定
   webpack: (config, { dev, isServer }) => {
     if (dev) {
-      // 開発環境でのキャッシュ問題を回避
-      config.cache = false;
+      // メモリ効率のためキャッシュを有効化（typeエラーが発生する場合のみ無効化）
+      config.cache = {
+        type: 'memory',
+        maxGenerations: 1,
+      };
       
       // React Server Componentsのマニフェスト問題を回避
       if (!isServer) {
@@ -23,6 +31,15 @@ const nextConfig = {
       
       // 開発環境でのmodule resolution改善
       config.resolve.symlinks = false;
+      
+      // メモリ使用量を制限
+      config.optimization = {
+        ...config.optimization,
+        splitChunks: {
+          chunks: 'all',
+          maxSize: 244000,
+        },
+      };
     }
     return config;
   },
@@ -45,13 +62,13 @@ const nextConfig = {
       },
     ];
   },
-  // 開発環境での追加設定
+  // 開発環境での追加設定（メモリ効率向上）
   ...(process.env.NODE_ENV === 'development' && {
     onDemandEntries: {
-      // ページが読み込まれてからメモリに保持する時間
-      maxInactiveAge: 25 * 1000,
-      // 同時にメモリに保持するページ数
-      pagesBufferLength: 2,
+      // ページが読み込まれてからメモリに保持する時間（短縮）
+      maxInactiveAge: 15 * 1000,
+      // 同時にメモリに保持するページ数（最小限）
+      pagesBufferLength: 1,
     },
   }),
 }

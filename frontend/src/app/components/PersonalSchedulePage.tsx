@@ -14,6 +14,9 @@ import {
   TIMELINE_CONFIG,
   capitalizeStatus
 } from './timeline/TimelineUtils';
+// 祝日関連のインポート
+import { Holiday } from './types/MainAppTypes';
+import { fetchHolidays, getHoliday, getDateColor, formatDateWithHoliday } from './utils/MainAppUtils';
 
 interface Schedule {
   id: number | string;
@@ -99,6 +102,7 @@ const PersonalSchedulePage: React.FC = () => {
     }
     return false;
   });
+  const [holidays, setHolidays] = useState<Holiday[]>([]);
 
   // スクロール位置管理のためのref
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -624,6 +628,11 @@ const PersonalSchedulePage: React.FC = () => {
       setLoading(false);
     }
   }, [currentStaff, monthDays, getApiUrl, authenticatedFetch, restoreScrollPosition]);
+
+  // 祝日データを初期化
+  useEffect(() => {
+    fetchHolidays().then(setHolidays);
+  }, []);
 
   // 初期化処理
   useEffect(() => {
@@ -1353,6 +1362,9 @@ const PersonalSchedulePage: React.FC = () => {
                       '月曜日: 09:00-18:00　火曜日: 09:00-18:00　水曜日: 09:00-18:00　木曜日: 09:00-18:00　金曜日: 09:00-18:00'
                     )}
                   </span>
+                  <div className="text-xs text-gray-500 mt-1">
+                    ※ 祝日は赤字で表示されます。祝日の勤務時間は個別に調整してください。
+                  </div>
                 </div>
               </div>
             </div>
@@ -1438,20 +1450,32 @@ const PersonalSchedulePage: React.FC = () => {
               {monthDays.map((day) => {
                 const dayStr = format(day, 'yyyy-MM-dd');
                 const daySchedules = schedules.filter(schedule => {
+                  // 基本的な日付マッチング
+                  let isMatchingDate = false;
                   if (schedule.date) {
-                    return schedule.date === dayStr;
+                    isMatchingDate = schedule.date === dayStr;
+                  } else if (schedule.start instanceof Date) {
+                    isMatchingDate = isSameDay(schedule.start, day);
+                  } else if (typeof schedule.start === 'string') {
+                    isMatchingDate = isSameDay(new Date(schedule.start), day);
                   }
-                  if (schedule.start instanceof Date) {
-                    return isSameDay(schedule.start, day);
+                  
+                  if (!isMatchingDate) return false;
+                  
+                  // 祝日判定：契約データは祝日に表示しない
+                  const scheduleLayer = schedule.layer || 'adjustment';
+                  if (scheduleLayer === 'contract') {
+                    const holiday = getHoliday(day, holidays);
+                    if (holiday) return false; // 祝日なら契約データを非表示
                   }
-                  if (typeof schedule.start === 'string') {
-                    return isSameDay(new Date(schedule.start), day);
-                  }
-                  return false;
+                  
+                  return true;
                 });
                 
                 const isCurrentDay = isToday(day);
                 const isPastDate = day < new Date(new Date().setHours(0, 0, 0, 0)); // 今日より前の日付
+                const holiday = getHoliday(day, holidays);
+                const dateColorClass = getDateColor(day, holidays);
                 
                 return (
                   <div 
@@ -1461,9 +1485,11 @@ const PersonalSchedulePage: React.FC = () => {
                     } ${
                       selectedDateForPreset && isSameDay(selectedDateForPreset, day) ? 'bg-blue-100 border-blue-300' : ''
                     } ${
-                      day.getDay() === 0 ? 'bg-red-50 text-red-600' : ''  // 日曜日
+                      holiday ? 'bg-red-50 text-red-600' : ''  // 祝日
                     } ${
-                      day.getDay() === 6 ? 'bg-blue-50 text-blue-600' : ''  // 土曜日
+                      !holiday && day.getDay() === 0 ? 'bg-red-50 text-red-600' : ''  // 日曜日（祝日でない場合）
+                    } ${
+                      !holiday && day.getDay() === 6 ? 'bg-blue-50 text-blue-600' : ''  // 土曜日（祝日でない場合）
                     }`}
                     onClick={(e) => {
                       if (isPastDate) return; // 過去の日付は選択不可
@@ -1486,6 +1512,9 @@ const PersonalSchedulePage: React.FC = () => {
                         <div className="text-xs font-semibold whitespace-nowrap">
                           {format(day, 'M/d E', { locale: ja })}
                         </div>
+                        {holiday && (
+                          <div className="text-xs text-red-600 mt-1 whitespace-nowrap">{holiday.name}</div>
+                        )}
                         {selectedDateForPreset && isSameDay(selectedDateForPreset, day) && (
                           <div className="text-xs text-blue-600 mt-1 whitespace-nowrap">📌 選択中</div>
                         )}
@@ -1533,16 +1562,26 @@ const PersonalSchedulePage: React.FC = () => {
                   {monthDays.map((day) => {
                     const dayStr = format(day, 'yyyy-MM-dd');
                     const daySchedules = schedules.filter(schedule => {
+                      // 基本的な日付マッチング
+                      let isMatchingDate = false;
                       if (schedule.date) {
-                        return schedule.date === dayStr;
+                        isMatchingDate = schedule.date === dayStr;
+                      } else if (schedule.start instanceof Date) {
+                        isMatchingDate = isSameDay(schedule.start, day);
+                      } else if (typeof schedule.start === 'string') {
+                        isMatchingDate = isSameDay(new Date(schedule.start), day);
                       }
-                      if (schedule.start instanceof Date) {
-                        return isSameDay(schedule.start, day);
+                      
+                      if (!isMatchingDate) return false;
+                      
+                      // 祝日判定：契約データは祝日に表示しない
+                      const scheduleLayer = schedule.layer || 'adjustment';
+                      if (scheduleLayer === 'contract') {
+                        const holiday = getHoliday(day, holidays);
+                        if (holiday) return false; // 祝日なら契約データを非表示
                       }
-                      if (typeof schedule.start === 'string') {
-                        return isSameDay(new Date(schedule.start), day);
-                      }
-                      return false;
+                      
+                      return true;
                     });
                     
                     const isCurrentDay = isToday(day);
