@@ -311,6 +311,165 @@ export class StaffService {
     }
   }
 
+  // 社員インポート時の自動昼休み追加メソッド
+  private async addAutomaticLunchBreaks(staffId: number, importDate: Date) {
+    console.log(`=== 自動昼休み追加開始: スタッフID ${staffId} ===`);
+    
+    try {
+      // 該当スタッフの契約勤務時間を取得
+      const contract = await this.prisma.contract.findFirst({
+        where: { staffId }
+      });
+
+      if (!contract) {
+        console.log(`契約データが見つかりません: スタッフID ${staffId}`);
+        return { added: 0, details: [] };
+      }
+
+      // 勤務日（契約時間が設定されている曜日）を特定
+      const workingDays = [];
+      const dayHoursMapping = [
+        { dayOfWeek: 1, hours: contract.mondayHours, name: '月曜日' },
+        { dayOfWeek: 2, hours: contract.tuesdayHours, name: '火曜日' },
+        { dayOfWeek: 3, hours: contract.wednesdayHours, name: '水曜日' },
+        { dayOfWeek: 4, hours: contract.thursdayHours, name: '木曜日' },
+        { dayOfWeek: 5, hours: contract.fridayHours, name: '金曜日' },
+        { dayOfWeek: 6, hours: contract.saturdayHours, name: '土曜日' },
+        { dayOfWeek: 0, hours: contract.sundayHours, name: '日曜日' }
+      ];
+
+      dayHoursMapping.forEach(day => {
+        if (day.hours && day.hours.trim()) {
+          workingDays.push(day.dayOfWeek);
+          console.log(`勤務日検出: ${day.name} (${day.hours})`);
+        }
+      });
+
+      if (workingDays.length === 0) {
+        console.log(`勤務日が設定されていません: スタッフID ${staffId}`);
+        return { added: 0, details: [] };
+      }
+
+      // 対象期間（インポート日から3ヶ月後まで）の昼休み対象日を計算
+      const endDate = new Date(importDate);
+      endDate.setMonth(endDate.getMonth() + 3);
+      
+      const lunchBreaksToAdd = [];
+      const currentDate = new Date(importDate);
+      
+      while (currentDate <= endDate) {
+        // 該当する曜日かチェック
+        if (workingDays.includes(currentDate.getDay())) {
+          const dateString = currentDate.toISOString().split('T')[0];
+          
+          // 12:00-13:00に既存予定があるかチェック
+          const lunchStart = new Date(`${dateString}T12:00:00+09:00`);
+          const lunchEnd = new Date(`${dateString}T13:00:00+09:00`);
+          
+          const existingAdjustments = await this.prisma.adjustment.findMany({
+            where: {
+              staffId,
+              date: new Date(dateString),
+              OR: [
+                // 12:00-13:00の範囲と重複する既存予定
+                {
+                  AND: [
+                    { start: { lte: lunchStart } },
+                    { end: { gte: lunchStart } }
+                  ]
+                },
+                {
+                  AND: [
+                    { start: { lte: lunchEnd } },
+                    { end: { gte: lunchEnd } }
+                  ]
+                },
+                {
+                  AND: [
+                    { start: { gte: lunchStart } },
+                    { end: { lte: lunchEnd } }
+                  ]
+                }
+              ]
+            }
+          });
+
+          // 既存の昼休み（break 12:00-13:00）があるかチェック
+          const existingLunchBreak = existingAdjustments.find(adj => 
+            adj.status === 'break' && 
+            adj.start.getTime() === lunchStart.getTime() && 
+            adj.end.getTime() === lunchEnd.getTime()
+          );
+
+          if (existingAdjustments.length === 0 || !existingLunchBreak) {
+            // 重複がない場合、昼休みを追加対象に
+            if (existingAdjustments.length > 0 && !existingLunchBreak) {
+              console.log(`${dateString}: 他の予定があるが昼休みがないため追加をスキップ`);
+            } else {
+              lunchBreaksToAdd.push({
+                date: new Date(dateString),
+                start: lunchStart,
+                end: lunchEnd,
+                dateString
+              });
+            }
+          } else {
+            console.log(`${dateString}: 既に昼休みが設定済み`);
+          }
+        }
+        
+        // 次の日へ
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+
+      console.log(`昼休み追加対象: ${lunchBreaksToAdd.length}件`);
+
+      // 昼休みを一括追加
+      const addedBreaks = [];
+      for (const lunchBreak of lunchBreaksToAdd) {
+        try {
+          const adjustment = await this.prisma.adjustment.create({
+            data: {
+              staffId,
+              date: lunchBreak.date,
+              status: 'break',
+              start: lunchBreak.start,
+              end: lunchBreak.end,
+              memo: '昼休み（社員インポート時自動追加）',
+              reason: '社員インポート時自動追加',
+              isPending: false
+            }
+          });
+          
+          addedBreaks.push({
+            date: lunchBreak.dateString,
+            adjustmentId: adjustment.id
+          });
+          
+          console.log(`昼休み追加完了: ${lunchBreak.dateString}`);
+        } catch (error) {
+          console.error(`昼休み追加エラー (${lunchBreak.dateString}):`, error);
+        }
+      }
+
+      console.log(`=== 自動昼休み追加完了: ${addedBreaks.length}件追加 ===`);
+      return {
+        added: addedBreaks.length,
+        details: addedBreaks
+      };
+
+    } catch (error) {
+      console.error('自動昼休み追加処理でエラー:', error);
+      return { added: 0, details: [], error: error.message };
+    }
+  }
+
+  // テスト用の公開メソッド
+  async testAddLunchBreaks(staffId: number) {
+    console.log(`=== テスト用昼休み追加開始: スタッフID ${staffId} ===`);
+    return this.addAutomaticLunchBreaks(staffId, new Date());
+  }
+
   async syncFromEmployeeData(jsonData: any) {
     try {
       console.log('=== 完全同期型社員情報同期開始 ===');
@@ -398,7 +557,10 @@ export class StaffService {
             include: { Contract: true, Adjustment: true }
           });
 
-          const isUpdate = staff.Contract.length > 0;
+          // 新規作成かどうかの判定（スタッフのcreatedAtで判定）
+          const now = new Date();
+          const isNewStaff = (now.getTime() - staff.createdAt.getTime()) < 5000; // 5秒以内なら新規作成
+          const isUpdate = !isNewStaff;
           console.log(`スタッフ${isUpdate ? '更新' : '新規作成'}完了: ${staff.name} (ID: ${staff.id})`);
           if (isUpdate) {
             console.log(`既存調整データ件数: ${staff.Adjustment.length}件`);
@@ -438,6 +600,16 @@ export class StaffService {
             }
           });
           console.log(`契約${isUpdate ? '更新' : '新規作成'}完了: ${contract.name}`);
+
+          // 昼休み自動追加（新規作成時のみ実行）
+          if (!isUpdate) {
+            console.log(`=== 新規スタッフ ${emp.name} に昼休み自動追加開始 ===`);
+            const lunchBreakResult = await this.addAutomaticLunchBreaks(staff.id, new Date());
+            console.log(`昼休み自動追加結果: ${lunchBreakResult.added}件追加`);
+            if (lunchBreakResult.error) {
+              console.error(`昼休み自動追加エラー: ${lunchBreakResult.error}`);
+            }
+          }
 
           if (isUpdate) {
             result.updated++;

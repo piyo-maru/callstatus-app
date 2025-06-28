@@ -95,6 +95,18 @@ export class StaffController {
     }
   }
 
+  @Post('test-lunch-break/:staffId')
+  async testLunchBreak(@Param('staffId') staffId: string) {
+    console.log(`=== 昼休み追加テスト開始: スタッフID ${staffId} ===`);
+    try {
+      const result = await this.staffService.testAddLunchBreaks(+staffId);
+      return { success: true, result };
+    } catch (error) {
+      console.error('昼休み追加テストエラー:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
   @Post('sync-from-json')
   @UseInterceptors(FileInterceptor('file'))
   async syncFromJson(@UploadedFile() file: Express.Multer.File) {
