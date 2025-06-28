@@ -760,7 +760,7 @@ const PersonalSchedulePage: React.FC = () => {
     }
   }, [dragOffset, handleUpdateSchedule]);
 
-  // 担当設定バッジ生成（メイン画面と同じロジック）
+  // 担当設定バッジ生成（月次プランナーと同じデザイン）
   const generateResponsibilityBadges = useCallback((date: Date): JSX.Element[] => {
     if (!currentStaff) return [];
     
@@ -784,16 +784,16 @@ const PersonalSchedulePage: React.FC = () => {
     // 受付部署の場合
     if ('lunch' in responsibility) {
       const receptionResp = responsibility as ReceptionResponsibilityData;
-      if (receptionResp.lunch) badges.push(<span key="lunch" className="inline-block bg-blue-100 text-blue-800 text-xs px-1 py-0.5 rounded font-medium">[昼当番]</span>);
-      if (receptionResp.fax) badges.push(<span key="fax" className="inline-block bg-green-100 text-green-800 text-xs px-1 py-0.5 rounded font-medium">[FAX]</span>);
-      if (receptionResp.cs) badges.push(<span key="cs" className="inline-block bg-purple-100 text-purple-800 text-xs px-1 py-0.5 rounded font-medium">[CS]</span>);
-      if (receptionResp.custom) badges.push(<span key="custom" className="inline-block bg-red-100 text-red-800 text-xs px-1 py-0.5 rounded font-medium">[{receptionResp.custom}]</span>);
+      if (receptionResp.lunch) badges.push(<span key="lunch" className="bg-blue-500 text-white px-1 py-0 rounded text-[10px] font-bold">昼</span>);
+      if (receptionResp.fax) badges.push(<span key="fax" className="bg-green-500 text-white px-1 py-0 rounded text-[10px] font-bold">FAX</span>);
+      if (receptionResp.cs) badges.push(<span key="cs" className="bg-purple-500 text-white px-1 py-0 rounded text-[10px] font-bold">CS</span>);
+      if (receptionResp.custom) badges.push(<span key="custom" className="bg-gray-500 text-white px-1 py-0 rounded text-[10px] font-bold">{receptionResp.custom.substring(0, 3)}</span>);
     } else {
       // 一般部署の場合
       const generalResp = responsibility as GeneralResponsibilityData;
-      if (generalResp.fax) badges.push(<span key="fax" className="inline-block bg-green-100 text-green-800 text-xs px-1 py-0.5 rounded font-medium">[FAX]</span>);
-      if (generalResp.subjectCheck) badges.push(<span key="subject" className="inline-block bg-orange-100 text-orange-800 text-xs px-1 py-0.5 rounded font-medium">[件名]</span>);
-      if (generalResp.custom) badges.push(<span key="custom" className="inline-block bg-red-100 text-red-800 text-xs px-1 py-0.5 rounded font-medium">[{generalResp.custom}]</span>);
+      if (generalResp.fax) badges.push(<span key="fax" className="bg-green-500 text-white px-1 py-0 rounded text-[10px] font-bold">FAX</span>);
+      if (generalResp.subjectCheck) badges.push(<span key="subject" className="bg-orange-500 text-white px-1 py-0 rounded text-[10px] font-bold">件名</span>);
+      if (generalResp.custom) badges.push(<span key="custom" className="bg-gray-500 text-white px-1 py-0 rounded text-[10px] font-bold">{generalResp.custom.substring(0, 3)}</span>);
     }
     
     return badges;

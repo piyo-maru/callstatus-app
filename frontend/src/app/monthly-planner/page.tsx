@@ -6,6 +6,7 @@ import { createPortal } from 'react-dom';
 import { STATUS_COLORS, capitalizeStatus } from '../components/timeline/TimelineUtils';
 import DatePicker, { registerLocale } from 'react-datepicker';
 import { ja } from 'date-fns/locale/ja';
+import { format } from 'date-fns';
 import "react-datepicker/dist/react-datepicker.css";
 
 registerLocale('ja', ja);
@@ -68,6 +69,60 @@ const presetSchedules: PresetSchedule[] = [
   { key: 'training', label: '研修', status: 'training', start: 9, end: 18 },
   { key: 'meeting', label: '会議', status: 'meeting', start: 10, end: 12 },
 ];
+
+// 担当設定関連の型定義
+type GeneralResponsibilityData = {
+  fax: boolean;
+  subjectCheck: boolean;
+  custom: string;
+};
+
+type ReceptionResponsibilityData = {
+  lunch: boolean;
+  fax: boolean;
+  cs: boolean;
+  custom: string;
+};
+
+type ResponsibilityData = GeneralResponsibilityData | ReceptionResponsibilityData;
+
+// 担当設定バッジコンポーネント
+const ResponsibilityBadges: React.FC<{
+  responsibilityData: ResponsibilityData | null;
+  department: string;
+}> = ({ responsibilityData, department }) => {
+  if (!responsibilityData) return null;
+
+  const isReception = department.includes('受付');
+  const badges = [];
+
+  if (isReception) {
+    const data = responsibilityData as ReceptionResponsibilityData;
+    if (data.lunch) badges.push({ key: 'lunch', label: '昼', color: 'bg-blue-500' });
+    if (data.fax) badges.push({ key: 'fax', label: 'FAX', color: 'bg-green-500' });
+    if (data.cs) badges.push({ key: 'cs', label: 'CS', color: 'bg-purple-500' });
+    if (data.custom) badges.push({ key: 'custom', label: data.custom.substring(0, 3), color: 'bg-gray-500' });
+  } else {
+    const data = responsibilityData as GeneralResponsibilityData;
+    if (data.fax) badges.push({ key: 'fax', label: 'FAX', color: 'bg-green-500' });
+    if (data.subjectCheck) badges.push({ key: 'subject', label: '件名', color: 'bg-orange-500' });
+    if (data.custom) badges.push({ key: 'custom', label: data.custom.substring(0, 3), color: 'bg-gray-500' });
+  }
+
+  return (
+    <>
+      {badges.map((badge) => (
+        <span
+          key={badge.key}
+          className={`${badge.color} text-white px-1 py-0 rounded text-[10px] font-bold`}
+          title={badge.key === 'custom' ? (responsibilityData as any).custom : badge.label}
+        >
+          {badge.label}
+        </span>
+      ))}
+    </>
+  );
+};
 
 // 色のコントラスト計算関数
 const getContrastColor = (backgroundColor: string, isTransparent: boolean = false): string => {
@@ -248,7 +303,7 @@ const DroppableCell: React.FC<{
         isOver ? 'bg-blue-100 border-blue-400 border-2' : ''
       }`}
       style={{
-        minHeight: '45px',
+        minHeight: '65px',
       }}
     >
       {children}
@@ -316,6 +371,20 @@ function MonthlyPlannerPageContent() {
   // 編集モーダル状態
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedPendingForEdit, setSelectedPendingForEdit] = useState<PendingSchedule | null>(null);
+  
+  // 担当設定関連の状態
+  const [responsibilityData, setResponsibilityData] = useState<{ [key: string]: ResponsibilityData }>({});
+  
+  // 担当設定モーダル関連の状態
+  const [showResponsibilityModal, setShowResponsibilityModal] = useState(false);
+  const [selectedCellForResponsibility, setSelectedCellForResponsibility] = useState<{
+    staffId: number;
+    staffName: string;
+    department: string;
+    group: string;
+    day: number;
+    dateString: string;
+  } | null>(null);
   
   // 部署・グループフィルター
   const [selectedDepartment, setSelectedDepartment] = useState<string>('all');
@@ -507,6 +576,35 @@ function MonthlyPlannerPageContent() {
       console.warn('Failed to fetch department settings:', error);
     }
   }, [token]);
+
+  // 担当設定データ取得関数
+  const fetchResponsibilityData = useCallback(async () => {
+    try {
+      const currentApiUrl = getApiUrl();
+      const year = currentMonth.getFullYear();
+      const month = currentMonth.getMonth() + 1;
+      
+      const response = await fetch(`${currentApiUrl}/api/responsibilities?year=${year}&month=${month}`, {
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        const responsibilityMap: { [key: string]: ResponsibilityData } = {};
+        
+        data.forEach((item: any) => {
+          const key = `${item.staffId}-${item.date}`;
+          responsibilityMap[key] = item.responsibilities;
+        });
+        
+        setResponsibilityData(responsibilityMap);
+      }
+    } catch (error) {
+      console.error('Failed to fetch responsibility data:', error);
+    }
+  }, [currentMonth]);
 
   // Pending取得関数（月次プランナー専用API使用）
   const fetchPendingSchedules = useCallback(async () => {
@@ -1016,18 +1114,80 @@ function MonthlyPlannerPageContent() {
     }
   }, [currentMonth, pendingSchedules, fetchPendingSchedules]);
 
+  // 担当設定保存関数
+  const saveResponsibilityData = useCallback(async (staffId: number, date: string, newResponsibilityData: ResponsibilityData) => {
+    try {
+      const currentApiUrl = getApiUrl();
+      const response = await fetch(`${currentApiUrl}/api/responsibilities`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          staffId,
+          date,
+          responsibilities: newResponsibilityData
+        })
+      });
+      
+      if (response.ok) {
+        console.log('担当設定保存成功');
+        
+        // ローカル状態を即座に更新
+        const responsibilityKey = `${staffId}-${date}`;
+        setResponsibilityData(prev => ({
+          ...prev,
+          [responsibilityKey]: newResponsibilityData
+        }));
+        
+        return true;
+      } else {
+        console.error('担当設定保存失敗:', response.status);
+        return false;
+      }
+    } catch (error) {
+      console.error('担当設定保存エラー:', error);
+      return false;
+    }
+  }, []);
+
+  // セルの右クリック処理（担当設定モーダル用）
+  const handleCellRightClick = useCallback((e: React.MouseEvent, staff: Staff, day: number) => {
+    e.preventDefault();
+    
+    // 承認モードでのみ担当設定可能
+    if (!isApprovalMode) {
+      return;
+    }
+    
+    const year = currentMonth.getFullYear();
+    const month = currentMonth.getMonth() + 1;
+    const dateString = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    
+    setSelectedCellForResponsibility({
+      staffId: staff.id,
+      staffName: staff.name,
+      department: staff.department,
+      group: staff.group,
+      day,
+      dateString
+    });
+    setShowResponsibilityModal(true);
+  }, [isApprovalMode, currentMonth]);
+
   // 初期データ取得
   useEffect(() => {
     fetchStaffData();
     fetchDepartmentSettings();
   }, [fetchStaffData, fetchDepartmentSettings]);
 
-  // 月が変更された時にpendingデータを取得（契約データ無効化）
+  // 月が変更された時にpendingデータと担当設定データを取得（契約データ無効化）
   useEffect(() => {
     if (staffList.length > 0) {
       fetchPendingSchedules();
+      fetchResponsibilityData();
     }
-  }, [currentMonth, staffList, fetchPendingSchedules]);
+  }, [currentMonth, staffList, fetchPendingSchedules, fetchResponsibilityData]);
 
   return (
     <div className="h-screen flex flex-col bg-gray-50">
@@ -1155,7 +1315,7 @@ function MonthlyPlannerPageContent() {
                 {/* 左側：スタッフ一覧 */}
                 <div className="min-w-fit max-w-[400px] sticky left-0 z-20 bg-white border-r border-gray-200">
                   {/* ヘッダー */}
-                  <div className="px-2 py-3 bg-gray-100 font-bold text-gray-600 text-sm text-center border-b whitespace-nowrap">
+                  <div className="px-2 py-2 bg-gray-100 font-bold text-gray-600 text-xs text-center border-b whitespace-nowrap">
                     部署 / グループ / スタッフ名
                   </div>
                   
@@ -1180,7 +1340,7 @@ function MonthlyPlannerPageContent() {
                             {staffInGroup.map((staff: any) => (
                               <div 
                                 key={staff.id} 
-                                className="px-2 pl-12 text-sm font-medium whitespace-nowrap h-[45px] hover:bg-gray-50 flex items-center border-b"
+                                className="px-2 pl-12 text-sm font-medium whitespace-nowrap h-[65px] hover:bg-gray-50 flex items-center border-b"
                               >
                                 <span className="staff-name">{staff.name}</span>
                               </div>
@@ -1218,10 +1378,7 @@ function MonthlyPlannerPageContent() {
                             key={day}
                             className={`w-24 px-2 py-2 text-center font-bold text-xs border-r ${getTextColor()}`}
                           >
-                            <div>{day}日</div>
-                            <div className="text-xs font-normal">
-                              ({dayNames[dayOfWeek]})
-                            </div>
+                            {day}日({dayNames[dayOfWeek]})
                           </div>
                         );
                       })}
@@ -1236,7 +1393,7 @@ function MonthlyPlannerPageContent() {
                           {/* 部署ヘッダー行 */}
                           <div className="flex h-[33px]">
                             {dateArray.map(day => (
-                              <div key={day} className="w-24 border-r border-b bg-gray-50"></div>
+                              <div key={day} className="w-24 border-r border-b" style={{backgroundColor: departmentColors[department] || '#f5f5f5'}}></div>
                             ))}
                           </div>
                           
@@ -1245,13 +1402,13 @@ function MonthlyPlannerPageContent() {
                               {/* グループヘッダー行 */}
                               <div className="flex h-[33px]">
                                 {dateArray.map(day => (
-                                  <div key={day} className="w-24 border-r border-b bg-gray-50"></div>
+                                  <div key={day} className="w-24 border-r border-b" style={{backgroundColor: teamColors[group] || '#f5f5f5'}}></div>
                                 ))}
                               </div>
                               
-                              {/* スタッフ行 */}
+                              {/* スタッフ行 - 社員名と同じ高さに調整 */}
                               {staffInGroup.map((staff: any) => (
-                                <div key={staff.id} className="flex h-[45px]">
+                                <div key={staff.id} className="flex h-[65px]">
                                   {dateArray.map(day => {
                                     const pendings = getCellPendings(staff.id, day);
                                     const hasContract = hasContractSchedule(staff.id, day);
@@ -1266,35 +1423,57 @@ function MonthlyPlannerPageContent() {
                                       >
                                         <div
                                           onClick={() => handleCellClick(staff, day)}
-                                          className={`w-full h-full relative cursor-pointer ${
+                                          onContextMenu={(e) => handleCellRightClick(e, staff, day)}
+                                          className={`w-full h-full flex flex-col cursor-pointer ${
                                             selectedCellForHighlight?.staffId === staff.id && 
                                             selectedCellForHighlight?.day === day
                                               ? 'ring-2 ring-blue-500 ring-inset bg-blue-50'
                                               : 'hover:bg-gray-100'
                                           }`}
+                                          title={isApprovalMode ? '右クリックで担当設定' : ''}
                                         >
-                                          {/* Pendingスケジュール表示 */}
-                                          {pendings.map((pending) => {
-                                            const backgroundColor = STATUS_COLORS[pending.status] || '#f3f4f6';
-                                            const pendingStyle = getPendingStyle(pending, backgroundColor);
-                                            const isTransparent = pendingStyle.backgroundColor === 'transparent';
-                                            const textColor = getContrastColor(backgroundColor, isTransparent);
-                                            
-                                            return (
-                                              <div key={`pending-${pending.id}`} className="absolute inset-1 flex items-center justify-center z-10">
-                                                <DraggablePending
-                                                  pending={pending}
-                                                  backgroundColor={backgroundColor}
-                                                  textColor={textColor}
-                                                  pendingStyle={pendingStyle}
-                                                  isTransparent={isTransparent}
-                                                  onDragStart={setDraggedPending}
-                                                  onApprovalClick={handleApprovalClick}
-                                                  isApprovalMode={isApprovalMode}
+                                          {/* Pendingスケジュール表示領域（45px） */}
+                                          <div className="h-11 relative">
+                                            {pendings.map((pending) => {
+                                              const backgroundColor = STATUS_COLORS[pending.status] || '#f3f4f6';
+                                              const pendingStyle = getPendingStyle(pending, backgroundColor);
+                                              const isTransparent = pendingStyle.backgroundColor === 'transparent';
+                                              const textColor = getContrastColor(backgroundColor, isTransparent);
+                                              
+                                              return (
+                                                <div key={`pending-${pending.id}`} className="absolute inset-1 flex items-center justify-center z-10">
+                                                  <DraggablePending
+                                                    pending={pending}
+                                                    backgroundColor={backgroundColor}
+                                                    textColor={textColor}
+                                                    pendingStyle={pendingStyle}
+                                                    isTransparent={isTransparent}
+                                                    onDragStart={setDraggedPending}
+                                                    onApprovalClick={handleApprovalClick}
+                                                    isApprovalMode={isApprovalMode}
+                                                  />
+                                                </div>
+                                              );
+                                            })}
+                                          </div>
+                                          
+                                          {/* 担当設定バッジ表示領域（16px） */}
+                                          <div className="h-4 px-1 py-0.5 flex flex-wrap items-center justify-center gap-1 text-xs">
+                                            {(() => {
+                                              const year = currentMonth.getFullYear();
+                                              const month = currentMonth.getMonth() + 1;
+                                              const dateString = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                                              const responsibilityKey = `${staff.id}-${dateString}`;
+                                              const staffResponsibilityData = responsibilityData[responsibilityKey];
+                                              
+                                              return (
+                                                <ResponsibilityBadges
+                                                  responsibilityData={staffResponsibilityData || null}
+                                                  department={staff.department}
                                                 />
-                                              </div>
-                                            );
-                                          })}
+                                              );
+                                            })()}
+                                          </div>
                                         </div>
                                       </DroppableCell>
                                     );
@@ -1387,6 +1566,43 @@ function MonthlyPlannerPageContent() {
             </div>
           </div>
         </div>,
+        document.body
+      )}
+
+      {/* 担当設定モーダル */}
+      {showResponsibilityModal && selectedCellForResponsibility && typeof window !== 'undefined' && createPortal(
+        <ResponsibilityModal
+          isOpen={showResponsibilityModal}
+          onClose={() => {
+            setShowResponsibilityModal(false);
+            setSelectedCellForResponsibility(null);
+          }}
+          staff={{
+            id: selectedCellForResponsibility.staffId,
+            name: selectedCellForResponsibility.staffName,
+            department: selectedCellForResponsibility.department,
+            group: selectedCellForResponsibility.group
+          }}
+          selectedDate={new Date(selectedCellForResponsibility.dateString)}
+          onSave={async (data: ResponsibilityData) => {
+            const success = await saveResponsibilityData(
+              selectedCellForResponsibility.staffId,
+              selectedCellForResponsibility.dateString,
+              data
+            );
+            if (success) {
+              alert('担当設定を保存しました');
+            } else {
+              alert('担当設定の保存に失敗しました');
+            }
+            setShowResponsibilityModal(false);
+            setSelectedCellForResponsibility(null);
+          }}
+          existingData={(() => {
+            const responsibilityKey = `${selectedCellForResponsibility.staffId}-${selectedCellForResponsibility.dateString}`;
+            return responsibilityData[responsibilityKey] || null;
+          })()}
+        />,
         document.body
       )}
 
@@ -1674,6 +1890,198 @@ function MonthlyPlannerPageContent() {
     </div>
   );
 }
+
+// 担当設定モーダルコンポーネント
+interface ResponsibilityModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  staff: {
+    id: number;
+    name: string;
+    department: string;
+    group: string;
+  };
+  selectedDate: Date;
+  onSave: (data: ResponsibilityData) => void;
+  existingData?: ResponsibilityData | null;
+}
+
+const ResponsibilityModal: React.FC<ResponsibilityModalProps> = ({
+  isOpen,
+  onClose,
+  staff,
+  selectedDate,
+  onSave,
+  existingData
+}) => {
+  // 部署判定（受付が含まれるかどうか）
+  const isReception = staff.department.includes('受付') || staff.group.includes('受付');
+  
+  // 一般部署用
+  const [fax, setFax] = useState(false);
+  const [subjectCheck, setSubjectCheck] = useState(false);
+  const [custom, setCustom] = useState('');
+  
+  // 受付部署用
+  const [lunch, setLunch] = useState(false);
+  const [cs, setCs] = useState(false);
+  
+  // 既存データがある場合の初期化
+  useEffect(() => {
+    if (isOpen && existingData) {
+      if (isReception && 'lunch' in existingData) {
+        const r = existingData as ReceptionResponsibilityData;
+        setLunch(r.lunch || false);
+        setFax(r.fax || false);
+        setCs(r.cs || false);
+        setCustom(r.custom || '');
+      } else if (!isReception && 'subjectCheck' in existingData) {
+        const r = existingData as GeneralResponsibilityData;
+        setFax(r.fax || false);
+        setSubjectCheck(r.subjectCheck || false);
+        setCustom(r.custom || '');
+      }
+    } else if (isOpen && !existingData) {
+      // 既存データがない場合は初期化
+      setFax(false);
+      setSubjectCheck(false);
+      setLunch(false);
+      setCs(false);
+      setCustom('');
+    }
+  }, [isOpen, existingData, isReception]);
+
+  if (!isOpen) return null;
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (isReception) {
+      onSave({
+        lunch,
+        fax,
+        cs,
+        custom
+      } as ReceptionResponsibilityData);
+    } else {
+      onSave({
+        fax,
+        subjectCheck,
+        custom
+      } as GeneralResponsibilityData);
+    }
+    
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+      <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-md">
+        <h2 className="text-lg font-semibold mb-4">
+          担当設定 - {format(selectedDate, 'M月d日(E)', { locale: ja })}
+        </h2>
+        
+        <div className="mb-4 p-3 bg-blue-50 rounded border">
+          <div className="text-sm text-blue-800">
+            <strong>担当者:</strong> {staff.name} ({staff.department})
+            {isReception && <span className="ml-2 text-xs bg-blue-200 px-2 py-1 rounded">受付部署</span>}
+          </div>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-3">
+            {isReception ? (
+              // 受付部署用UI
+              <>
+                <label className="flex items-center space-x-3">
+                  <input
+                    type="checkbox"
+                    checked={lunch}
+                    onChange={(e) => setLunch(e.target.checked)}
+                    className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                  />
+                  <span className="text-sm">🍽️ 昼当番</span>
+                </label>
+                
+                <label className="flex items-center space-x-3">
+                  <input
+                    type="checkbox"
+                    checked={fax}
+                    onChange={(e) => setFax(e.target.checked)}
+                    className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                  />
+                  <span className="text-sm">📰 FAX当番</span>
+                </label>
+                
+                <label className="flex items-center space-x-3">
+                  <input
+                    type="checkbox"
+                    checked={cs}
+                    onChange={(e) => setCs(e.target.checked)}
+                    className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                  />
+                  <span className="text-sm">☎️ CS担当</span>
+                </label>
+              </>
+            ) : (
+              // 一般部署用UI
+              <>
+                <label className="flex items-center space-x-3">
+                  <input
+                    type="checkbox"
+                    checked={fax}
+                    onChange={(e) => setFax(e.target.checked)}
+                    className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                  />
+                  <span className="text-sm">📰 FAX当番</span>
+                </label>
+                
+                <label className="flex items-center space-x-3">
+                  <input
+                    type="checkbox"
+                    checked={subjectCheck}
+                    onChange={(e) => setSubjectCheck(e.target.checked)}
+                    className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                  />
+                  <span className="text-sm">📝 件名チェック担当</span>
+                </label>
+              </>
+            )}
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                その他の担当業務
+              </label>
+              <textarea
+                value={custom}
+                onChange={(e) => setCustom(e.target.value)}
+                placeholder="その他の担当業務があれば入力してください"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                rows={3}
+              />
+            </div>
+          </div>
+
+          <div className="flex space-x-3 pt-4 border-t">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+            >
+              キャンセル
+            </button>
+            <button
+              type="submit"
+              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+            >
+              保存
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
 
 // メインコンポーネント
 export default function MonthlyPlannerPage() {
