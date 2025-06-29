@@ -1122,15 +1122,24 @@ export default function FullMainApp() {
       console.log('Support data received:', supportData);
       console.log('Responsibility data received:', responsibilityData);
       
+      // O(1)アクセス用のMapを作成
+      const supportAssignmentMap = new Map<number, any>();
+      supportData.assignments?.forEach((assignment: any) => {
+        if (assignment.type === 'temporary') {
+          supportAssignmentMap.set(assignment.staffId, assignment);
+        }
+      });
       
+      const responsibilityMap = new Map<number, any>();
+      responsibilityData.responsibilities?.forEach((responsibility: any) => {
+        responsibilityMap.set(responsibility.staffId, responsibility);
+      });
       
-      // 支援状況と担当設定をスタッフデータにマージ
+      // 支援状況と担当設定をスタッフデータにマージ（O(1)アクセス）
       const staffWithSupportAndResponsibility = scheduleData.staff.map(staff => {
-        // 支援設定（temporary assignment）を探す
-        const tempAssignment = supportData.assignments?.find((s: any) => 
-          s.staffId === staff.id && s.type === 'temporary'
-        ) as any;
-        const responsibilityInfo = responsibilityData.responsibilities?.find((r: any) => r.staffId === staff.id) as any;
+        // O(1)でMap検索
+        const tempAssignment = supportAssignmentMap.get(staff.id);
+        const responsibilityInfo = responsibilityMap.get(staff.id);
         
         let result = { ...staff };
         
@@ -1942,14 +1951,28 @@ export default function FullMainApp() {
     };
   }, [dragInfo]);
 
+  // スタッフ別スケジュールMap（O(1)アクセス用）
+  const schedulesByStaffMap = useMemo(() => {
+    const map = new Map<number, any[]>();
+    schedules.forEach(schedule => {
+      if (!map.has(schedule.staffId)) {
+        map.set(schedule.staffId, []);
+      }
+      map.get(schedule.staffId)!.push(schedule);
+    });
+    return map;
+  }, [schedules]);
+
   const staffWithCurrentStatus = useMemo(() => {
     const currentDecimalHour = currentTime.getHours() + currentTime.getMinutes() / 60;
     return staffList.map(staff => {
-      const applicableSchedules = schedules.filter(s => s.staffId === staff.id && currentDecimalHour >= s.start && currentDecimalHour < s.end);
+      // O(1)でスタッフのスケジュールを取得
+      const staffSchedules = schedulesByStaffMap.get(staff.id) || [];
+      const applicableSchedules = staffSchedules.filter(s => currentDecimalHour >= s.start && currentDecimalHour < s.end);
       const currentSchedule = applicableSchedules.length > 0 ? applicableSchedules.reduce((latest, current) => latest.id > current.id ? latest : current) : null;
       return { ...staff, currentStatus: currentSchedule ? currentSchedule.status : 'off' };
     });
-  }, [staffList, schedules, currentTime]);
+  }, [staffList, schedulesByStaffMap, currentTime]);
   
   const departmentGroupFilteredStaff = useMemo(() => {
     return staffWithCurrentStatus.filter(staff => {
@@ -2080,8 +2103,9 @@ export default function FullMainApp() {
         // 15分間隔の中間点でのステータスを取得
         const checkTime = rangeStart + 0.125; // 15分間の中間点（7.5分後）
         
-        const applicableSchedules = schedules.filter(s => 
-          s.staffId === staff.id && 
+        // O(1)でスタッフのスケジュールを取得してから時間フィルタリング
+        const staffSchedules = schedulesByStaffMap.get(staff.id) || [];
+        const applicableSchedules = staffSchedules.filter(s => 
           checkTime >= s.start && 
           checkTime < s.end
         );

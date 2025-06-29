@@ -235,6 +235,39 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
     return eachDayOfInterval({ start, end });
   }, [selectedDate]);
 
+  // 日付別スケジュールMap（O(1)アクセス用）
+  const schedulesByDate = useMemo(() => {
+    const map = new Map<string, Schedule[]>();
+    schedules.forEach(schedule => {
+      let dateKey = '';
+      if (schedule.date) {
+        dateKey = schedule.date;
+      } else if (schedule.start instanceof Date) {
+        dateKey = format(schedule.start, 'yyyy-MM-dd');
+      } else if (typeof schedule.start === 'string') {
+        dateKey = format(new Date(schedule.start), 'yyyy-MM-dd');
+      }
+      
+      if (dateKey && !map.has(dateKey)) {
+        map.set(dateKey, []);
+      }
+      if (dateKey) {
+        map.get(dateKey)!.push(schedule);
+      }
+    });
+    return map;
+  }, [schedules]);
+
+  // 祝日チェック用Map（O(1)アクセス用）
+  const holidayByDate = useMemo(() => {
+    const map = new Map<string, Holiday>();
+    holidays.forEach(holiday => {
+      const dateKey = format(new Date(holiday.date), 'yyyy-MM-dd');
+      map.set(dateKey, holiday);
+    });
+    return map;
+  }, [holidays]);
+
   // TimelineUtilsの関数を使用（既にインポート済み）
 
   // APIベースURLを取得
@@ -1672,26 +1705,15 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
                 <div className="min-w-[1300px]">
                   {monthDays.map((day) => {
                     const dayStr = format(day, 'yyyy-MM-dd');
-                    const daySchedules = schedules.filter(schedule => {
-                      // 基本的な日付マッチング
-                      let isMatchingDate = false;
-                      if (schedule.date) {
-                        isMatchingDate = schedule.date === dayStr;
-                      } else if (schedule.start instanceof Date) {
-                        isMatchingDate = isSameDay(schedule.start, day);
-                      } else if (typeof schedule.start === 'string') {
-                        isMatchingDate = isSameDay(new Date(schedule.start), day);
-                      }
-                      
-                      if (!isMatchingDate) return false;
-                      
+                    // O(1)で日付別スケジュールを取得し、祝日フィルタリングを適用
+                    const rawDaySchedules = schedulesByDate.get(dayStr) || [];
+                    const holiday = holidayByDate.get(dayStr);
+                    const daySchedules = rawDaySchedules.filter(schedule => {
                       // 祝日判定：契約データは祝日に表示しない
                       const scheduleLayer = schedule.layer || 'adjustment';
-                      if (scheduleLayer === 'contract') {
-                        const holiday = getHoliday(day, holidays);
-                        if (holiday) return false; // 祝日なら契約データを非表示
+                      if (scheduleLayer === 'contract' && holiday) {
+                        return false; // 祝日なら契約データを非表示
                       }
-                      
                       return true;
                     });
                     
