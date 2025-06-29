@@ -164,16 +164,6 @@ export default function PendingApprovalPage() {
     }
   }, [processingItem, approvalAction, approvalReason, selectedItems, token, fetchPendingList]);
 
-  // 全選択・全解除
-  const handleSelectAll = useCallback(() => {
-    const pendingItems = pendingList.filter(item => !item.approvedAt && !item.rejectedAt);
-    if (selectedItems.size === pendingItems.length) {
-      setSelectedItems(new Set());
-    } else {
-      setSelectedItems(new Set(pendingItems.map(item => item.id)));
-    }
-  }, [pendingList, selectedItems]);
-
   // 部署一覧取得
   const departments = useMemo(() => {
     const deptSet = new Set(pendingList.map(item => item.staffName?.split(' ')[0]).filter(Boolean));
@@ -189,6 +179,16 @@ export default function PendingApprovalPage() {
       return true;
     });
   }, [pendingList, filterStatus]);
+
+  // 全選択・全解除
+  const handleSelectAll = useCallback(() => {
+    const availableItems = filteredList.filter(item => !item.approvedAt && !item.rejectedAt);
+    if (selectedItems.size === availableItems.length && availableItems.length > 0) {
+      setSelectedItems(new Set());
+    } else {
+      setSelectedItems(new Set(availableItems.map(item => item.id)));
+    }
+  }, [filteredList, selectedItems]);
 
   // 統計情報
   const stats = useMemo(() => {

@@ -6,14 +6,13 @@ import { useAuth } from '../components/AuthProvider';
 import AuthGuard from '../components/AuthGuard';
 import { createPortal } from 'react-dom';
 import { STATUS_COLORS, capitalizeStatus } from '../components/timeline/TimelineUtils';
-import DatePicker, { registerLocale } from 'react-datepicker';
+import { registerLocale } from 'react-datepicker';
 import { ja } from 'date-fns/locale/ja';
 import { format } from 'date-fns';
 import "react-datepicker/dist/react-datepicker.css";
 import { fetchHolidays, getHoliday } from '../components/utils/MainAppUtils';
 import { Holiday } from '../components/types/MainAppTypes';
 import { usePresetSettings } from '../hooks/usePresetSettings';
-import { UnifiedPreset } from '../components/types/PresetTypes';
 import { convertToLegacyFormat } from '../components/constants/PresetSchedules';
 import { UnifiedSettingsModal } from '../components/modals/UnifiedSettingsModal';
 
@@ -196,7 +195,7 @@ const DraggablePending: React.FC<{
   onDragStart: (pending: PendingSchedule) => void;
   onApprovalClick?: (pending: PendingSchedule) => void;
   isApprovalMode?: boolean;
-}> = ({ pending, backgroundColor, textColor, pendingStyle, isTransparent, onDragStart, onApprovalClick, isApprovalMode }) => {
+}> = ({ pending, textColor, pendingStyle, isTransparent, onDragStart, onApprovalClick, isApprovalMode }) => {
   const canDrag = !pending.approvedAt && !pending.rejectedAt; // 未承認のみドラッグ可能
   const canApprove = !pending.approvedAt && !pending.rejectedAt; // 未承認のみ承認可能
   const isRejected = pending.rejectedAt && !pending.approvedAt; // 却下済み
@@ -213,18 +212,21 @@ const DraggablePending: React.FC<{
 
   const handleClick = (e: React.MouseEvent) => {
     e.preventDefault();
-    e.stopPropagation();
     
     if (isRejected && onApprovalClick) {
       // 却下済み予定の場合は却下理由モーダルを表示
+      e.stopPropagation();
       onApprovalClick(pending);
     } else if (isApprovalMode && pending.approvedAt && !pending.rejectedAt && onApprovalClick) {
       // 承認モードで承認済み予定の場合は削除モーダルを表示
+      e.stopPropagation();
       onApprovalClick(pending);
     } else if (isApprovalMode && canApprove && onApprovalClick) {
       // 承認モードで未承認予定の場合は承認モーダルを表示
+      e.stopPropagation();
       onApprovalClick(pending);
     }
+    // 上記以外の場合はstopPropagation()しないため、親のセルクリックイベントが実行される
   };
 
   const getCursor = () => {
@@ -370,13 +372,14 @@ function MonthlyPlannerPageContent() {
   // 基本状態
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [staffList, setStaffList] = useState<Staff[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [draggedPending, setDraggedPending] = useState<PendingSchedule | null>(null);
+  const [isLoading] = useState(false);
+  const [, setDraggedPending] = useState<PendingSchedule | null>(null);
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   
   // 契約表示キャッシュ状態
   const [displayCache, setDisplayCache] = useState<{ [key: string]: boolean }>({});
-  const [cacheLoading, setCacheLoading] = useState(false);
+  const [, setCacheLoading] = useState(false);
+  
   
   // 月ナビゲーション関数
   const goToPreviousMonth = useCallback(() => {
@@ -737,12 +740,22 @@ function MonthlyPlannerPageContent() {
     }
   }, [currentMonth]);
 
-  // 契約レイヤースケジュール取得無効化（最軽量）
-  const fetchContractSchedules = useCallback(async () => {
-    // 月次プランナーはプリセット登録専用なので契約背景色は不要
-    // パフォーマンス優先で契約データ取得を無効化
-    console.log('Contract schedules: Disabled for monthly planner performance');
-  }, []);
+  // PendingSchedulesをインデックス化したMapでキャッシュ（パフォーマンス最適化）
+  const pendingScheduleMap = useMemo(() => {
+    const map = new Map<string, PendingSchedule[]>();
+    
+    pendingSchedules.forEach(pending => {
+      const pendingDate = new Date(pending.date).toISOString().split('T')[0];
+      const key = `${pending.staffId}-${pendingDate}`;
+      
+      if (!map.has(key)) {
+        map.set(key, []);
+      }
+      map.get(key)!.push(pending);
+    });
+    
+    return map;
+  }, [pendingSchedules]);
 
   // セルクリック処理（2段階操作）
   const handleCellClick = useCallback((staff: Staff, day: number) => {
@@ -756,13 +769,9 @@ function MonthlyPlannerPageContent() {
       const month = currentMonth.getMonth() + 1;
       const dateString = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
       
-      // 承認済み予定があるセルでは編集を制限
-      const approvedPending = pendingSchedules.find(pending => {
-        const pendingDate = new Date(pending.date).toISOString().split('T')[0];
-        return pending.staffId === staff.id && 
-               pendingDate === dateString &&
-               pending.approvedAt;
-      });
+      // 承認済み予定があるセルでは編集を制限（O(1)検索）
+      const cellPendings = pendingScheduleMap.get(`${staff.id}-${dateString}`) || [];
+      const approvedPending = cellPendings.find(pending => pending.approvedAt);
 
       if (approvedPending) {
         alert('承認済み予定があるため編集できません。');
@@ -930,13 +939,11 @@ function MonthlyPlannerPageContent() {
   const applyPreset = useCallback(async (preset: PresetSchedule) => {
     if (!selectedCell) return;
 
+    // O(1) Map検索を使用
+    const cellPendings = pendingScheduleMap.get(`${selectedCell.staffId}-${selectedCell.dateString}`) || [];
+    
     // 該当セルに承認済み予定があるかチェック
-    const approvedPending = pendingSchedules.find(pending => {
-      const pendingDate = new Date(pending.date).toISOString().split('T')[0];
-      return pending.staffId === selectedCell.staffId && 
-             pendingDate === selectedCell.dateString &&
-             pending.approvedAt;
-    });
+    const approvedPending = cellPendings.find(pending => pending.approvedAt);
 
     if (approvedPending) {
       alert('承認済み予定があるため編集できません。');
@@ -944,13 +951,9 @@ function MonthlyPlannerPageContent() {
     }
 
     // 該当セルに既存のpending予定があるかチェック
-    const existingPending = pendingSchedules.find(pending => {
-      const pendingDate = new Date(pending.date).toISOString().split('T')[0];
-      return pending.staffId === selectedCell.staffId && 
-             pendingDate === selectedCell.dateString &&
-             !pending.approvedAt && 
-             !pending.rejectedAt;
-    });
+    const existingPending = cellPendings.find(pending => 
+      !pending.approvedAt && !pending.rejectedAt
+    );
 
     if (existingPending) {
       alert('このマスには既にpending予定が設定されています。先に既存の予定を削除してください。');
@@ -992,17 +995,14 @@ function MonthlyPlannerPageContent() {
     setShowModal(false);
     setSelectedCell(null);
     setSelectedCellForHighlight(null);
-  }, [selectedCell, pendingSchedules, fetchPendingSchedules]);
+  }, [selectedCell, pendingScheduleMap, fetchPendingSchedules]);
 
   // 予定クリア
   const clearSchedule = useCallback(async () => {
     if (!selectedCell) return;
 
-    // 該当セルのpendingを削除
-    const cellPendings = pendingSchedules.filter(pending => {
-      const pendingDate = new Date(pending.date).toISOString().split('T')[0];
-      return pending.staffId === selectedCell.staffId && pendingDate === selectedCell.dateString;
-    });
+    // O(1) Map検索を使用
+    const cellPendings = pendingScheduleMap.get(`${selectedCell.staffId}-${selectedCell.dateString}`) || [];
 
     if (cellPendings.length === 0) {
       alert('削除する予定がありません');
@@ -1050,7 +1050,7 @@ function MonthlyPlannerPageContent() {
     setShowModal(false);
     setSelectedCell(null);
     setSelectedCellForHighlight(null);
-  }, [selectedCell, pendingSchedules, fetchPendingSchedules]);
+  }, [selectedCell, pendingScheduleMap, fetchPendingSchedules]);
 
   // スタッフ名クリック時の個人ページ遷移（全ユーザー閲覧可能）
   const handleStaffNameClick = useCallback((staffId: number) => {
@@ -1118,32 +1118,15 @@ function MonthlyPlannerPageContent() {
     setSelectedPendingForEdit(null);
   }, [selectedPendingForEdit, fetchPendingSchedules]);
 
-  // セル内のスケジュール取得関数
+  // セル内のスケジュール取得関数 - O(1) Map検索
   const getCellPendings = useCallback((staffId: number, day: number) => {
     const year = currentMonth.getFullYear();
     const month = currentMonth.getMonth() + 1;
     const dateString = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     
-    return pendingSchedules.filter(pending => {
-      const pendingDate = new Date(pending.date).toISOString().split('T')[0];
-      return pending.staffId === staffId && pendingDate === dateString;
-    });
-  }, [currentMonth, pendingSchedules]);
+    return pendingScheduleMap.get(`${staffId}-${dateString}`) || [];
+  }, [currentMonth, pendingScheduleMap]);
 
-  // セルにpending予定があるかチェック（未承認のみ）
-  const hasPendingInCell = useCallback((staffId: number, day: number) => {
-    const year = currentMonth.getFullYear();
-    const month = currentMonth.getMonth() + 1;
-    const dateString = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    
-    return pendingSchedules.some(pending => {
-      const pendingDate = new Date(pending.date).toISOString().split('T')[0];
-      return pending.staffId === staffId && 
-             pendingDate === dateString &&
-             !pending.approvedAt && 
-             !pending.rejectedAt;
-    });
-  }, [currentMonth, pendingSchedules]);
 
   // 契約スケジュール有無判定関数（キャッシュベース）
   const hasContractSchedule = useCallback((staffId: number, day: number) => {
