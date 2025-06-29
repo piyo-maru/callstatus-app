@@ -1,7 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { ChunkImportService } from '../import-progress/chunk-import.service';
-import { ImportProgressGateway } from '../import-progress/import-progress.gateway';
 
 // 文字チェック関連の型定義
 interface CharacterCheckError {
@@ -38,7 +37,6 @@ export class StaffService {
   constructor(
     private prisma: PrismaService,
     private chunkImportService: ChunkImportService,
-    private progressGateway: ImportProgressGateway,
   ) {}
 
   // 文字チェック関数
@@ -1267,12 +1265,10 @@ export class StaffService {
     }
   }
 
-  // 【チャンク処理 + 非同期処理】社員インポート（プログレス通知付き）
+  // 社員情報インポート（非同期処理）
   async syncFromEmployeeDataWithProgress(jsonData: any, importId?: string) {
-    const actualImportId = importId || `import-${Date.now()}`;
-    
     try {
-      console.log('=== チャンク処理社員情報同期開始 ===');
+      console.log('=== 社員情報同期開始 ===');
       console.log('受信データ:', JSON.stringify(jsonData, null, 2));
       
       if (!jsonData.employeeData || !Array.isArray(jsonData.employeeData)) {
@@ -1282,9 +1278,6 @@ export class StaffService {
 
       const employeeData: EmployeeData[] = jsonData.employeeData;
       console.log(`対象データ: ${employeeData.length}件`);
-
-      // 初期進捗通知
-      this.progressGateway.notifyImportStarted(actualImportId, employeeData.length);
 
       // チャンク処理で社員データを処理
       const results = await this.chunkImportService.processStaffImportInChunks(
@@ -1302,7 +1295,7 @@ export class StaffService {
           }
         },
         {
-          importId: actualImportId,
+          importId: importId || `import-${Date.now()}`,
           chunkSize: 25, // 25人ずつ処理
           onStaffProcessed: (staff, result, index) => {
             console.log(`完了: ${staff.name} (${index + 1}件目)`);
@@ -1348,15 +1341,14 @@ export class StaffService {
         (summary as any).contractDisplayCacheError = cacheError.message;
       }
       
-      // 完了通知
-      this.progressGateway.notifyImportCompleted(actualImportId, summary);
+      // 処理完了ログ
+      console.log('=== インポート処理完了 ===', summary);
       
       return summary;
 
     } catch (error) {
-      console.error('チャンク処理社員同期でエラー:', error);
-      this.progressGateway.notifyImportError(actualImportId, error);
-      throw new BadRequestException(`チャンク処理でエラーが発生しました: ${error.message}`);
+      console.error('社員情報インポートでエラー:', error);
+      throw new BadRequestException(`社員情報インポートでエラーが発生しました: ${error.message}`);
     }
   }
 
