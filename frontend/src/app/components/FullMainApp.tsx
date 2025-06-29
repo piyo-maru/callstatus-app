@@ -1434,7 +1434,17 @@ export default function FullMainApp() {
       
       // データを再取得してUIを更新
       console.log('Fetching updated data...');
+      const savedScrollPosition = topScrollRef.current?.scrollLeft || 0; // 直接変数で保存
+      console.log('保存するスクロール位置:', savedScrollPosition);
       await fetchData(displayDate);
+      // fetchData完了後、保存した位置に復元
+      setTimeout(() => {
+        if (topScrollRef.current && bottomScrollRef.current && savedScrollPosition > 0) {
+          console.log('fetchData完了後の復元実行:', savedScrollPosition);
+          topScrollRef.current.scrollLeft = savedScrollPosition;
+          bottomScrollRef.current.scrollLeft = savedScrollPosition;
+        }
+      }, 100);
       setIsModalOpen(false);
       setEditingSchedule(null);
       setDraggedSchedule(null);
@@ -1465,7 +1475,17 @@ export default function FullMainApp() {
       }
       
       // データを再取得してUIを更新
+      const savedScrollPosition = topScrollRef.current?.scrollLeft || 0;
+      console.log('削除後の保存スクロール位置:', savedScrollPosition);
       await fetchData(displayDate);
+      // 削除完了後、保存した位置に復元
+      setTimeout(() => {
+        if (topScrollRef.current && bottomScrollRef.current && savedScrollPosition > 0) {
+          console.log('削除後の復元実行:', savedScrollPosition);
+          topScrollRef.current.scrollLeft = savedScrollPosition;
+          bottomScrollRef.current.scrollLeft = savedScrollPosition;
+        }
+      }, 100);
     } catch (error) { 
       console.error('予定の削除に失敗しました', error);
       alert(`予定の削除に失敗しました: ${error instanceof Error ? error.message : String(error)}`);
@@ -1542,7 +1562,15 @@ export default function FullMainApp() {
       console.log('結果:', result);
       
       // データを再取得してUIを更新
+      const savedScrollPosition = topScrollRef.current?.scrollLeft || 0;
       await fetchData(displayDate);
+      // データ更新完了後、保存した位置に復元
+      setTimeout(() => {
+        if (topScrollRef.current && bottomScrollRef.current && savedScrollPosition > 0) {
+          topScrollRef.current.scrollLeft = savedScrollPosition;
+          bottomScrollRef.current.scrollLeft = savedScrollPosition;
+        }
+      }, 100);
       setIsAssignmentModalOpen(false);
       setSelectedStaffForAssignment(null);
     } catch (error) {
@@ -1591,7 +1619,15 @@ export default function FullMainApp() {
       console.log('結果:', result);
       
       // データを再取得してUIを更新
+      const savedScrollPosition = topScrollRef.current?.scrollLeft || 0;
       await fetchData(displayDate);
+      // データ更新完了後、保存した位置に復元
+      setTimeout(() => {
+        if (topScrollRef.current && bottomScrollRef.current && savedScrollPosition > 0) {
+          topScrollRef.current.scrollLeft = savedScrollPosition;
+          bottomScrollRef.current.scrollLeft = savedScrollPosition;
+        }
+      }, 100);
       setIsAssignmentModalOpen(false);
       setSelectedStaffForAssignment(null);
     } catch (error) {
@@ -1660,7 +1696,15 @@ export default function FullMainApp() {
       console.log('責任設定保存完了:', result);
       
       // データを再取得してUIを更新
+      const savedScrollPosition = topScrollRef.current?.scrollLeft || 0;
       await fetchData(displayDate);
+      // データ更新完了後、保存した位置に復元
+      setTimeout(() => {
+        if (topScrollRef.current && bottomScrollRef.current && savedScrollPosition > 0) {
+          topScrollRef.current.scrollLeft = savedScrollPosition;
+          bottomScrollRef.current.scrollLeft = savedScrollPosition;
+        }
+      }, 100);
       
       setIsResponsibilityModalOpen(false);
       setSelectedStaffForResponsibility(null);
@@ -1850,7 +1894,15 @@ export default function FullMainApp() {
       alert(message);
       
       // データを再取得してUIを更新
+      const savedScrollPosition = topScrollRef.current?.scrollLeft || 0;
       await fetchData(displayDate);
+      // データ更新完了後、保存した位置に復元
+      setTimeout(() => {
+        if (topScrollRef.current && bottomScrollRef.current && savedScrollPosition > 0) {
+          topScrollRef.current.scrollLeft = savedScrollPosition;
+          bottomScrollRef.current.scrollLeft = savedScrollPosition;
+        }
+      }, 100);
       setIsImportHistoryModalOpen(false);
     } catch (error) {
       console.error('ロールバックに失敗しました:', error);
