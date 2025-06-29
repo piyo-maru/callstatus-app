@@ -1,0 +1,16 @@
+{
+  "employeeData": [
+    {
+      "empNo": "TEST001",
+      "name": "テストユーザー1", 
+      "dept": "テスト部署",
+      "team": "テストチーム",
+      "email": "test1@example.com",
+      "mondayHours": "09:00-18:00",
+      "tuesdayHours": "09:00-18:00", 
+      "wednesdayHours": "09:00-18:00",
+      "thursdayHours": "09:00-18:00",
+      "fridayHours": "09:00-18:00"
+    }
+  ]
+}

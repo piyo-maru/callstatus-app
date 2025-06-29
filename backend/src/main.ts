@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { NestExpressApplication } from '@nestjs/platform-express';
+import { IoAdapter } from '@nestjs/platform-socket.io';
 import * as fs from 'fs';
 import * as ini from 'ini';
 import * as path from 'path';
@@ -28,6 +29,11 @@ function loadConfig() {
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  
+  // WebSocketアダプター設定（Socket.IO用）
+  app.useWebSocketAdapter(new IoAdapter(app));
+  console.log('WebSocket adapter initialized');
+  
   const config = loadConfig();
 
   // 大きなファイル処理用の設定

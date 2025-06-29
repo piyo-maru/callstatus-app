@@ -6,9 +6,9 @@ async function checkAdmin() {
   try {
     console.log('=== Admin アカウント確認 ===');
     
-    const adminUser = await prisma.userAuth.findUnique({
+    const adminUser = await prisma.user_auth.findUnique({
       where: { email: 'admin@example.com' },
-      include: { staff: true }
+      include: { Staff: true }
     });
     
     if (adminUser) {
@@ -18,7 +18,7 @@ async function checkAdmin() {
         hasPassword: !!adminUser.password,
         userType: adminUser.userType,
         isActive: adminUser.isActive,
-        staffName: adminUser.staff?.name
+        staffName: adminUser.Staff?.name
       });
       
       if (adminUser.password) {
@@ -32,8 +32,8 @@ async function checkAdmin() {
     
     // 全ユーザー一覧も確認
     console.log('\n=== 全ユーザー一覧 ===');
-    const allUsers = await prisma.userAuth.findMany({
-      include: { staff: true }
+    const allUsers = await prisma.user_auth.findMany({
+      include: { Staff: true }
     });
     
     allUsers.forEach(user => {

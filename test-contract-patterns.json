@@ -1,0 +1,66 @@
+{
+  "employeeData": [
+    {
+      "empNo": "NORMAL001",
+      "name": "平日勤務者",
+      "dept": "システム部",
+      "team": "通常チーム",
+      "email": "normal@example.com",
+      "mondayHours": "9:00-18:00",
+      "tuesdayHours": "9:00-18:00",
+      "wednesdayHours": "9:00-18:00",
+      "thursdayHours": "9:00-18:00",
+      "fridayHours": "9:00-18:00"
+    },
+    {
+      "empNo": "WEEKEND001",
+      "name": "土日勤務者",
+      "dept": "システム部",
+      "team": "週末チーム",
+      "email": "weekend@example.com",
+      "saturdayHours": "10:00-19:00",
+      "sundayHours": "10:00-19:00"
+    },
+    {
+      "empNo": "MIXED001",
+      "name": "混合勤務者",
+      "dept": "システム部",
+      "team": "混合チーム",
+      "email": "mixed@example.com",
+      "mondayHours": "9:00-18:00",
+      "wednesdayHours": "9:00-18:00",
+      "fridayHours": "9:00-18:00",
+      "saturdayHours": "10:00-16:00"
+    },
+    {
+      "empNo": "PARTTIME001",
+      "name": "時短勤務者",
+      "dept": "システム部",
+      "team": "時短チーム",
+      "email": "parttime@example.com",
+      "tuesdayHours": "10:00-15:00",
+      "thursdayHours": "10:00-15:00"
+    },
+    {
+      "empNo": "FULLWEEK001",
+      "name": "週7勤務者",
+      "dept": "システム部",
+      "team": "フルチーム",
+      "email": "fullweek@example.com",
+      "mondayHours": "8:00-17:00",
+      "tuesdayHours": "8:00-17:00",
+      "wednesdayHours": "8:00-17:00",
+      "thursdayHours": "8:00-17:00",
+      "fridayHours": "8:00-17:00",
+      "saturdayHours": "9:00-18:00",
+      "sundayHours": "9:00-18:00"
+    },
+    {
+      "empNo": "NOCONTRACT001",
+      "name": "契約なし者",
+      "dept": "システム部",
+      "team": "契約なしチーム",
+      "email": "nocontract@example.com"
+    }
+  ]
+}

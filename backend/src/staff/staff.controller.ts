@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Body, Param, Delete, Patch, UseInterceptors, UploadedFile } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { StaffService } from './staff.service';
+import { ImportProgressGateway } from '../import-progress/import-progress.gateway';
 // 一時的に無効化（コンパイルエラー回避）
 // import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 // import { RolesGuard } from '../auth/roles.guard';
@@ -11,7 +12,10 @@ import { StaffService } from './staff.service';
 @Controller('staff')
 // @UseGuards(JwtAuthGuard, RolesGuard) // 一時的に無効化
 export class StaffController {
-  constructor(private readonly staffService: StaffService) {}
+  constructor(
+    private readonly staffService: StaffService,
+    private readonly progressGateway: ImportProgressGateway
+  ) {}
 
   @Get()
   findAll() {
@@ -207,6 +211,80 @@ export class StaffController {
   }
 
   // === チャンク処理 + 非同期処理 ===
+
+  // テスト用：手動ContractDisplayCache生成
+  @Post('test-cache-generation')
+  async testCacheGeneration() {
+    try {
+      console.log('🔧 テスト用ContractDisplayCache生成開始');
+      
+      // 最初の3名のスタッフIDを取得
+      const staffData = await this.staffService.findAll();
+      const staffIds = staffData.slice(0, 3).map(s => s.id);
+      
+      console.log('🔧 対象スタッフIDs:', staffIds);
+      
+      if (staffIds.length > 0) {
+        const result = await this.staffService.generateContractDisplayCache(staffIds, 3);
+        console.log('🔧 生成結果:', result);
+        
+        return {
+          success: true,
+          result
+        };
+      } else {
+        return {
+          success: false,
+          error: 'スタッフが見つかりません'
+        };
+      }
+    } catch (error) {
+      console.error('🔧 テスト用キャッシュ生成エラー:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  // インポート進捗確認API（WebSocketフォールバック用）
+  @Get('import-status/:importId')
+  async getImportStatus(@Param('importId') importId: string) {
+    try {
+      const progress = this.progressGateway.getImportProgress(importId);
+      const isActive = this.progressGateway.isImportActive(importId);
+      
+      if (progress) {
+        return {
+          success: true,
+          importId,
+          status: 'in_progress',
+          progress,
+          isActive
+        };
+      } else if (isActive) {
+        return {
+          success: true,
+          importId,
+          status: 'in_progress',
+          message: '進捗情報を準備中です'
+        };
+      } else {
+        return {
+          success: true,
+          importId,
+          status: 'completed_or_not_found',
+          message: 'インポートが完了したか、存在しないIDです'
+        };
+      }
+    } catch (error) {
+      console.error('インポート状況取得エラー:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
 
   @Post('sync-from-json-body-chunked')
   async syncFromJsonBodyChunked(@Body() jsonData: any) {

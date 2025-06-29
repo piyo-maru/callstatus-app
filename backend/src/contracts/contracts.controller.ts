@@ -1,4 +1,4 @@
-import { Controller, Get, Query, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Query, Param, BadRequestException, ParseIntPipe } from '@nestjs/common';
 import { ContractsService } from './contracts.service';
 
 @Controller('contracts')
@@ -31,5 +31,14 @@ export class ContractsController {
     }
 
     return this.contractsService.getMonthlyContractSchedules(yearNum, monthNum);
+  }
+
+  /**
+   * 指定スタッフの契約データを取得
+   * GET /api/contracts/staff/:staffId
+   */
+  @Get('staff/:staffId')
+  async getStaffContract(@Param('staffId', ParseIntPipe) staffId: number) {
+    return this.contractsService.getStaffContract(staffId);
   }
 }

@@ -87,7 +87,6 @@ export class SchedulesController {
     if (!date) {
       throw new Error('date parameter is required');
     }
-    console.log(`2層統合API呼び出し: date=${date}`);
     const layeredSchedules = await this.layerManagerService.getLayeredSchedules(date);
     
     // スタッフ情報も含めて返す（既存APIとの互換性）
@@ -123,22 +122,16 @@ export class SchedulesController {
       throw new Error('date parameter is required');
     }
 
-    console.log(`統合スケジュールAPI呼び出し: date=${date}, includeMasking=${includeMasking}, staffId=${staffId}`);
-
     const targetDate_utc = this.parseTargetDateUtc(date);
     const businessToday_utc = this.getBusinessTodayUtc();
-
-    console.log(`日付判定: target=${targetDate_utc.toISOString()}, businessToday=${businessToday_utc.toISOString()}`);
 
     const targetStaffId = staffId ? parseInt(staffId) : undefined;
 
     // 業務日基準で過去の日付は履歴データから取得
     if (targetDate_utc < businessToday_utc) {
-      console.log('過去日付として履歴データを取得');
       return this.getHistoricalSchedules(date, includeMasking === 'true', targetStaffId);
     } else {
       // 業務日基準で今日以降は現在のデータから取得
-      console.log('現在日付として現在データを取得');
       return this.getCurrentSchedules(date, targetStaffId);
     }
   }
@@ -272,7 +265,6 @@ export class SchedulesController {
    * 現在のデータを取得
    */
   private async getCurrentSchedules(date: string, targetStaffId?: number) {
-    console.log(`現在データ取得: date=${date}, targetStaffId=${targetStaffId}`);
     const layeredSchedules = await this.layerManagerService.getLayeredSchedules(date);
     
     // スタッフ情報も含めて返す

@@ -15,59 +15,115 @@ interface ProgressInfo {
 export default function TestImportPage() {
   const [socket, setSocket] = useState<Socket | null>(null)
   const [isConnected, setIsConnected] = useState(false)
+  
+  // デバッグ用: isConnected状態の変化をログ出力
+  useEffect(() => {
+    console.log('🔧 isConnected state changed to:', isConnected)
+  }, [isConnected])
   const [importId, setImportId] = useState<string>('')
   const [progress, setProgress] = useState<ProgressInfo | null>(null)
   const [logs, setLogs] = useState<string[]>([])
   const [isImporting, setIsImporting] = useState(false)
+  const [pollingTimer, setPollingTimer] = useState<NodeJS.Timeout | null>(null)
 
   // WebSocket接続
   useEffect(() => {
-    const newSocket = io('http://localhost:3002', {
-      transports: ['websocket', 'polling']
+    console.log('🔍 WebSocket接続開始: http://localhost:3002 namespace: /import-progress')
+    
+    // Socket.IO名前空間の接続方式 - 複数パターンテスト
+    let newSocket;
+    
+    try {
+      // 方式1: 名前空間指定でURL構築
+      newSocket = io('http://localhost:3002/import-progress', {
+        transports: ['polling', 'websocket'],
+        timeout: 10000,
+        forceNew: true,
+        autoConnect: true
+      })
+    } catch (error) {
+      console.warn('🔧 名前空間URL接続失敗、代替方式を試行:', error)
+      
+      // 方式2: ベースURL + 名前空間指定
+      newSocket = io('http://localhost:3002', {
+        transports: ['polling', 'websocket'],
+        timeout: 10000,
+        forceNew: true,
+        autoConnect: true
+      }).of('/import-progress')
+    }
+    
+    console.log('🔍 Socket.IO接続オプション:', {
+      url: 'http://localhost:3002/import-progress',
+      transports: ['polling', 'websocket'],
+      connected: newSocket.connected
     })
 
     newSocket.on('connect', () => {
-      console.log('WebSocket connected')
+      console.log('✅ WebSocket connected successfully')
+      console.log('🔧 Setting isConnected to true...')
       setIsConnected(true)
       addLog('✅ WebSocket接続完了')
+      console.log('🔧 isConnected state should now be: true')
     })
 
-    newSocket.on('disconnect', () => {
-      console.log('WebSocket disconnected')
+    newSocket.on('disconnect', (reason) => {
+      console.log('❌ WebSocket disconnected:', reason)
       setIsConnected(false)
-      addLog('❌ WebSocket切断')
+      addLog(`❌ WebSocket切断: ${reason}`)
     })
 
-    newSocket.on('importStarted', (data) => {
-      console.log('Import started:', data)
-      setProgress({ 
-        total: data.total, 
-        processed: 0, 
-        currentChunk: 1, 
-        totalChunks: Math.ceil(data.total / 25),
-        percentage: 0,
-        currentAction: 'インポート開始',
-        estimatedTimeRemaining: 0
-      })
-      addLog(`🚀 インポート開始: ${data.total}件`)
+    newSocket.on('connect_error', (error) => {
+      console.error('🚨 WebSocket connection error:', error)
+      addLog(`🚨 WebSocket接続エラー: ${error.message}`)
+      setIsConnected(false)
     })
 
-    newSocket.on('importProgress', (data) => {
-      console.log('Import progress:', data)
-      setProgress(data.progress)
-      addLog(`⏳ ${data.progress.currentAction} - ${data.progress.percentage}% (${data.progress.processed}/${data.progress.total})`)
+    newSocket.on('error', (error) => {
+      console.error('🚨 WebSocket error:', error)
+      addLog(`🚨 WebSocketエラー: ${error}`)
     })
 
-    newSocket.on('importCompleted', (data) => {
-      console.log('Import completed:', data)
-      addLog(`✅ インポート完了: 成功${data.result.successful}件、失敗${data.result.failed}件`)
+    newSocket.on('import-progress', (data) => {
+      console.log('📊 Import progress received:', data)
+      
+      // プログレス情報があれば設定
+      if (data.progress) {
+        setProgress(data.progress)
+        addLog(`⏳ ${data.progress.currentAction} - ${data.progress.percentage}% (${data.progress.processed}/${data.progress.total})`)
+      } else {
+        // 単純な進捗データの場合
+        addLog(`📊 進捗更新: ${JSON.stringify(data)}`)
+      }
+    })
+
+    newSocket.on('import-completed', (data) => {
+      console.log('✅ Import completed:', data)
+      addLog(`✅ インポート完了: ${JSON.stringify(data.summary)}`)
       setIsImporting(false)
+      setProgress(null)
+      stopProgressPolling() // ポーリング停止
     })
 
-    newSocket.on('importError', (data) => {
-      console.log('Import error:', data)
-      addLog(`❌ インポートエラー: ${data.error}`)
+    newSocket.on('import-error', (data) => {
+      console.log('❌ Import error:', data)
+      addLog(`❌ インポートエラー: ${data.error || JSON.stringify(data)}`)
       setIsImporting(false)
+      setProgress(null)
+      stopProgressPolling() // ポーリング停止
+    })
+
+    newSocket.on('import-cancelled', (data) => {
+      console.log('🚫 Import cancelled:', data)
+      addLog(`🚫 インポートキャンセル: ${data.importId}`)
+      setIsImporting(false)
+      setProgress(null)
+      stopProgressPolling() // ポーリング停止
+    })
+
+    // 全イベントをキャッチするデバッグリスナー
+    newSocket.onAny((eventName, ...args) => {
+      console.log(`🔍 WebSocketイベント受信: ${eventName}`, args)
     })
 
     setSocket(newSocket)
@@ -82,15 +138,68 @@ export default function TestImportPage() {
     setLogs(prev => [...prev, `[${timestamp}] ${message}`])
   }
 
-  const startTestImport = async () => {
-    if (!isConnected) {
-      alert('WebSocketが接続されていません')
-      return
+  // HTTP APIによる進捗ポーリング（WebSocketフォールバック）
+  const startProgressPolling = (importId: string) => {
+    console.log(`🔄 HTTPポーリング開始: ${importId}`)
+    addLog(`🔄 WebSocket未接続のためHTTPポーリングで進捗確認`)
+    
+    const pollProgress = async () => {
+      try {
+        const response = await fetch(`http://localhost:3002/api/staff/import-status/${importId}`)
+        const result = await response.json()
+        
+        if (result.success) {
+          if (result.status === 'in_progress' && result.progress) {
+            setProgress(result.progress)
+            addLog(`📊 進捗更新: ${result.progress.percentage}% (${result.progress.processed}/${result.progress.total})`)
+          } else if (result.status === 'completed_or_not_found') {
+            addLog(`✅ インポート処理完了`)
+            setIsImporting(false)
+            stopProgressPolling()
+          } else {
+            addLog(`ℹ️ ${result.message || 'ステータス確認中...'}`)
+          }
+        } else {
+          addLog(`⚠️ 進捗確認エラー: ${result.error}`)
+        }
+      } catch (error) {
+        console.error('Progress polling error:', error)
+        addLog(`❌ 進捗確認失敗: ${error}`)
+      }
     }
+    
+    // 最初のポーリング実行
+    pollProgress()
+    
+    // 2秒間隔でポーリング
+    const timer = setInterval(pollProgress, 2000)
+    setPollingTimer(timer)
+  }
 
+  const stopProgressPolling = () => {
+    if (pollingTimer) {
+      clearInterval(pollingTimer)
+      setPollingTimer(null)
+      console.log(`⏹️ HTTPポーリング停止`)
+    }
+  }
+
+  // コンポーネントアンマウント時のクリーンアップ
+  useEffect(() => {
+    return () => {
+      stopProgressPolling()
+    }
+  }, [])
+
+  const startTestImport = async () => {
     setIsImporting(true)
     setProgress(null)
     setLogs([])
+    
+    // WebSocket未接続時の警告（実行は継続）
+    if (!isConnected) {
+      addLog('⚠️ WebSocket未接続 - 進捗表示なしで実行します')
+    }
     
     // テスト用の社員データ（小規模）
     const testData = {
@@ -150,6 +259,11 @@ export default function TestImportPage() {
         setImportId(result.importId)
         addLog(`📡 API呼び出し成功: ${result.message}`)
         addLog(`🆔 インポートID: ${result.importId}`)
+        
+        // WebSocket未接続時はHTTPポーリングで進捗確認
+        if (!isConnected) {
+          startProgressPolling(result.importId)
+        }
       } else {
         addLog(`❌ API呼び出し失敗: ${result.error}`)
         setIsImporting(false)
@@ -227,15 +341,24 @@ export default function TestImportPage() {
       <div className="mb-6">
         <button
           onClick={startTestImport}
-          disabled={!isConnected || isImporting}
+          disabled={isImporting}
           className={`px-6 py-3 rounded-lg font-medium ${
-            !isConnected || isImporting
+            isImporting
               ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-              : 'bg-blue-600 text-white hover:bg-blue-700'
+              : isConnected 
+                ? 'bg-blue-600 text-white hover:bg-blue-700'
+                : 'bg-green-600 text-white hover:bg-green-700'
           }`}
         >
-          {isImporting ? '処理中...' : 'テストインポート開始（3件）'}
+          {isImporting ? '処理中...' : isConnected ? 'テストインポート開始（3件）' : 'テストインポート開始（HTTPポーリング）'}
         </button>
+        
+        {/* WebSocket状態の説明 */}
+        {!isConnected && !isImporting && (
+          <p className="text-sm text-green-600 mt-2">
+            💡 WebSocket未接続時もHTTPポーリングで進捗確認できます
+          </p>
+        )}
       </div>
 
       {/* ログ表示 */}

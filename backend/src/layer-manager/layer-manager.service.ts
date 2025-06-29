@@ -23,29 +23,21 @@ export class LayerManagerService {
    * レイヤー2: 個別調整・例外予定
    */
   async getLayeredSchedules(dateString: string): Promise<LayeredSchedule[]> {
-    console.log(`LayerManager: Getting layered schedules for ${dateString}`);
     const schedules: LayeredSchedule[] = [];
 
     try {
       // レイヤー1: 契約による基本勤務時間を生成
-      console.log('LayerManager: Generating contract schedules...');
       const contractSchedules = await this.generateContractSchedules(dateString);
-      console.log(`LayerManager: Generated ${contractSchedules.length} contract schedules`);
       schedules.push(...contractSchedules);
 
       // レイヤー2: 個別調整予定を取得
-      console.log('LayerManager: Getting adjustment schedules...');
       const adjustmentSchedules = await this.getAdjustmentSchedules(dateString);
-      console.log(`LayerManager: Found ${adjustmentSchedules.length} adjustment schedules`);
       schedules.push(...adjustmentSchedules);
 
       // 従来のScheduleテーブルからも取得（後方互換性のため）
-      console.log('LayerManager: Getting legacy schedules...');
       const legacySchedules = await this.getLegacySchedules(dateString);
-      console.log(`LayerManager: Found ${legacySchedules.length} legacy schedules`);
       schedules.push(...legacySchedules);
 
-      console.log(`LayerManager: Total schedules: ${schedules.length}`);
       return schedules;
     } catch (error) {
       console.error('LayerManager: Error in getLayeredSchedules:', error);
@@ -59,10 +51,9 @@ export class LayerManagerService {
   async generateContractSchedules(dateString: string): Promise<LayeredSchedule[]> {
     const schedules: LayeredSchedule[] = [];
     
-    // 指定日付の曜日を取得
-    const date = new Date(dateString);
-    const dayOfWeek = date.getDay(); // 0=日曜, 1=月曜, ..., 6=土曜
-    console.log(`LayerManager: Date ${dateString} is day ${dayOfWeek} (0=Sunday)`);
+    // 指定日付の曜日を取得（UTC基準で厳密に処理）
+    const date = new Date(`${dateString}T00:00:00.000Z`);
+    const dayOfWeek = date.getUTCDay(); // 0=日曜, 1=月曜, ..., 6=土曜
     
     // 曜日名をContractテーブルのカラム名にマッピング
     const dayColumns = [
@@ -76,35 +67,27 @@ export class LayerManagerService {
     ];
     
     const dayColumn = dayColumns[dayOfWeek];
-    console.log(`LayerManager: Looking for ${dayColumn} in contracts`);
     
     // 全ての契約データを取得してフィルタリング
     const allContracts = await this.prisma.contract.findMany();
-    console.log(`LayerManager: Found ${allContracts.length} total contracts`);
     
     // 該当曜日に勤務時間が設定されている契約をフィルタ
     const contracts = allContracts.filter(contract => {
       const workHours = contract[dayColumn as keyof typeof contract];
-      console.log(`LayerManager: Contract ${contract.empNo} (${contract.name}) - ${dayColumn}: ${workHours}`);
       return workHours !== null && workHours !== undefined && workHours !== '';
     });
-    console.log(`LayerManager: Found ${contracts.length} contracts with ${dayColumn} set`);
 
     // 各契約から勤務時間スケジュールを生成
     for (const contract of contracts) {
       const workHours = contract[dayColumn] as string;
       if (!workHours) continue;
 
-      console.log(`LayerManager: Processing contract ${contract.empNo} with hours: ${workHours}`);
-      // "09:00-18:00" 形式をパース
       const schedule = this.parseWorkHours(workHours, dateString, contract.staffId, contract.empNo);
       if (schedule) {
-        console.log(`LayerManager: Generated schedule for ${contract.empNo}: ${schedule.start.toISOString()} - ${schedule.end.toISOString()}`);
         schedules.push(schedule);
       }
     }
 
-    console.log(`LayerManager: Generated ${schedules.length} contract schedules`);
     return schedules;
   }
 
@@ -112,14 +95,27 @@ export class LayerManagerService {
    * 勤務時間文字列("09:00-18:00")をLayeredScheduleに変換
    */
   private parseWorkHours(workHours: string, dateString: string, staffId: number, empNo: string): LayeredSchedule | null {
-    const timeRange = workHours.match(/^(\d{2}:\d{2})-(\d{2}:\d{2})$/);
-    if (!timeRange) return null;
+    // 1桁または2桁の時間に対応した正規表現
+    const timeRange = workHours.match(/^(\d{1,2}:\d{2})-(\d{1,2}:\d{2})$/);
+    if (!timeRange) {
+      console.error(`LayerManager: Failed to parse work hours: "${workHours}" for ${empNo}`);
+      return null;
+    }
 
     const [, startTime, endTime] = timeRange;
     
+    // 時刻を2桁にパディング（例：8:00 → 08:00）
+    const padTime = (time: string) => {
+      const [hour, minute] = time.split(':');
+      return `${hour.padStart(2, '0')}:${minute}`;
+    };
+    
+    const paddedStartTime = padTime(startTime);
+    const paddedEndTime = padTime(endTime);
+    
     // JST時刻をUTCに変換（ISO-8601準拠）
-    const startUtc = new Date(`${dateString}T${startTime}:00+09:00`);
-    const endUtc = new Date(`${dateString}T${endTime}:00+09:00`);
+    const startUtc = new Date(`${dateString}T${paddedStartTime}:00+09:00`);
+    const endUtc = new Date(`${dateString}T${paddedEndTime}:00+09:00`);
 
     return {
       id: `contract_${empNo}_${dateString}`,
@@ -156,10 +152,6 @@ export class LayerManagerService {
       }
     });
 
-    console.log(`LayerManager: Found ${adjustments.length} adjustments for ${dateString}`);
-    adjustments.forEach(adj => {
-      console.log(`LayerManager: Adjustment ID ${adj.id}, staffId ${adj.staffId}, status ${adj.status}, start ${adj.start.toISOString()}`);
-    });
 
     return adjustments.map(adj => {
       const adjustmentSchedule: LayeredSchedule = {
@@ -173,7 +165,6 @@ export class LayerManagerService {
         priority: 3, // 個別調整は最高優先度
         isApprovedPending: adj.isPending && adj.approvedAt !== null // 承認済みpendingかどうか
       };
-      console.log(`Adjustment schedule created: ID ${adjustmentSchedule.id}, staffId ${adj.staffId}, database ID: ${adj.id}, isApprovedPending: ${adjustmentSchedule.isApprovedPending}`);
       return adjustmentSchedule;
     });
   }
@@ -184,10 +175,9 @@ export class LayerManagerService {
   async generateHistoricalContractSchedules(dateString: string): Promise<LayeredSchedule[]> {
     const schedules: LayeredSchedule[] = [];
     
-    // 指定日付の曜日を取得
-    const date = new Date(dateString);
-    const dayOfWeek = date.getDay(); // 0=日曜, 1=月曜, ..., 6=土曜
-    console.log(`LayerManager: [Historical] Date ${dateString} is day ${dayOfWeek} (0=Sunday)`);
+    // 指定日付の曜日を取得（UTC基準で厳密に処理）
+    const date = new Date(`${dateString}T00:00:00.000Z`);
+    const dayOfWeek = date.getUTCDay(); // 0=日曜, 1=月曜, ..., 6=土曜
     
     // 曜日名をContractテーブルのカラム名にマッピング
     const dayColumns = [
@@ -201,7 +191,6 @@ export class LayerManagerService {
     ];
     
     const dayColumn = dayColumns[dayOfWeek];
-    console.log(`LayerManager: [Historical] Looking for ${dayColumn} in contracts`);
     
     // 退職者を含む全ての契約データを取得
     const allContracts = await this.prisma.contract.findMany({
@@ -209,31 +198,25 @@ export class LayerManagerService {
         Staff: true // スタッフ情報も取得（退職者判定用）
       }
     });
-    console.log(`LayerManager: [Historical] Found ${allContracts.length} total contracts (including retired staff)`);
     
     // 該当曜日に勤務時間が設定されている契約をフィルタ
     const contracts = allContracts.filter(contract => {
       const workHours = contract[dayColumn as keyof typeof contract];
-      console.log(`LayerManager: [Historical] Contract ${contract.empNo} (${contract.name}) - ${dayColumn}: ${workHours}, Staff Active: ${contract.Staff?.isActive}`);
       return workHours !== null && workHours !== undefined && workHours !== '';
     });
-    console.log(`LayerManager: [Historical] Found ${contracts.length} contracts with ${dayColumn} set`);
 
     // 各契約から勤務時間スケジュールを生成
     for (const contract of contracts) {
       const workHours = contract[dayColumn] as string;
       if (!workHours) continue;
 
-      console.log(`LayerManager: [Historical] Processing contract ${contract.empNo} with hours: ${workHours}`);
       // "09:00-18:00" 形式をパース
       const schedule = this.parseWorkHours(workHours, dateString, contract.staffId, contract.empNo);
       if (schedule) {
-        console.log(`LayerManager: [Historical] Generated schedule for ${contract.empNo}: ${schedule.start.toISOString()} - ${schedule.end.toISOString()}`);
         schedules.push(schedule);
       }
     }
 
-    console.log(`LayerManager: [Historical] Generated ${schedules.length} historical contract schedules`);
     return schedules;
   }
 
@@ -264,7 +247,6 @@ export class LayerManagerService {
         layer: 'adjustment' as const,
         priority: 2 // 従来データは中間優先度
       };
-      console.log(`Legacy schedule created: ID ${legacySchedule.id}, staffId ${sch.staffId}`);
       return legacySchedule;
     });
   }

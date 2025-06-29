@@ -1,9 +1,12 @@
 'use client';
 
 import FullMainApp from './components/FullMainApp';
+import AuthGuard from './components/AuthGuard';
 
 export default function HomePage() {
   return (
-    <FullMainApp />
+    <AuthGuard>
+      <FullMainApp />
+    </AuthGuard>
   );
 }

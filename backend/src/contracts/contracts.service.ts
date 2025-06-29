@@ -92,4 +92,17 @@ export class ContractsService {
       schedules: scheduleData,
     };
   }
+
+  /**
+   * 指定スタッフの契約データを取得
+   * @param staffId スタッフID
+   * @returns 契約データ
+   */
+  async getStaffContract(staffId: number) {
+    const contract = await this.prisma.contract.findFirst({
+      where: { staffId: staffId },
+    });
+    
+    return contract;
+  }
 }

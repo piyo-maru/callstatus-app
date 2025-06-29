@@ -406,6 +406,22 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
         if (targetStaff) {
           if (isDev) console.log('選択された社員:', targetStaff);
           setCurrentStaff(targetStaff);
+          
+          // 契約データを取得
+          try {
+            const contractResponse = await authenticatedFetch(`${getApiUrl()}/api/contracts/staff/${targetStaff.id}`);
+            if (contractResponse.ok) {
+              const contract = await contractResponse.json();
+              if (isDev) console.log('取得した契約データ:', contract);
+              setContractData(contract);
+            } else {
+              if (isDev) console.log('契約データが見つかりません');
+              setContractData(null);
+            }
+          } catch (err) {
+            console.error('契約データの取得に失敗:', err);
+            setContractData(null);
+          }
         } else {
           if (initialStaffId) {
             setError(`指定されたスタッフ（ID: ${initialStaffId}）が見つかりません`);
@@ -1454,7 +1470,7 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
                         return hours ? `${day}: ${hours}` : null;
                       }).filter(Boolean).join('　')
                     ) : (
-                      '月曜日: 09:00-18:00　火曜日: 09:00-18:00　水曜日: 09:00-18:00　木曜日: 09:00-18:00　金曜日: 09:00-18:00'
+                      '契約データがありません'
                     )}
                   </span>
                   <div className="text-xs text-gray-500 mt-1">
@@ -1474,7 +1490,7 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
         )}
 
         {/* プリセット予定ボタン */}
-        <div className="sticky top-4 z-30 bg-white rounded-lg shadow-sm p-4 mb-6 border border-gray-200">
+        <div className="sticky top-4 z-40 bg-white rounded-lg shadow-sm p-4 mb-6 border border-gray-200">
           <div className="mb-3 text-xs text-gray-600">
             📌 今日の予定を追加、または下の日付をクリックして特定の日に追加
           </div>

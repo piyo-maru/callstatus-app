@@ -725,6 +725,113 @@ export class StaffService {
     return this.addAutomaticLunchBreaks(staffId, new Date());
   }
 
+  // 契約表示キャッシュ生成メソッド（公開）
+  async generateContractDisplayCache(staffIds: number[], monthsAhead: number = 3) {
+    console.log(`=== 契約表示キャッシュ生成開始: ${staffIds.length}名、${monthsAhead}ヶ月分 ===`);
+
+    try {
+      // 対象期間の計算
+      const currentDate = new Date();
+      const startMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+      const endMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + monthsAhead, 1);
+      
+      console.log(`期間: ${startMonth.toISOString().split('T')[0]} ～ ${endMonth.toISOString().split('T')[0]}`);
+
+      // 対象スタッフの契約データを取得
+      const contracts = await this.prisma.contract.findMany({
+        where: { 
+          staffId: { in: staffIds } 
+        },
+        select: {
+          staffId: true,
+          mondayHours: true,
+          tuesdayHours: true,
+          wednesdayHours: true,
+          thursdayHours: true,
+          fridayHours: true,
+          saturdayHours: true,
+          sundayHours: true
+        }
+      });
+
+      console.log(`取得した契約データ: ${contracts.length}件`);
+
+      // キャッシュデータの生成
+      const cacheEntries = [];
+      const contractMap = new Map(contracts.map(c => [c.staffId, c]));
+
+      for (const staffId of staffIds) {
+        const contract = contractMap.get(staffId);
+        
+        // 各月の各日についてキャッシュ生成
+        for (let monthOffset = 0; monthOffset < monthsAhead; monthOffset++) {
+          const targetMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + monthOffset, 1);
+          const year = targetMonth.getFullYear();
+          const month = targetMonth.getMonth() + 1; // 1-based month
+          const daysInMonth = new Date(year, month, 0).getDate();
+
+          for (let day = 1; day <= daysInMonth; day++) {
+            const date = new Date(year, month - 1, day);
+            const dayOfWeek = date.getDay(); // 0=日曜, 6=土曜
+            
+            // 契約勤務時間の有無を判定
+            let hasContract = false;
+            if (contract) {
+              const dayKeys = ['sundayHours', 'mondayHours', 'tuesdayHours', 'wednesdayHours', 'thursdayHours', 'fridayHours', 'saturdayHours'];
+              const dayKey = dayKeys[dayOfWeek];
+              const workHours = contract[dayKey];
+              hasContract = workHours != null && typeof workHours === 'string' && workHours.trim() !== '';
+            }
+
+            cacheEntries.push({
+              staffId,
+              year,
+              month,
+              day,
+              hasContract
+            });
+          }
+        }
+      }
+
+      console.log(`生成されたキャッシュエントリ: ${cacheEntries.length}件`);
+
+      // 既存キャッシュを削除（対象期間・対象スタッフ）
+      await this.prisma.contractDisplayCache.deleteMany({
+        where: {
+          staffId: { in: staffIds },
+          year: {
+            gte: startMonth.getFullYear(),
+            lte: endMonth.getFullYear()
+          },
+          month: {
+            gte: startMonth.getFullYear() === endMonth.getFullYear() ? startMonth.getMonth() + 1 : 1,
+            lte: startMonth.getFullYear() === endMonth.getFullYear() ? endMonth.getMonth() + 1 : 12
+          }
+        }
+      });
+
+      // 新しいキャッシュを一括挿入
+      if (cacheEntries.length > 0) {
+        await this.prisma.contractDisplayCache.createMany({
+          data: cacheEntries,
+          skipDuplicates: true
+        });
+      }
+
+      console.log(`=== 契約表示キャッシュ生成完了: ${cacheEntries.length}件挿入 ===`);
+      return {
+        generatedEntries: cacheEntries.length,
+        staffCount: staffIds.length,
+        monthsAhead
+      };
+
+    } catch (error) {
+      console.error('契約表示キャッシュ生成エラー:', error);
+      throw error;
+    }
+  }
+
   async syncFromEmployeeData(jsonData: any) {
     try {
       console.log('=== 完全同期型社員情報同期開始 ===');
@@ -904,6 +1011,32 @@ export class StaffService {
           }
         }
         console.log(`=== 論理削除完了: ${staffToDelete.length}件 ===`);
+      }
+
+      // 【新機能】契約表示キャッシュの生成
+      console.log('=== 契約表示キャッシュ生成開始 ===');
+      try {
+        // 更新されたスタッフのIDを収集
+        const updatedStaffIds = [];
+        for (const emp of employeeData) {
+          const staff = await this.prisma.staff.findUnique({
+            where: { empNo: emp.empNo },
+            select: { id: true }
+          });
+          if (staff) {
+            updatedStaffIds.push(staff.id);
+          }
+        }
+        
+        if (updatedStaffIds.length > 0) {
+          const cacheResult = await this.generateContractDisplayCache(updatedStaffIds, 3);
+          console.log(`契約表示キャッシュ生成完了: ${cacheResult.generatedEntries}件`);
+        } else {
+          console.log('キャッシュ生成対象のスタッフがいません');
+        }
+      } catch (cacheError) {
+        console.error('契約表示キャッシュ生成でエラー（処理は継続）:', cacheError);
+        // キャッシュ生成エラーは主処理に影響させない
       }
 
       console.log('=== 完全同期完了 ===');
@@ -1186,6 +1319,34 @@ export class StaffService {
       };
 
       console.log('=== チャンク処理完了 ===', summary);
+      
+      // ContractDisplayCache生成（月次プランナー用）
+      try {
+        console.log('🟢 ContractDisplayCache生成開始');
+        console.log(`🟢 results配列: ${results.length}件`);
+        console.log('🟢 results詳細:', results.slice(0, 3));
+        
+        const updatedStaffIds = results
+          .filter(r => r.success && r.staff?.id)
+          .map(r => r.staff.id);
+        
+        console.log(`🟢 抽出されたstaffIds: ${updatedStaffIds.length}件`, updatedStaffIds.slice(0, 5));
+        
+        if (updatedStaffIds.length > 0) {
+          console.log('🟢 generateContractDisplayCache呼び出し開始');
+          const cacheResult = await this.generateContractDisplayCache(updatedStaffIds, 3);
+          console.log(`🟢 ContractDisplayCache生成完了: ${cacheResult.generatedEntries}件`);
+          
+          // 進捗通知にキャッシュ生成情報を追加
+          (summary as any).contractDisplayCacheGenerated = cacheResult.generatedEntries;
+        } else {
+          console.log('🔴 ContractDisplayCache生成対象のスタッフがいません');
+          (summary as any).contractDisplayCacheGenerated = 0;
+        }
+      } catch (cacheError) {
+        console.error('🔴 ContractDisplayCache生成エラー:', cacheError);
+        (summary as any).contractDisplayCacheError = cacheError.message;
+      }
       
       // 完了通知
       this.progressGateway.notifyImportCompleted(actualImportId, summary);

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '../../components/AuthProvider';
+import AuthGuard from '../../components/AuthGuard';
 import { STATUS_COLORS, capitalizeStatus } from '../../components/timeline/TimelineUtils';
 
 // 型定義
@@ -203,7 +204,8 @@ export default function PendingApprovalPage() {
   }, [fetchPendingList]);
 
   return (
-    <div className="h-screen flex flex-col bg-gray-50">
+    <AuthGuard requiredRole={['ADMIN', 'SYSTEM_ADMIN']}>
+      <div className="h-screen flex flex-col bg-gray-50">
       {/* ヘッダー */}
       <div className="bg-white shadow-sm border-b">
         {/* タイトル行 */}
@@ -497,6 +499,7 @@ export default function PendingApprovalPage() {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </AuthGuard>
   );
 }

@@ -1,7 +1,9 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '../components/AuthProvider';
+import AuthGuard from '../components/AuthGuard';
 import { createPortal } from 'react-dom';
 import { STATUS_COLORS, capitalizeStatus } from '../components/timeline/TimelineUtils';
 import DatePicker, { registerLocale } from 'react-datepicker';
@@ -319,6 +321,7 @@ const DroppableCell: React.FC<{
 
 // 月次プランナーのメインコンポーネント
 function MonthlyPlannerPageContent() {
+  const router = useRouter();
   const { user, token, logout } = useAuth();
   
   // API呼び出し用の認証付きfetch関数
@@ -352,7 +355,7 @@ function MonthlyPlannerPageContent() {
   
   // 権限チェック関数
   const canManage = useCallback(() => {
-    return user?.role === 'ADMIN';
+    return user?.role === 'SYSTEM_ADMIN' || user?.role === 'ADMIN';
   }, [user?.role]);
   
   // 統一プリセットシステム
@@ -370,6 +373,10 @@ function MonthlyPlannerPageContent() {
   const [isLoading, setIsLoading] = useState(false);
   const [draggedPending, setDraggedPending] = useState<PendingSchedule | null>(null);
   const [holidays, setHolidays] = useState<Holiday[]>([]);
+  
+  // 契約表示キャッシュ状態
+  const [displayCache, setDisplayCache] = useState<{ [key: string]: boolean }>({});
+  const [cacheLoading, setCacheLoading] = useState(false);
   
   // 月ナビゲーション関数
   const goToPreviousMonth = useCallback(() => {
@@ -626,6 +633,37 @@ function MonthlyPlannerPageContent() {
       console.error('Failed to fetch staff data:', error);
     }
   }, [token]);
+
+  // 契約表示キャッシュを取得
+  const fetchDisplayCache = useCallback(async (year: number, month: number) => {
+    setCacheLoading(true);
+    try {
+      const currentApiUrl = getApiUrl();
+      const response = await fetch(`${currentApiUrl}/api/monthly-planner/display-cache/${year}/${month}`, {
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          setDisplayCache(data.data || {});
+          console.log(`契約表示キャッシュ取得完了: ${data.count}件`);
+        } else {
+          console.warn('契約表示キャッシュ取得失敗:', data.error);
+          setDisplayCache({});
+        }
+      } else {
+        console.warn('契約表示キャッシュ取得API失敗');
+        setDisplayCache({});
+      }
+    } catch (error) {
+      console.error('契約表示キャッシュ取得エラー:', error);
+      setDisplayCache({});
+    } finally {
+      setCacheLoading(false);
+    }
+  }, []);
 
   // 部署・グループ設定を取得
   const fetchDepartmentSettings = useCallback(async () => {
@@ -1014,6 +1052,11 @@ function MonthlyPlannerPageContent() {
     setSelectedCellForHighlight(null);
   }, [selectedCell, pendingSchedules, fetchPendingSchedules]);
 
+  // スタッフ名クリック時の個人ページ遷移（全ユーザー閲覧可能）
+  const handleStaffNameClick = useCallback((staffId: number) => {
+    router.push(`/personal/${staffId}`);
+  }, [router]);
+
   // 編集モーダル用の削除処理
   const handleEditDelete = useCallback(async () => {
     if (!selectedPendingForEdit) return;
@@ -1102,22 +1145,23 @@ function MonthlyPlannerPageContent() {
     });
   }, [currentMonth, pendingSchedules]);
 
-  // 契約スケジュール有無判定関数
+  // 契約スケジュール有無判定関数（キャッシュベース）
   const hasContractSchedule = useCallback((staffId: number, day: number) => {
-    // 軽量な契約判定：曜日ベースでの基本判定
+    // 祝日判定：祝日は契約データ無効（既存ロジック維持）
     const year = currentMonth.getFullYear();
     const month = currentMonth.getMonth() + 1;
     const date = new Date(year, month - 1, day);
-    const dayOfWeek = date.getDay(); // 0=日曜, 6=土曜
-    
-    // 祝日判定：祝日は契約データ無効
     const holiday = getHoliday(date, holidays);
     if (holiday) return false;
     
-    // 基本的に平日は契約勤務あり、土日は契約勤務なし
-    // （将来的には実際の契約データを参照可能）
-    return dayOfWeek >= 1 && dayOfWeek <= 5; // 月〜金のみ
-  }, [currentMonth, holidays]);
+    // キャッシュから契約情報を参照
+    const cacheKey = `${staffId}-${day}`;
+    const hasContract = displayCache[cacheKey];
+    
+    
+    // キャッシュデータのみを信頼し、ない場合は契約なしとして扱う
+    return hasContract === true;
+  }, [currentMonth, holidays, displayCache]);
 
   // Pending予定のドラッグ&ドロップ処理
   const handlePendingDrop = useCallback(async (draggedPending: PendingSchedule, targetStaffId: number, targetDay: number) => {
@@ -1264,13 +1308,18 @@ function MonthlyPlannerPageContent() {
     loadHolidays();
   }, [fetchStaffData, fetchDepartmentSettings]);
 
-  // 月が変更された時にpendingデータと担当設定データを取得（契約データ無効化）
+  // 月が変更された時にpendingデータと担当設定データと契約表示キャッシュを取得
   useEffect(() => {
     if (staffList.length > 0) {
       fetchPendingSchedules();
       fetchResponsibilityData();
+      
+      // 契約表示キャッシュを取得
+      const year = currentMonth.getFullYear();
+      const month = currentMonth.getMonth() + 1;
+      fetchDisplayCache(year, month);
     }
-  }, [currentMonth, staffList, fetchPendingSchedules, fetchResponsibilityData]);
+  }, [currentMonth, staffList, fetchPendingSchedules, fetchResponsibilityData, fetchDisplayCache]);
 
   return (
     <div className="min-h-screen bg-gray-50 p-4">
@@ -1355,17 +1404,19 @@ function MonthlyPlannerPageContent() {
                 ⚙️ 設定
               </button>
             )}
-            <label className="flex items-center space-x-2 text-sm">
-              <input
-                type="checkbox"
-                checked={isApprovalMode}
-                onChange={(e) => setIsApprovalMode(e.target.checked)}
-                className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
-              />
-              <span className={`font-medium ${isApprovalMode ? 'text-blue-600' : 'text-gray-600'}`}>
-                承認モード
-              </span>
-            </label>
+            {canManage() && (
+              <label className="flex items-center space-x-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={isApprovalMode}
+                  onChange={(e) => setIsApprovalMode(e.target.checked)}
+                  className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <span className={`font-medium ${isApprovalMode ? 'text-blue-600' : 'text-gray-600'}`}>
+                  承認モード
+                </span>
+              </label>
+            )}
           </div>
         </div>
 
@@ -1436,7 +1487,13 @@ function MonthlyPlannerPageContent() {
                                 key={staff.id} 
                                 className="px-2 pl-12 text-sm font-medium whitespace-nowrap h-[65px] hover:bg-gray-50 flex items-center border-b"
                               >
-                                <span className="staff-name">{staff.name}</span>
+                                <button
+                                  onClick={() => handleStaffNameClick(staff.id)}
+                                  className="staff-name text-left hover:text-blue-600 hover:underline transition-colors"
+                                  title="個人ページを表示"
+                                >
+                                  {staff.name}
+                                </button>
                               </div>
                             ))}
                           </div>
@@ -2198,5 +2255,9 @@ const ResponsibilityModal: React.FC<ResponsibilityModalProps> = ({
 
 // メインコンポーネント
 export default function MonthlyPlannerPage() {
-  return <MonthlyPlannerPageContent />;
+  return (
+    <AuthGuard>
+      <MonthlyPlannerPageContent />
+    </AuthGuard>
+  );
 }
