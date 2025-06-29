@@ -116,34 +116,37 @@ export class SchedulesController {
   @Get('unified')
   async findUnified(
     @Query('date') date: string,
-    @Query('includeMasking') includeMasking?: string
+    @Query('includeMasking') includeMasking?: string,
+    @Query('staffId') staffId?: string
   ) {
     if (!date) {
       throw new Error('date parameter is required');
     }
 
-    console.log(`統合スケジュールAPI呼び出し: date=${date}, includeMasking=${includeMasking}`);
+    console.log(`統合スケジュールAPI呼び出し: date=${date}, includeMasking=${includeMasking}, staffId=${staffId}`);
 
     const targetDate_utc = this.parseTargetDateUtc(date);
     const businessToday_utc = this.getBusinessTodayUtc();
 
     console.log(`日付判定: target=${targetDate_utc.toISOString()}, businessToday=${businessToday_utc.toISOString()}`);
 
+    const targetStaffId = staffId ? parseInt(staffId) : undefined;
+
     // 業務日基準で過去の日付は履歴データから取得
     if (targetDate_utc < businessToday_utc) {
       console.log('過去日付として履歴データを取得');
-      return this.getHistoricalSchedules(date, includeMasking === 'true');
+      return this.getHistoricalSchedules(date, includeMasking === 'true', targetStaffId);
     } else {
       // 業務日基準で今日以降は現在のデータから取得
       console.log('現在日付として現在データを取得');
-      return this.getCurrentSchedules(date);
+      return this.getCurrentSchedules(date, targetStaffId);
     }
   }
 
   /**
    * 履歴データを取得して返す（契約レイヤーも含む）
    */
-  private async getHistoricalSchedules(date: string, includeMasking: boolean = false) {
+  private async getHistoricalSchedules(date: string, includeMasking: boolean = false, targetStaffId?: number) {
     console.log(`履歴データ取得開始: ${date}, マスキング: ${includeMasking}`);
     
     // 1. 履歴データ（調整レイヤー）を取得
@@ -268,18 +271,24 @@ export class SchedulesController {
   /**
    * 現在のデータを取得
    */
-  private async getCurrentSchedules(date: string) {
-    console.log(`現在データ取得: date=${date}`);
+  private async getCurrentSchedules(date: string, targetStaffId?: number) {
+    console.log(`現在データ取得: date=${date}, targetStaffId=${targetStaffId}`);
     const layeredSchedules = await this.layerManagerService.getLayeredSchedules(date);
     
     // スタッフ情報も含めて返す
+    const staffWhere = targetStaffId ? { isActive: true, id: targetStaffId } : { isActive: true };
     const staff = await this.schedulesService['prisma'].staff.findMany({
-      where: { isActive: true },
+      where: staffWhere,
       orderBy: { id: 'asc' }
     });
     
+    // スケジュールもstaffIdでフィルタリング
+    const filteredSchedules = targetStaffId 
+      ? layeredSchedules.filter(ls => ls.staffId === targetStaffId)
+      : layeredSchedules;
+    
     return {
-      schedules: layeredSchedules.map((ls, index) => ({
+      schedules: filteredSchedules.map((ls, index) => ({
         id: `${ls.layer}_${ls.id}_${index}`,
         staffId: ls.staffId,
         status: ls.status,

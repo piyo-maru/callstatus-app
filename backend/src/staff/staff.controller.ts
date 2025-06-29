@@ -51,6 +51,13 @@ export class StaffController {
     return this.staffService.remove(+id);
   }
 
+  // テスト用break追加エンドポイント
+  @Post(':id/test-add-breaks')
+  async testAddBreaks(@Param('id') id: string) {
+    console.log(`テスト用break追加: スタッフID ${id}`);
+    return this.staffService.testAddLunchBreaks(+id);
+  }
+
   @Post('sync-from-json-body')
   async syncFromJsonBody(@Body() jsonData: any) {
     console.log('=== syncFromJsonBody endpoint called ===');
@@ -138,6 +145,151 @@ export class StaffController {
     } catch (error) {
       console.error('Error syncing staff from JSON:', error);
       console.error('Error stack:', error.stack);
+    }
+  }
+
+  // === 管理者権限管理用API（Phase 5） ===
+
+  @Get('management')
+  async getStaffForManagement() {
+    console.log('=== 管理者権限管理用スタッフ一覧取得 ===');
+    try {
+      const result = await this.staffService.findAllForManagement();
+      return { success: true, data: result };
+    } catch (error) {
+      console.error('管理者権限管理用スタッフ取得エラー:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  @Get('departments')
+  async getAvailableDepartments() {
+    console.log('=== 利用可能部署一覧取得 ===');
+    try {
+      const result = await this.staffService.getAvailableDepartments();
+      return { success: true, data: result };
+    } catch (error) {
+      console.error('部署一覧取得エラー:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  @Patch(':id/manager-permissions')
+  async updateManagerPermissions(
+    @Param('id') id: string,
+    @Body() updateData: {
+      isManager: boolean;
+      managerDepartments?: string[];
+      managerPermissions?: string[];
+      updatedBy?: string; // 更新者情報（監査ログ用）
+    }
+  ) {
+    console.log(`=== 管理者権限更新: スタッフID ${id} ===`, updateData);
+    try {
+      const result = await this.staffService.updateManagerPermissions(+id, updateData);
+      return { success: true, data: result };
+    } catch (error) {
+      console.error('管理者権限更新エラー:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  @Get(':id/manager-audit-logs')
+  async getManagerAuditLogs(@Param('id') id: string) {
+    console.log(`=== 管理者監査ログ取得: スタッフID ${id} ===`);
+    try {
+      const result = await this.staffService.getManagerAuditLogs(+id);
+      return { success: true, data: result };
+    } catch (error) {
+      console.error('監査ログ取得エラー:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // === チャンク処理 + 非同期処理 ===
+
+  @Post('sync-from-json-body-chunked')
+  async syncFromJsonBodyChunked(@Body() jsonData: any) {
+    console.log('=== チャンク処理社員インポート開始 ===');
+    const importId = `import-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    
+    try {
+      console.log('Received JSON data:', JSON.stringify(jsonData, null, 2));
+      
+      // 【非同期処理】バックグラウンドで実行
+      // クライアントにはすぐにレスポンスを返し、処理はバックグラウンドで継続
+      setImmediate(async () => {
+        try {
+          await this.staffService.syncFromEmployeeDataWithProgress(jsonData, importId);
+        } catch (error) {
+          console.error('バックグラウンド処理エラー:', error);
+        }
+      });
+
+      // 即座にレスポンスを返す（非同期処理開始の通知）
+      return {
+        success: true,
+        message: 'チャンク処理によるインポートを開始しました',
+        importId: importId,
+        note: 'WebSocketでリアルタイム進捗を確認できます'
+      };
+    } catch (error) {
+      console.error('Error in chunked sync:', error);
+      return {
+        success: false,
+        error: error.message,
+        importId: importId
+      };
+    }
+  }
+
+  @Post('sync-from-json-chunked')
+  @UseInterceptors(FileInterceptor('file'))
+  async syncFromJsonChunked(@UploadedFile() file: Express.Multer.File) {
+    console.log('=== チャンク処理ファイルインポート開始 ===');
+    const importId = `import-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    
+    try {
+      if (!file) {
+        throw new Error('No file uploaded');
+      }
+
+      console.log('File details:', {
+        originalname: file.originalname,
+        mimetype: file.mimetype,
+        size: file.size
+      });
+
+      const fileContent = file.buffer.toString('utf8');
+      const jsonData = JSON.parse(fileContent);
+      
+      // 【非同期処理】バックグラウンドで実行
+      setImmediate(async () => {
+        try {
+          await this.staffService.syncFromEmployeeDataWithProgress(jsonData, importId);
+        } catch (error) {
+          console.error('バックグラウンド処理エラー:', error);
+        }
+      });
+
+      // 即座にレスポンスを返す
+      return {
+        success: true,
+        message: 'チャンク処理によるファイルインポートを開始しました',
+        importId: importId,
+        fileInfo: {
+          name: file.originalname,
+          size: file.size
+        },
+        note: 'WebSocketでリアルタイム進捗を確認できます'
+      };
+    } catch (error) {
+      console.error('Error in chunked file sync:', error);
+      return {
+        success: false,
+        error: error.message,
+        importId: importId
+      };
     }
   }
 }

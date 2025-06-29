@@ -4,7 +4,10 @@ import { createContext, useContext, useState, useEffect, ReactNode } from 'react
 import { getApiBaseUrlSync, initializeApiConfig } from '../../lib/api-config';
 
 // 認証状態の型定義（バックエンドのUserTypeと一致させる）
-export type UserRole = 'STAFF' | 'ADMIN' | 'READONLY';
+export type UserRole = 'STAFF' | 'ADMIN' | 'READONLY' | 'SYSTEM_ADMIN';
+
+// 管理者権限の種類
+export type ManagerPermission = 'READ' | 'WRITE' | 'APPROVE' | 'DELETE';
 
 export type AuthUser = {
   id: string; // バックエンドのCUIDに合わせて文字列に変更
@@ -13,6 +16,11 @@ export type AuthUser = {
   role: UserRole;
   staffId?: number;
   isActive: boolean;
+  
+  // 管理者権限関連（既存ユーザーには影響しない）
+  isManager?: boolean;
+  managerDepartments?: string[];  // 管理対象部署
+  managerPermissions?: ManagerPermission[];  // 管理者権限レベル
 };
 
 type AuthContextType = {
@@ -28,6 +36,13 @@ type AuthContextType = {
   isAuthenticated: boolean;
   isTransitioning: boolean;
   setTransitioning: (transitioning: boolean) => void;
+  
+  // 権限チェック関数（既存機能を損なわない）
+  canEditSchedule: (targetStaffId?: number) => boolean;
+  canManageDepartment: (department: string) => boolean;
+  canApproveSchedules: () => boolean;
+  isSystemAdmin: () => boolean;
+  getAvailableDepartments: () => string[];
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -44,19 +59,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // 初期化時にAPIとローカルストレージを設定
   useEffect(() => {
     const initialize = () => {
-      // 🚨 一時的なテスト用ユーザー設定（認証スキップ）
-      const testUser: AuthUser = {
-        id: 'test-user-1',
-        email: 'admin@example.com',
-        name: 'テスト管理者',
-        role: 'ADMIN',
-        staffId: 1,
-        isActive: true
-      };
-      setUser(testUser);
-      setToken('test-token');
+      // ローカルストレージから認証情報を復元
+      const savedToken = localStorage.getItem('auth_token');
+      const savedUser = localStorage.getItem('auth_user');
+      
+      if (savedToken && savedUser) {
+        try {
+          const parsedUser = JSON.parse(savedUser);
+          setToken(savedToken);
+          setUser(parsedUser);
+          console.log('認証情報を復元しました:', parsedUser.email);
+        } catch (error) {
+          console.error('認証情報の復元に失敗:', error);
+          localStorage.removeItem('auth_token');
+          localStorage.removeItem('auth_user');
+        }
+      }
+      
       setLoading(false);
-      console.log('テストユーザーでログイン完了');
     };
     
     initialize();
@@ -223,6 +243,55 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsTransitioning(transitioning);
   };
 
+  // 権限チェック関数群（シンプル3層構造）
+  const canEditSchedule = (targetStaffId?: number) => {
+    if (!user) return false;
+    
+    // システム管理者は全て編集可能
+    if (user.role === 'SYSTEM_ADMIN') return true;
+    
+    // 管理者は他人の予定も編集可能
+    if (user.role === 'ADMIN') return true;
+    
+    // 本人の予定は常に編集可能
+    if (targetStaffId === user.staffId) return true;
+    
+    return false;
+  };
+
+  const canManageDepartment = (department: string) => {
+    if (!user) return false;
+    
+    // システム管理者・管理者は全部署管理可能
+    if (user.role === 'SYSTEM_ADMIN' || user.role === 'ADMIN') return true;
+    
+    return false;
+  };
+
+  const canApproveSchedules = () => {
+    if (!user) return false;
+    
+    // システム管理者・管理者は承認可能
+    if (user.role === 'SYSTEM_ADMIN' || user.role === 'ADMIN') return true;
+    
+    return false;
+  };
+
+  const isSystemAdmin = () => {
+    return user?.role === 'SYSTEM_ADMIN';
+  };
+
+  const getAvailableDepartments = () => {
+    if (!user) return [];
+    
+    // システム管理者・管理者は全部署
+    if (user.role === 'SYSTEM_ADMIN' || user.role === 'ADMIN') {
+      return []; // 空配列は「全部署」を意味する
+    }
+    
+    return [];
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -238,6 +307,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAuthenticated,
         isTransitioning,
         setTransitioning,
+        // 権限チェック関数
+        canEditSchedule,
+        canManageDepartment,
+        canApproveSchedules,
+        isSystemAdmin,
+        getAvailableDepartments,
       }}
     >
       {children}

@@ -1,0 +1,28 @@
+{
+  "employeeData": [
+    {
+      "empNo": "TEST001",
+      "name": "テストユーザー1", 
+      "dept": "テスト部署",
+      "team": "テストチーム",
+      "email": "test1@example.com",
+      "mondayHours": "09:00-18:00",
+      "tuesdayHours": "09:00-18:00", 
+      "wednesdayHours": "09:00-18:00",
+      "thursdayHours": "09:00-18:00",
+      "fridayHours": "09:00-18:00"
+    },
+    {
+      "empNo": "TEST002",
+      "name": "テストユーザー2", 
+      "dept": "開発部",
+      "team": "システムチーム",
+      "email": "test2@example.com",
+      "mondayHours": "10:00-19:00",
+      "tuesdayHours": "10:00-19:00", 
+      "wednesdayHours": "10:00-19:00",
+      "thursdayHours": "10:00-19:00",
+      "fridayHours": "10:00-19:00"
+    }
+  ]
+}

@@ -85,7 +85,15 @@ type ResponsibilityData = GeneralResponsibilityData | ReceptionResponsibilityDat
 // ユーティリティ関数（TimelineUtilsから使用）
 const availableStatuses = ['online', 'remote', 'meeting', 'training', 'break', 'off', 'unplanned', 'night duty'];
 
-const PersonalSchedulePage: React.FC = () => {
+interface PersonalSchedulePageProps {
+  initialStaffId?: number;    // 表示対象のスタッフID（指定なしは本人）
+  readOnlyMode?: boolean;     // 閲覧専用モード
+}
+
+const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({ 
+  initialStaffId, 
+  readOnlyMode = false 
+}) => {
   const { user, loading: authLoading, logout } = useAuth();
   
   // 統一プリセットシステム
@@ -375,23 +383,35 @@ const PersonalSchedulePage: React.FC = () => {
         const staffList: Staff[] = await response.json();
         if (isDev) console.log('取得したスタッフリスト:', staffList);
         
-        // ユーザーメールから社員を検索
-        let userStaff = staffList.find(staff => {
-          // Contract テーブルのemailとマッチング
-          return staff.name.includes(user.email.split('@')[0]) || 
-                 staff.empNo === user.email.split('@')[0];
-        });
+        let targetStaff: Staff | undefined;
         
-        if (!userStaff && staffList.length > 0) {
-          if (isDev) console.log('ユーザーに対応する社員が見つからないため、最初の社員を使用');
-          userStaff = staffList[0];
+        // initialStaffIdが指定されている場合は、指定されたスタッフを表示
+        if (initialStaffId) {
+          targetStaff = staffList.find(staff => staff.id === initialStaffId);
+          if (isDev) console.log(`指定されたスタッフID: ${initialStaffId}, 見つかったスタッフ:`, targetStaff);
+        } else {
+          // initialStaffIdが指定されていない場合は、ログインユーザーに対応する社員を表示
+          targetStaff = staffList.find(staff => {
+            // Contract テーブルのemailとマッチング
+            return staff.name.includes(user.email.split('@')[0]) || 
+                   staff.empNo === user.email.split('@')[0];
+          });
+          
+          if (!targetStaff && staffList.length > 0) {
+            if (isDev) console.log('ユーザーに対応する社員が見つからないため、最初の社員を使用');
+            targetStaff = staffList[0];
+          }
         }
         
-        if (userStaff) {
-          if (isDev) console.log('選択された社員:', userStaff);
-          setCurrentStaff(userStaff);
+        if (targetStaff) {
+          if (isDev) console.log('選択された社員:', targetStaff);
+          setCurrentStaff(targetStaff);
         } else {
-          setError('対応する社員情報が見つかりません');
+          if (initialStaffId) {
+            setError(`指定されたスタッフ（ID: ${initialStaffId}）が見つかりません`);
+          } else {
+            setError('対応する社員情報が見つかりません');
+          }
         }
       } else {
         const errorText = await response.text();
