@@ -250,7 +250,12 @@ export default function StaffManagementPage() {
   const [error, setError] = useState<string | null>(null);
   const [editingStaff, setEditingStaff] = useState<StaffMember | null>(null);
   const [filterDepartment, setFilterDepartment] = useState<string>('all');
+  const [filterGroup, setFilterGroup] = useState<string>('all');
   const [filterManagerOnly, setFilterManagerOnly] = useState(false);
+  const [departmentSettings, setDepartmentSettings] = useState<{
+    departments: Array<{name: string, displayOrder: number}>,
+    groups: Array<{name: string, displayOrder: number}>
+  }>({ departments: [], groups: [] });
 
   // システム管理者以外はアクセス拒否
   useEffect(() => {
@@ -294,13 +299,73 @@ export default function StaffManagementPage() {
         isActive: true
       }
     }
-  ].sort((a, b) => {
-    // 部署 → グループ → 社員番号 → 名前の順でソート
-    if (a.department !== b.department) return a.department.localeCompare(b.department);
-    if (a.group !== b.group) return a.group.localeCompare(b.group);
-    if (a.empNo !== b.empNo) return (a.empNo || '').localeCompare(b.empNo || '');
-    return a.name.localeCompare(b.name);
-  });
+  ];
+
+  // 設定モーダルの表示順に従ったソート関数
+  const sortStaffByDisplayOrder = useCallback((staff: StaffMember[]) => {
+    return [...staff].sort((a, b) => {
+      // 1. 部署の表示順で比較
+      const deptA = departmentSettings.departments.find(d => d.name === a.department);
+      const deptB = departmentSettings.departments.find(d => d.name === b.department);
+      const deptOrderA = deptA?.displayOrder ?? 999;
+      const deptOrderB = deptB?.displayOrder ?? 999;
+      
+      if (deptOrderA !== deptOrderB) {
+        return deptOrderA - deptOrderB;
+      }
+      
+      // 2. 部署名で比較（表示順が同じ場合）
+      if (a.department !== b.department) {
+        return a.department.localeCompare(b.department);
+      }
+      
+      // 3. グループの表示順で比較
+      const groupA = departmentSettings.groups.find(g => g.name === a.group);
+      const groupB = departmentSettings.groups.find(g => g.name === b.group);
+      const groupOrderA = groupA?.displayOrder ?? 999;
+      const groupOrderB = groupB?.displayOrder ?? 999;
+      
+      if (groupOrderA !== groupOrderB) {
+        return groupOrderA - groupOrderB;
+      }
+      
+      // 4. グループ名で比較（表示順が同じ場合）
+      if (a.group !== b.group) {
+        return a.group.localeCompare(b.group);
+      }
+      
+      // 5. 管理者権限で比較（システム管理者 > 管理者 > 一般ユーザー）
+      const getRoleOrder = (staff: StaffMember): number => {
+        if (staff.user_auth?.userType === 'ADMIN') return 0; // システム管理者
+        if (staff.isManager) return 1; // 管理者
+        return 2; // 一般ユーザー
+      };
+      
+      const roleOrderA = getRoleOrder(a);
+      const roleOrderB = getRoleOrder(b);
+      
+      if (roleOrderA !== roleOrderB) {
+        return roleOrderA - roleOrderB;
+      }
+      
+      // 6. 社員番号 → 名前の順でソート
+      if (a.empNo !== b.empNo) return (a.empNo || '').localeCompare(b.empNo || '');
+      return a.name.localeCompare(b.name);
+    });
+  }, [departmentSettings]);
+
+  // 部署・グループ設定取得
+  const fetchDepartmentSettings = useCallback(async () => {
+    try {
+      const response = await fetch(`${getApiUrl()}/api/department-settings`);
+      if (response.ok) {
+        const data = await response.json();
+        setDepartmentSettings(data);
+      }
+    } catch (error) {
+      console.warn('部署・グループ設定の取得に失敗:', error);
+    }
+  }, []);
 
   // スタッフ一覧取得
   const fetchStaffList = useCallback(async () => {
@@ -344,9 +409,10 @@ export default function StaffManagementPage() {
 
   useEffect(() => {
     if (!authLoading && isSystemAdmin()) {
+      fetchDepartmentSettings();
       fetchStaffList();
     }
-  }, [authLoading, isSystemAdmin, fetchStaffList]);
+  }, [authLoading, isSystemAdmin]);
 
   // 権限更新
   const handlePermissionUpdate = async (staffId: number, permissions: ManagerPermissionUpdate) => {
@@ -396,18 +462,60 @@ export default function StaffManagementPage() {
     }
   };
 
-  // フィルター適用
-  const filteredStaff = staffList.filter(staff => {
-    if (filterDepartment !== 'all' && staff.department !== filterDepartment) {
-      return false;
-    }
-    if (filterManagerOnly && !staff.isManager) {
-      return false;
-    }
-    return true;
+  // フィルター適用とソート
+  const filteredStaff = sortStaffByDisplayOrder(
+    staffList.filter(staff => {
+      if (filterDepartment !== 'all' && staff.department !== filterDepartment) {
+        return false;
+      }
+      if (filterGroup !== 'all' && staff.group !== filterGroup) {
+        return false;
+      }
+      if (filterManagerOnly && !staff.isManager) {
+        return false;
+      }
+      return true;
+    })
+  );
+
+  // 部署リストも表示順でソート
+  const departments = Array.from(new Set(staffList.map(s => s.department))).sort((a, b) => {
+    const deptA = departmentSettings.departments.find(d => d.name === a);
+    const deptB = departmentSettings.departments.find(d => d.name === b);
+    const orderA = deptA?.displayOrder ?? 999;
+    const orderB = deptB?.displayOrder ?? 999;
+    if (orderA !== orderB) return orderA - orderB;
+    return a.localeCompare(b);
   });
 
-  const departments = Array.from(new Set(staffList.map(s => s.department)));
+  // グループリストも表示順でソート（部署フィルターに応じて絞り込み）
+  const groups = Array.from(new Set(
+    staffList
+      .filter(s => filterDepartment === 'all' || s.department === filterDepartment)
+      .map(s => s.group)
+  )).sort((a, b) => {
+    // 部署順 → グループ順でソート
+    const staffA = staffList.find(s => s.group === a);
+    const staffB = staffList.find(s => s.group === b);
+    
+    if (staffA && staffB) {
+      const deptA = departmentSettings.departments.find(d => d.name === staffA.department);
+      const deptB = departmentSettings.departments.find(d => d.name === staffB.department);
+      const deptOrderA = deptA?.displayOrder ?? 999;
+      const deptOrderB = deptB?.displayOrder ?? 999;
+      
+      if (deptOrderA !== deptOrderB) return deptOrderA - deptOrderB;
+      if (staffA.department !== staffB.department) return staffA.department.localeCompare(staffB.department);
+    }
+    
+    const groupA = departmentSettings.groups.find(g => g.name === a);
+    const groupB = departmentSettings.groups.find(g => g.name === b);
+    const groupOrderA = groupA?.displayOrder ?? 999;
+    const groupOrderB = groupB?.displayOrder ?? 999;
+    
+    if (groupOrderA !== groupOrderB) return groupOrderA - groupOrderB;
+    return a.localeCompare(b);
+  });
 
   if (authLoading) {
     return <div className="flex items-center justify-center min-h-screen">読み込み中...</div>;
@@ -447,9 +555,22 @@ export default function StaffManagementPage() {
                 onChange={(e) => setFilterDepartment(e.target.value)}
                 className="border border-gray-300 rounded px-3 py-2 text-sm"
               >
-                <option value="all">全部署</option>
+                <option value="all">すべての部署</option>
                 {departments.map(dept => (
                   <option key={dept} value={dept}>{dept}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">グループ</label>
+              <select
+                value={filterGroup}
+                onChange={(e) => setFilterGroup(e.target.value)}
+                className="border border-gray-300 rounded px-3 py-2 text-sm"
+              >
+                <option value="all">すべてのグループ</option>
+                {groups.map(group => (
+                  <option key={group} value={group}>{group}</option>
                 ))}
               </select>
             </div>
@@ -499,7 +620,10 @@ export default function StaffManagementPage() {
                     スタッフ情報
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    部署・グループ
+                    部署
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    グループ
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     管理者権限
@@ -531,7 +655,10 @@ export default function StaffManagementPage() {
                       </div>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-900">
-                      {staff.department} / {staff.group}
+                      {staff.department}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-900">
+                      {staff.group}
                     </td>
                     <td className="px-6 py-4">
                       <div className="space-y-1">

@@ -370,8 +370,12 @@ function MonthlyPlannerPageContent() {
     return unifiedPresets.map(preset => convertToLegacyFormat(preset)) as PresetSchedule[];
   }, [getPresetsForPage]);
   
-  // 基本状態
-  const [currentMonth, setCurrentMonth] = useState(new Date());
+  // 基本状態 - 初期表示は翌月
+  const [currentMonth, setCurrentMonth] = useState(() => {
+    const nextMonth = new Date();
+    nextMonth.setMonth(nextMonth.getMonth() + 1);
+    return nextMonth;
+  });
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [isLoading] = useState(false);
   const [, setDraggedPending] = useState<PendingSchedule | null>(null);
@@ -1570,27 +1574,27 @@ function MonthlyPlannerPageContent() {
               </span>
               <a
                 href="/"
-                className="text-sm bg-green-100 hover:bg-green-200 text-green-800 px-3 py-1 rounded border border-green-300 transition-colors"
+                className="text-sm bg-green-100 hover:bg-green-200 text-green-800 px-3 py-1 rounded-md border border-green-300 transition-colors duration-150 h-7 flex items-center font-medium"
               >
                 📊 出社状況
               </a>
               <a
                 href="/personal"
-                className="text-sm bg-blue-100 hover:bg-blue-200 text-blue-800 px-3 py-1 rounded border border-blue-300 transition-colors"
+                className="text-sm bg-blue-100 hover:bg-blue-200 text-blue-800 px-3 py-1 rounded-md border border-blue-300 transition-colors duration-150 h-7 flex items-center font-medium"
               >
                 👤 個人ページ
               </a>
               {user?.role === 'ADMIN' && (
                 <a
                   href="/admin/pending-approval"
-                  className="text-sm bg-orange-100 hover:bg-orange-200 text-orange-800 px-3 py-1 rounded border border-orange-300 transition-colors"
+                  className="text-sm bg-orange-100 hover:bg-orange-200 text-orange-800 px-3 py-1 rounded-md border border-orange-300 transition-colors duration-150 h-7 flex items-center font-medium"
                 >
                   🔐 申請承認管理
                 </a>
               )}
               <button
                 onClick={logout}
-                className="text-sm bg-gray-100 hover:bg-gray-200 px-3 py-1 rounded border"
+                className="text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1 rounded-md border border-gray-300 transition-colors duration-150 h-7 flex items-center font-medium"
               >
                 ログアウト
               </button>
@@ -1605,21 +1609,21 @@ function MonthlyPlannerPageContent() {
               <button 
                 type="button" 
                 onClick={goToPreviousMonth}
-                className="px-2 py-1 text-xs font-medium text-gray-900 bg-white border border-gray-200 rounded-l-lg hover:bg-gray-100 h-7"
+                className="px-2 py-1 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-l-md hover:bg-gray-50 h-7 transition-colors duration-150"
               >
                 &lt;
               </button>
               <button 
                 type="button" 
                 onClick={() => setCurrentMonth(new Date())}
-                className="px-2 py-1 text-xs font-medium text-gray-900 bg-white border-t border-b border-gray-200 hover:bg-gray-100 h-7"
+                className="px-2 py-1 text-xs font-medium text-gray-700 bg-white border-t border-b border-r border-gray-300 hover:bg-gray-50 h-7 transition-colors duration-150"
               >
                 今月
               </button>
               <button 
                 type="button" 
                 onClick={goToNextMonth}
-                className="px-2 py-1 text-xs font-medium text-gray-900 bg-white border border-gray-200 rounded-r-lg hover:bg-gray-100 h-7"
+                className="px-2 py-1 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-r-md hover:bg-gray-50 h-7 transition-colors duration-150"
               >
                 &gt;
               </button>
@@ -1634,7 +1638,7 @@ function MonthlyPlannerPageContent() {
             {canManage() && (
               <button
                 onClick={() => setIsSettingsModalOpen(true)}
-                className="px-3 py-1 text-xs font-medium text-white bg-gray-600 border border-transparent rounded-md hover:bg-gray-700 h-7"
+                className="px-3 py-1 text-xs font-medium text-white bg-gray-600 border border-transparent rounded-md hover:bg-gray-700 h-7 transition-colors duration-150"
               >
                 ⚙️ 設定
               </button>
@@ -1656,11 +1660,11 @@ function MonthlyPlannerPageContent() {
         </div>
 
         {/* フィルター行 */}
-        <div className="px-6 py-3 border-t border-gray-200 flex items-center space-x-6">
+        <div className="px-6 py-3 border-t border-gray-200 bg-gray-50 flex items-center space-x-6">
           <select
             value={selectedDepartment}
             onChange={(e) => setSelectedDepartment(e.target.value)}
-            className="px-2 py-1 text-sm border-0 bg-transparent text-gray-700"
+            className="rounded-md border-gray-300 shadow-sm text-xs h-7 px-2 font-medium text-gray-700 bg-white transition-colors duration-150 hover:border-gray-400 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
           >
             <option value="all">すべての部署</option>
             {sortedDepartments.map(dept => (
@@ -1671,7 +1675,7 @@ function MonthlyPlannerPageContent() {
           <select
             value={selectedGroup}
             onChange={(e) => setSelectedGroup(e.target.value)}
-            className="px-2 py-1 text-sm border-0 bg-transparent text-gray-700"
+            className="rounded-md border-gray-300 shadow-sm text-xs h-7 px-2 font-medium text-gray-700 bg-white transition-colors duration-150 hover:border-gray-400 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
           >
             <option value="all">すべてのグループ</option>
             {sortedGroups.map(group => (

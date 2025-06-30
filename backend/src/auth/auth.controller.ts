@@ -47,4 +47,25 @@ export class AuthController {
   async getProfile(@Request() req: any) {
     return req.user;
   }
+
+  @Post('request-initial-setup')
+  @HttpCode(200)
+  async requestInitialSetup(@Body() body: any) {
+    const { email } = body;
+    return this.authService.requestInitialSetup(email);
+  }
+
+  @Post('request-password-reset')
+  @HttpCode(200)
+  async requestPasswordReset(@Body() body: any) {
+    const { email } = body;
+    return this.authService.requestPasswordReset(email);
+  }
+
+  @Post('reset-password')
+  @HttpCode(200)
+  async resetPassword(@Body() body: any) {
+    const { token, password, confirmPassword } = body;
+    return this.authService.resetPasswordWithToken(token, password, confirmPassword);
+  }
 }

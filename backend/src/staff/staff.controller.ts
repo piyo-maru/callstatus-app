@@ -208,6 +208,38 @@ export class StaffController {
     }
   }
 
+  // === システム管理者権限管理用API ===
+
+  @Patch(':id/system-admin-permissions')
+  async updateSystemAdminPermissions(
+    @Param('id') id: string,
+    @Body() updateData: {
+      isSystemAdmin: boolean;
+      updatedBy?: string;
+    }
+  ) {
+    console.log(`=== システム管理者権限更新: スタッフID ${id} ===`, updateData);
+    try {
+      const result = await this.staffService.updateSystemAdminPermissions(+id, updateData);
+      return { success: true, data: result };
+    } catch (error) {
+      console.error('システム管理者権限更新エラー:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  @Get('system-admins')
+  async getSystemAdmins() {
+    console.log('=== システム管理者一覧取得 ===');
+    try {
+      const result = await this.staffService.findSystemAdmins();
+      return { success: true, data: result };
+    } catch (error) {
+      console.error('システム管理者一覧取得エラー:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
   // === チャンク処理 + 非同期処理 ===
 
   // テスト用：手動ContractDisplayCache生成

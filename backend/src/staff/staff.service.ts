@@ -1087,11 +1087,19 @@ export class StaffService {
               isActive: true,
               lastLoginAt: true
             }
+          },
+          // 契約情報（メールアドレス取得用）
+          Contract: {
+            select: {
+              email: true
+            },
+            take: 1
           }
         },
         orderBy: [
           { department: 'asc' },
-          { group: 'asc' }, 
+          { group: 'asc' },
+          { empNo: 'asc' },
           { name: 'asc' }
         ]
       });
@@ -1457,6 +1465,149 @@ export class StaffService {
         employee: emp,
         error: error.message
       };
+    }
+  }
+
+  // === システム管理者権限管理メソッド ===
+
+  // システム管理者権限設定
+  async updateSystemAdminPermissions(
+    staffId: number,
+    updateData: {
+      isSystemAdmin: boolean;
+      updatedBy?: string;
+    }
+  ) {
+    console.log(`=== システム管理者権限更新開始: スタッフID ${staffId} ===`, updateData);
+    
+    try {
+      // 対象スタッフの存在確認
+      const existingStaff = await this.prisma.staff.findUnique({
+        where: { id: staffId },
+        include: {
+          user_auth: {
+            select: {
+              id: true,
+              email: true,
+              userType: true,
+              isActive: true
+            }
+          }
+        }
+      });
+
+      if (!existingStaff) {
+        throw new Error(`スタッフID ${staffId} が見つかりません`);
+      }
+
+      console.log('対象スタッフ情報:', existingStaff);
+
+      let userAuth = existingStaff.user_auth;
+      const beforeUserType = userAuth?.userType || null;
+
+      // 認証アカウントが存在しない場合は自動作成
+      if (!userAuth) {
+        console.log('認証アカウントが存在しません。自動作成します...');
+        
+        // メールアドレスが設定されていない場合はempNoベースで生成
+        const email = existingStaff.empNo ? 
+          `${existingStaff.empNo}@company.com` : 
+          `staff${staffId}@company.com`;
+
+        userAuth = await this.prisma.user_auth.create({
+          data: {
+            id: `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            email: email,
+            userType: updateData.isSystemAdmin ? 'ADMIN' : 'STAFF',
+            isActive: true,
+            staffId: staffId,
+            createdAt: new Date(),
+            updatedAt: new Date()
+          }
+        });
+
+        console.log('認証アカウント自動作成完了:', userAuth);
+      } else {
+        // 既存の認証アカウントを更新
+        userAuth = await this.prisma.user_auth.update({
+          where: { id: userAuth.id },
+          data: {
+            userType: updateData.isSystemAdmin ? 'ADMIN' : 'STAFF',
+            updatedAt: new Date()
+          }
+        });
+
+        console.log('認証アカウント更新完了:', userAuth);
+      }
+
+      // 監査ログ記録
+      await this.createManagerAuditLog({
+        managerId: 1, // TODO: 実際の更新者IDを使用
+        targetStaffId: staffId,
+        action: updateData.isSystemAdmin ? 'GRANT_SYSTEM_ADMIN' : 'REVOKE_SYSTEM_ADMIN',
+        resource: 'system_admin_permission',
+        resourceId: staffId.toString(),
+        details: JSON.stringify({
+          before: { userType: beforeUserType },
+          after: { userType: userAuth.userType },
+          updatedBy: updateData.updatedBy || 'システム',
+          email: userAuth.email
+        })
+      });
+
+      console.log(`システム管理者権限更新完了: ${existingStaff.name}`, {
+        email: userAuth.email,
+        userType: userAuth.userType
+      });
+
+      return {
+        staff: existingStaff,
+        userAuth: userAuth,
+        isSystemAdmin: userAuth.userType === 'ADMIN'
+      };
+
+    } catch (error) {
+      console.error('システム管理者権限更新エラー:', error);
+      throw new Error(`システム管理者権限更新に失敗しました: ${error.message}`);
+    }
+  }
+
+  // システム管理者一覧取得
+  async findSystemAdmins() {
+    console.log('=== システム管理者一覧取得開始 ===');
+    
+    try {
+      const systemAdmins = await this.prisma.staff.findMany({
+        where: {
+          isActive: true,
+          user_auth: {
+            userType: 'ADMIN',
+            isActive: true
+          }
+        },
+        include: {
+          user_auth: {
+            select: {
+              id: true,
+              email: true,
+              userType: true,
+              isActive: true,
+              lastLoginAt: true,
+              createdAt: true
+            }
+          }
+        },
+        orderBy: [
+          { department: 'asc' },
+          { name: 'asc' }
+        ]
+      });
+
+      console.log(`システム管理者取得完了: ${systemAdmins.length}件`);
+      return systemAdmins;
+    } catch (error) {
+      console.error('システム管理者一覧取得エラー:', error);
+      throw new Error(`システム管理者一覧取得に失敗しました: ${error.message}`);
     }
   }
 }
