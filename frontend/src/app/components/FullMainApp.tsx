@@ -23,7 +23,7 @@ import {
   ImportHistory, SnapshotHistory 
 } from './types/MainAppTypes';
 import { 
-  statusColors, displayStatusColors, departmentColors, teamColors, 
+  statusColors, departmentColors, teamColors, 
   getApiUrl 
 } from './constants/MainAppConstants';
 import { AVAILABLE_STATUSES } from './timeline/TimelineUtils';
@@ -2346,7 +2346,7 @@ export default function FullMainApp() {
     });
     let statusesToDisplay: string[];
     if (selectedStatus === 'all') { statusesToDisplay = [...AVAILABLE_STATUSES]; } 
-    else if (selectedStatus === 'available') { statusesToDisplay = AVAILABLE_STATUSES; } 
+    else if (selectedStatus === 'available') { statusesToDisplay = [...AVAILABLE_STATUSES]; } 
     else { statusesToDisplay = AVAILABLE_STATUSES.filter(s => !AVAILABLE_STATUSES.includes(s)); }
     
     // 15分単位でのデータポイント生成（8:00開始）
@@ -2516,12 +2516,21 @@ export default function FullMainApp() {
           <span className="text-sm text-gray-600">
             {user?.name || user?.email} ({user?.role === 'ADMIN' ? '管理者' : '一般ユーザー'})
           </span>
-          <a
-            href="/personal"
-            className="text-sm bg-blue-100 hover:bg-blue-200 text-blue-800 px-3 py-1 rounded border border-blue-300 transition-colors"
-          >
-            👤 個人ページ
-          </a>
+          {user?.role === 'ADMIN' ? (
+            <a
+              href="/admin/staff-management"
+              className="text-sm bg-orange-100 hover:bg-orange-200 text-orange-800 px-3 py-1 rounded border border-orange-300 transition-colors"
+            >
+              ⚙️ 管理者設定
+            </a>
+          ) : (
+            <a
+              href="/personal"
+              className="text-sm bg-blue-100 hover:bg-blue-200 text-blue-800 px-3 py-1 rounded border border-blue-300 transition-colors"
+            >
+              👤 個人ページ
+            </a>
+          )}
           <a
             href="/monthly-planner"
             className="text-sm bg-purple-100 hover:bg-purple-200 text-purple-800 px-3 py-1 rounded border border-purple-300 transition-colors"
@@ -2913,7 +2922,20 @@ export default function FullMainApp() {
                                   const layerOrder: { [key: string]: number } = { contract: 1, adjustment: 2 };
                                   const aLayer = (a as any).layer || 'adjustment';
                                   const bLayer = (b as any).layer || 'adjustment';
-                                  return layerOrder[aLayer] - layerOrder[bLayer];
+                                  
+                                  // 第1優先: レイヤー順序
+                                  const layerDiff = layerOrder[aLayer] - layerOrder[bLayer];
+                                  if (layerDiff !== 0) return layerDiff;
+                                  
+                                  // 第2優先: 同一調整レイヤー内では後勝ち（IDまたは作成時刻順）
+                                  if (aLayer === 'adjustment' && bLayer === 'adjustment') {
+                                    // IDが数値の場合は数値比較、文字列の場合は文字列比較で後勝ち
+                                    const aId = typeof a.id === 'number' ? a.id : parseInt(String(a.id)) || 0;
+                                    const bId = typeof b.id === 'number' ? b.id : parseInt(String(b.id)) || 0;
+                                    return aId - bId; // 小さいIDから大きいIDへ（後から作成されたものが後に描画される）
+                                  }
+                                  
+                                  return 0;
                                 }).map((schedule, index) => {
                                   const startPosition = timeToPositionPercent(schedule.start);
                                   const endPosition = timeToPositionPercent(schedule.end);
@@ -2951,7 +2973,7 @@ export default function FullMainApp() {
                                            opacity: isContract ? 0.5 : isHistoricalData ? 0.8 : canEdit(schedule.staffId) ? 1 : 0.7,
                                            backgroundImage: isContract ? 'repeating-linear-gradient(45deg, transparent, transparent 2px, rgba(255,255,255,0.3) 2px, rgba(255,255,255,0.3) 4px)' : 
                                                           isHistoricalData ? 'repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(255,255,255,0.15) 10px, rgba(255,255,255,0.15) 20px)' : 'none',
-                                           zIndex: isContract ? 10 : isHistoricalData ? 15 : 30
+                                           zIndex: isContract ? 10 : isHistoricalData ? 15 : (30 + index) // 調整レイヤーは後勝ち（後のindexほど高いz-index）
                                          }} 
                                          onClick={(e) => { 
                                            e.stopPropagation(); 
@@ -3016,7 +3038,7 @@ export default function FullMainApp() {
                                   );
                                 })}
                                 {dragInfo && dragInfo.staff.id === staff.id && (
-                                  <div className="absolute bg-indigo-200 bg-opacity-50 border-2 border-dashed border-indigo-500 rounded pointer-events-none z-30"
+                                  <div className="absolute bg-indigo-200 bg-opacity-50 border-2 border-dashed border-indigo-500 rounded pointer-events-none z-[999]"
                                        style={{ 
                                          left: `${Math.min(dragInfo.startX, dragInfo.currentX)}px`, 
                                          top: '25%', 

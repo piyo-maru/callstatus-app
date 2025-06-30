@@ -1735,6 +1735,25 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
                         return false; // 祝日なら契約データを非表示
                       }
                       return true;
+                    }).sort((a, b) => {
+                      // レイヤー順: contract(1) < adjustment(2)
+                      const layerOrder: { [key: string]: number } = { contract: 1, adjustment: 2 };
+                      const aLayer = (a as any).layer || 'adjustment';
+                      const bLayer = (b as any).layer || 'adjustment';
+                      
+                      // 第1優先: レイヤー順序
+                      const layerDiff = layerOrder[aLayer] - layerOrder[bLayer];
+                      if (layerDiff !== 0) return layerDiff;
+                      
+                      // 第2優先: 同一調整レイヤー内では後勝ち（IDまたは作成時刻順）
+                      if (aLayer === 'adjustment' && bLayer === 'adjustment') {
+                        // IDが数値の場合は数値比較、文字列の場合は文字列比較で後勝ち
+                        const aId = typeof a.id === 'number' ? a.id : parseInt(String(a.id)) || 0;
+                        const bId = typeof b.id === 'number' ? b.id : parseInt(String(b.id)) || 0;
+                        return aId - bId; // 小さいIDから大きいIDへ（後から作成されたものが後に描画される）
+                      }
+                      
+                      return 0;
                     });
                     
                     const isCurrentDay = isToday(day);
@@ -1875,7 +1894,7 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
                                 : isHistorical 
                                 ? 'repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(255,255,255,0.15) 10px, rgba(255,255,255,0.15) 20px)'
                                 : 'none',
-                              zIndex: isContract ? 10 : isHistorical ? 15 : 30,
+                              zIndex: isContract ? 10 : isHistorical ? 15 : (30 + index), // 調整レイヤーは後勝ち（後のindexほど高いz-index）
                             }}
                             onClick={(e) => {
                               e.stopPropagation();
@@ -1943,7 +1962,7 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
 
                       {dragInfo && format(dragInfo.day, 'yyyy-MM-dd') === dayStr && (
                         <div 
-                          className="absolute bg-indigo-200 bg-opacity-50 border-2 border-dashed border-indigo-500 rounded pointer-events-none z-30"
+                          className="absolute bg-indigo-200 bg-opacity-50 border-2 border-dashed border-indigo-500 rounded pointer-events-none z-[999]"
                           style={{ 
                             left: `${Math.min(dragInfo.startX, dragInfo.currentX)}px`, 
                             top: '25%', 
