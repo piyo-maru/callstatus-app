@@ -140,11 +140,67 @@ export const getCurrentTimePosition = (currentTime: Date): number | null => {
 };
 
 /**
- * ステータス文字列を表示用に整形
+ * ステータス文字列を表示用に整形（日本語対応）
  * @param status ステータス文字列
- * @returns 先頭大文字の文字列
+ * @param useJapanese 日本語表示を使用するか（デフォルト: true）
+ * @returns 表示用のステータス文字列
  */
-export const capitalizeStatus = (status: string): string => {
+export const capitalizeStatus = (status: string, useJapanese: boolean = true): string => {
+  if (useJapanese) {
+    return getEffectiveDisplayName(status);
+  }
+  return status.charAt(0).toUpperCase() + status.slice(1);
+};
+
+/**
+ * 現在有効なステータス色を取得（カスタム設定を含む）
+ * @param status ステータス文字列
+ * @returns 色のHEXコード
+ */
+export const getEffectiveStatusColor = (status: string): string => {
+  if (typeof window !== 'undefined') {
+    try {
+      const savedColors = localStorage.getItem('callstatus-statusColors');
+      if (savedColors) {
+        const customColors = JSON.parse(savedColors);
+        if (customColors[status]) {
+          return customColors[status];
+        }
+      }
+    } catch (error) {
+      console.error('Failed to parse custom status colors:', error);
+    }
+  }
+  
+  return STATUS_COLORS[status] || '#9ca3af';
+};
+
+/**
+ * 現在有効なステータス表示名を取得（カスタム設定を含む）
+ * @param status ステータス文字列
+ * @returns 表示用のステータス文字列
+ */
+export const getEffectiveDisplayName = (status: string): string => {
+  if (typeof window !== 'undefined') {
+    try {
+      const savedDisplayNames = localStorage.getItem('callstatus-statusDisplayNames');
+      if (savedDisplayNames) {
+        const customDisplayNames = JSON.parse(savedDisplayNames);
+        if (customDisplayNames[status]) {
+          return customDisplayNames[status];
+        }
+      }
+    } catch (error) {
+      console.error('Failed to parse custom status display names:', error);
+    }
+  }
+  
+  // デフォルトの日本語表示名を返す
+  if (STATUS_DISPLAY_NAMES[status]) {
+    return STATUS_DISPLAY_NAMES[status];
+  }
+  
+  // フォールバック: 英語の先頭大文字
   return status.charAt(0).toUpperCase() + status.slice(1);
 };
 
@@ -183,7 +239,7 @@ export const calculateScheduleBarStyle = (schedule: Schedule) => {
   return {
     left: `${startPosition}%`,
     width: `${barWidth}%`,
-    backgroundColor: STATUS_COLORS[schedule.status] || '#9ca3af',
+    backgroundColor: getEffectiveStatusColor(schedule.status),
     opacity: isContract ? 0.5 : isHistoricalData ? 0.8 : 1,
     zIndex: isContract ? 10 : isHistoricalData ? 15 : 30,
     startPosition,
@@ -205,6 +261,18 @@ export const AVAILABLE_STATUSES = [
   'unplanned', 
   'night duty'
 ] as const;
+
+// === ステータス日本語表示名マッピング ===
+export const STATUS_DISPLAY_NAMES: { [key: string]: string } = {
+  'online': '在社',
+  'remote': 'リモート',
+  'meeting': '会議',
+  'training': '研修',
+  'break': '休憩',
+  'off': '休み',
+  'unplanned': '急用',
+  'night duty': '夜間対応'
+};
 
 // === 時間軸の特別エリア定義 ===
 export const SPECIAL_TIME_AREAS = {

@@ -1,6 +1,6 @@
 // MainAppConstants.ts - FullMainApp関連の定数定義
 
-import { STATUS_COLORS } from '../timeline/TimelineUtils';
+import { STATUS_COLORS, AVAILABLE_STATUSES } from '../timeline/TimelineUtils';
 
 // ステータス色は TimelineUtils.STATUS_COLORS を使用
 // 大文字小文字両対応のための拡張マップ
@@ -15,18 +15,6 @@ export const statusColors: { [key: string]: string } = {
   'Off': STATUS_COLORS.off,
   'Unplanned': STATUS_COLORS.unplanned,
   'Night duty': STATUS_COLORS['night duty'],
-};
-
-// 表示用ステータスカラー（重複除去済み）
-export const displayStatusColors: { [key: string]: string } = {
-  'online': '#22c55e',
-  'remote': '#10b981', 
-  'meeting': '#f59e0b',
-  'training': '#3b82f6',
-  'break': '#f97316',
-  'off': '#ef4444',
-  'unplanned': '#dc2626',
-  'night duty': '#4f46e5',
 };
 
 // 部署の色設定（より薄く調整）
@@ -104,6 +92,4 @@ export const getApiUrl = (): string => {
   return `http://${hostname}:3002`;
 };
 
-// 利用可能なステータス定義
-export const availableStatuses = ['online', 'remote', 'meeting', 'training', 'break', 'off', 'unplanned', 'night duty'];
-export const AVAILABLE_STATUSES = ['online', 'remote', 'night duty'];
+// 利用可能なステータス定義は TimelineUtils.AVAILABLE_STATUSES を使用

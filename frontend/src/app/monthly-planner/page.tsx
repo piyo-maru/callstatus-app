@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '../components/AuthProvider';
 import AuthGuard from '../components/AuthGuard';
 import { createPortal } from 'react-dom';
-import { STATUS_COLORS, capitalizeStatus } from '../components/timeline/TimelineUtils';
+import { STATUS_COLORS, capitalizeStatus, getEffectiveStatusColor } from '../components/timeline/TimelineUtils';
 import { registerLocale } from 'react-datepicker';
 import { ja } from 'date-fns/locale/ja';
 import { format } from 'date-fns';
@@ -1838,7 +1838,7 @@ function MonthlyPlannerPageContent() {
                                           {/* Pendingスケジュール表示領域（45px） */}
                                           <div className="h-11 relative">
                                             {pendings.map((pending) => {
-                                              const backgroundColor = STATUS_COLORS[pending.status] || '#f3f4f6';
+                                              const backgroundColor = getEffectiveStatusColor(pending.status);
                                               const pendingStyle = getPendingStyle(pending, backgroundColor);
                                               const isTransparent = pendingStyle.backgroundColor === 'transparent';
                                               const textColor = getContrastColor(backgroundColor, isTransparent);
@@ -1938,7 +1938,7 @@ function MonthlyPlannerPageContent() {
                   >
                     <div
                       className="w-4 h-4 rounded mr-3"
-                      style={{ backgroundColor: STATUS_COLORS[preset.status] }}
+                      style={{ backgroundColor: getEffectiveStatusColor(preset.status) }}
                     />
                     <div className="flex-1">
                       <div className="font-medium">{preset.label}</div>
@@ -2252,11 +2252,11 @@ function MonthlyPlannerPageContent() {
                         onClick={() => handleEditUpdate(preset)}
                         className="p-3 border border-gray-300 rounded-lg hover:bg-gray-50 text-left"
                         style={{ 
-                          borderColor: STATUS_COLORS[preset.status] || '#d1d5db',
-                          backgroundColor: `${STATUS_COLORS[preset.status] || '#f3f4f6'}20`
+                          borderColor: getEffectiveStatusColor(preset.status),
+                          backgroundColor: `${getEffectiveStatusColor(preset.status)}20`
                         }}
                       >
-                        <div className="font-medium" style={{ color: STATUS_COLORS[preset.status] || '#374151' }}>
+                        <div className="font-medium" style={{ color: getEffectiveStatusColor(preset.status) }}>
                           {preset.label}
                         </div>
                         <div className="text-sm text-gray-500">

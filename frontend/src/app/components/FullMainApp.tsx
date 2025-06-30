@@ -13,7 +13,8 @@ import "react-datepicker/dist/react-datepicker.css";
 import { 
   timeToPositionPercent, 
   positionPercentToTime, 
-  capitalizeStatus
+  capitalizeStatus,
+  getEffectiveStatusColor
 } from './timeline/TimelineUtils';
 // ★★★ 分離されたモジュールのインポート ★★★
 import { 
@@ -23,8 +24,9 @@ import {
 } from './types/MainAppTypes';
 import { 
   statusColors, displayStatusColors, departmentColors, teamColors, 
-  getApiUrl, availableStatuses, AVAILABLE_STATUSES 
+  getApiUrl 
 } from './constants/MainAppConstants';
+import { AVAILABLE_STATUSES } from './timeline/TimelineUtils';
 import { 
   fetchHolidays, getHoliday, getDateColor, 
   formatDateWithHoliday, checkSupportedCharacters, 
@@ -221,7 +223,7 @@ declare global {
           {(status === 'meeting' || status === 'training') && (
             <div>
               <label htmlFor="memo" className="block text-sm font-medium text-gray-700">
-                メモ ({capitalizeStatus(status) === 'Meeting' ? '会議' : '研修'}内容)
+                メモ ({status === 'meeting' ? '会議' : '研修'}内容)
               </label>
               <textarea
                 id="memo"
@@ -229,7 +231,7 @@ declare global {
                 onChange={e => setMemo(e.target.value)}
                 className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                 rows={3}
-                placeholder={capitalizeStatus(status) === 'Meeting' ? '会議の内容を入力...' : '研修の内容を入力...'}
+                placeholder={status === 'meeting' ? '会議の内容を入力...' : '研修の内容を入力...'}
               />
             </div>
           )}
@@ -688,7 +690,7 @@ const StatusChart = ({ data, staffList, selectedDepartment, selectedGroup, showC
                   <div key={status} className="flex items-center text-xs">
                     <div 
                       className="w-2 h-2 rounded mr-1 flex-shrink-0" 
-                      style={{ backgroundColor: statusColors[status] || '#8884d8' }}
+                      style={{ backgroundColor: getEffectiveStatusColor(status) }}
                     ></div>
                     <span className="truncate" style={{ opacity: status === 'online' ? 1 : 0.7 }}>
                       {capitalizeStatus(status)}
@@ -702,7 +704,7 @@ const StatusChart = ({ data, staffList, selectedDepartment, selectedGroup, showC
                   <div key={status} className="flex items-center text-xs">
                     <div 
                       className="w-2 h-2 rounded mr-1 flex-shrink-0" 
-                      style={{ backgroundColor: statusColors[status] || '#8884d8' }}
+                      style={{ backgroundColor: getEffectiveStatusColor(status) }}
                     ></div>
                     <span className="truncate" style={{ opacity: status === 'online' ? 1 : 0.7 }}>
                       {capitalizeStatus(status)}
@@ -2343,9 +2345,9 @@ export default function FullMainApp() {
         return departmentMatch && groupMatch;
     });
     let statusesToDisplay: string[];
-    if (selectedStatus === 'all') { statusesToDisplay = availableStatuses; } 
+    if (selectedStatus === 'all') { statusesToDisplay = [...AVAILABLE_STATUSES]; } 
     else if (selectedStatus === 'available') { statusesToDisplay = AVAILABLE_STATUSES; } 
-    else { statusesToDisplay = availableStatuses.filter(s => !AVAILABLE_STATUSES.includes(s)); }
+    else { statusesToDisplay = AVAILABLE_STATUSES.filter(s => !AVAILABLE_STATUSES.includes(s)); }
     
     // 15分単位でのデータポイント生成（8:00開始）
     const timePoints = [];
@@ -2364,7 +2366,7 @@ export default function FullMainApp() {
     timePoints.forEach(timePoint => {
       const { hour, label, dataRange } = timePoint;
       const counts: { [key: string]: any } = { time: label };
-      statusesToDisplay.forEach(status => { counts[status] = 0; });
+      statusesToDisplay?.forEach(status => { counts[status] = 0; });
       staffToChart.forEach(staff => {
         const [rangeStart, rangeEnd] = dataRange;
         

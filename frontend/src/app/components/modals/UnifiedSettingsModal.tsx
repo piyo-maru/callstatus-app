@@ -9,7 +9,7 @@ import { usePresetSettings } from '../../hooks/usePresetSettings';
 import { UnifiedPreset, PresetCategory, PresetEditFormData } from '../types/PresetTypes';
 import { DepartmentGroupSetting, SnapshotHistory, ImportHistory, DisplaySettings } from '../types/MainAppTypes';
 import { displayStatusColors } from '../constants/MainAppConstants';
-import { capitalizeStatus } from '../timeline/TimelineUtils';
+import { capitalizeStatus, STATUS_COLORS, STATUS_DISPLAY_NAMES, AVAILABLE_STATUSES, getEffectiveDisplayName } from '../timeline/TimelineUtils';
 import { getApiUrl } from '../constants/MainAppConstants';
 import { PresetEditModal } from './PresetEditModal';
 
@@ -45,6 +45,14 @@ export function UnifiedSettingsModal({
   const [viewMode, setViewMode] = useState<'normal' | 'compact'>('normal');
   const [maskingEnabled, setMaskingEnabled] = useState(false);
   const [timeRange, setTimeRange] = useState<'standard' | 'extended'>('standard');
+  
+  // ステータス色設定の状態
+  const [customStatusColors, setCustomStatusColors] = useState<{ [key: string]: string }>({});
+  const [isStatusColorsModified, setIsStatusColorsModified] = useState(false);
+  
+  // ステータス表示名設定の状態
+  const [customStatusDisplayNames, setCustomStatusDisplayNames] = useState<{ [key: string]: string }>({});
+  const [isStatusDisplayNamesModified, setIsStatusDisplayNamesModified] = useState(false);
   
   // 管理機能の状態
   const [departments, setDepartments] = useState<DepartmentGroupSetting[]>([]);
@@ -120,9 +128,32 @@ export function UnifiedSettingsModal({
   useEffect(() => {
     const savedViewMode = localStorage.getItem('callstatus-viewMode') as 'normal' | 'compact' || 'normal';
     const savedMaskingEnabled = localStorage.getItem('callstatus-maskingEnabled') === 'true';
+    const savedStatusColors = localStorage.getItem('callstatus-statusColors');
+    const savedStatusDisplayNames = localStorage.getItem('callstatus-statusDisplayNames');
     
     setViewMode(savedViewMode);
     setMaskingEnabled(savedMaskingEnabled);
+    
+    if (savedStatusColors) {
+      try {
+        const parsed = JSON.parse(savedStatusColors);
+        setCustomStatusColors(parsed);
+      } catch (error) {
+        console.error('Failed to parse saved status colors:', error);
+        setCustomStatusColors({});
+      }
+    }
+    
+    if (savedStatusDisplayNames) {
+      try {
+        const parsed = JSON.parse(savedStatusDisplayNames);
+        setCustomStatusDisplayNames(parsed);
+        setIsStatusDisplayNamesModified(Object.keys(parsed).length > 0);
+      } catch (error) {
+        console.error('Failed to parse saved status display names:', error);
+        setCustomStatusDisplayNames({});
+      }
+    }
   }, []);
 
   // 設定変更時にlocalStorageに保存
@@ -136,6 +167,111 @@ export function UnifiedSettingsModal({
     setMaskingEnabled(newMaskingEnabled);
     localStorage.setItem('callstatus-maskingEnabled', newMaskingEnabled.toString());
   }, [maskingEnabled]);
+
+  // ステータス色変更ハンドラー
+  const handleStatusColorChange = useCallback((status: string, color: string) => {
+    const newColors = { ...customStatusColors, [status]: color };
+    setCustomStatusColors(newColors);
+    setIsStatusColorsModified(true);
+    localStorage.setItem('callstatus-statusColors', JSON.stringify(newColors));
+    
+    // 親コンポーネントに色変更を通知
+    if (onSettingsChange) {
+      onSettingsChange({
+        statusColors: newColors
+      });
+    }
+  }, [customStatusColors, onSettingsChange]);
+
+  // ステータス色をデフォルトに戻す
+  const handleResetStatusColors = useCallback(() => {
+    setCustomStatusColors({});
+    setIsStatusColorsModified(false);
+    localStorage.removeItem('callstatus-statusColors');
+    
+    if (onSettingsChange) {
+      onSettingsChange({
+        statusColors: {}
+      });
+    }
+  }, [onSettingsChange]);
+
+  // 現在有効な色を取得する関数
+  const getEffectiveStatusColor = useCallback((status: string) => {
+    return customStatusColors[status] || STATUS_COLORS[status] || '#9ca3af';
+  }, [customStatusColors]);
+
+  // ステータス表示名変更ハンドラー
+  const handleStatusDisplayNameChange = useCallback((status: string, displayName: string) => {
+    const trimmedDisplayName = displayName.trim();
+    
+    // 空文字の場合は設定を削除（デフォルトに戻る）
+    if (trimmedDisplayName === '') {
+      const newDisplayNames = { ...customStatusDisplayNames };
+      delete newDisplayNames[status];
+      
+      setCustomStatusDisplayNames(newDisplayNames);
+      setIsStatusDisplayNamesModified(Object.keys(newDisplayNames).length > 0);
+      
+      if (Object.keys(newDisplayNames).length === 0) {
+        localStorage.removeItem('callstatus-statusDisplayNames');
+      } else {
+        localStorage.setItem('callstatus-statusDisplayNames', JSON.stringify(newDisplayNames));
+      }
+      
+      // 親コンポーネントに表示名変更を通知
+      if (onSettingsChange) {
+        onSettingsChange({
+          statusDisplayNames: newDisplayNames
+        });
+      }
+      return;
+    }
+    
+    // 文字数制限チェック（20文字）
+    if (trimmedDisplayName.length > 20) {
+      return;
+    }
+    
+    // 重複チェック（他のステータスと同じ表示名は許可しない）
+    const existingDisplayNames = Object.values(customStatusDisplayNames).filter(name => name && name !== customStatusDisplayNames[status]);
+    const defaultDisplayNames = Object.values(STATUS_DISPLAY_NAMES).filter(name => name !== STATUS_DISPLAY_NAMES[status]);
+    const allExistingNames = [...existingDisplayNames, ...defaultDisplayNames];
+    
+    if (allExistingNames.includes(trimmedDisplayName)) {
+      return; // 重複する場合は更新しない
+    }
+    
+    const newDisplayNames = { ...customStatusDisplayNames, [status]: trimmedDisplayName };
+    setCustomStatusDisplayNames(newDisplayNames);
+    setIsStatusDisplayNamesModified(true);
+    localStorage.setItem('callstatus-statusDisplayNames', JSON.stringify(newDisplayNames));
+    
+    // 親コンポーネントに表示名変更を通知
+    if (onSettingsChange) {
+      onSettingsChange({
+        statusDisplayNames: newDisplayNames
+      });
+    }
+  }, [customStatusDisplayNames, onSettingsChange]);
+
+  // ステータス表示名をデフォルトに戻す
+  const handleResetStatusDisplayNames = useCallback(() => {
+    setCustomStatusDisplayNames({});
+    setIsStatusDisplayNamesModified(false);
+    localStorage.removeItem('callstatus-statusDisplayNames');
+    
+    if (onSettingsChange) {
+      onSettingsChange({
+        statusDisplayNames: {}
+      });
+    }
+  }, [onSettingsChange]);
+
+  // 現在有効な表示名を取得する関数
+  const getEffectiveStatusDisplayName = useCallback((status: string) => {
+    return customStatusDisplayNames[status] || STATUS_DISPLAY_NAMES[status] || status.charAt(0).toUpperCase() + status.slice(1);
+  }, [customStatusDisplayNames]);
 
   // プリセット有効/無効切替
   const handleTogglePreset = useCallback((presetId: string) => {
@@ -548,16 +684,103 @@ export function UnifiedSettingsModal({
                   </p>
                 </div>
 
-                {/* ステータス色設定 */}
+                {/* ステータス設定 */}
                 <div className="border border-gray-200 rounded-lg p-4">
-                  <h4 className="font-medium text-gray-900 mb-3">🎨 ステータス色設定</h4>
-                  <div className="grid grid-cols-2 gap-4">
-                    {Object.entries(displayStatusColors).map(([status, color]) => (
-                      <div key={status} className="flex items-center space-x-2">
-                        <div className="w-4 h-4 rounded" style={{ backgroundColor: color }}></div>
-                        <span className="text-sm">{capitalizeStatus(status)}</span>
+                  <div className="flex justify-between items-center mb-3">
+                    <h4 className="font-medium text-gray-900">🎨 ステータス設定</h4>
+                    <div className="flex space-x-2">
+                      {(isStatusColorsModified || isStatusDisplayNamesModified) && (
+                        <span className="text-xs text-orange-600 self-center">変更済み</span>
+                      )}
+                      <button
+                        onClick={handleResetStatusColors}
+                        className="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded hover:bg-gray-200 transition-colors"
+                        disabled={!isStatusColorsModified}
+                      >
+                        色リセット
+                      </button>
+                      <button
+                        onClick={handleResetStatusDisplayNames}
+                        className="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded hover:bg-gray-200 transition-colors"
+                        disabled={!isStatusDisplayNamesModified}
+                      >
+                        表示名リセット
+                      </button>
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-500 mb-4">
+                    各ステータスの表示色と表示名をカスタマイズできます。変更はすぐに反映されます。
+                  </p>
+                  <div className="space-y-3">
+                    {AVAILABLE_STATUSES.map((status) => (
+                      <div key={status} className="flex items-center justify-between p-3 border border-gray-100 rounded">
+                        <div className="flex items-center space-x-3">
+                          <div 
+                            className="w-6 h-6 rounded-md border border-gray-300 flex-shrink-0" 
+                            style={{ backgroundColor: getEffectiveStatusColor(status) }}
+                          ></div>
+                          <div className="flex-1 min-w-0">
+                            <input
+                              type="text"
+                              value={customStatusDisplayNames[status] || ''}
+                              onChange={(e) => handleStatusDisplayNameChange(status, e.target.value)}
+                              className="w-full text-sm font-medium text-gray-900 border-none outline-none bg-transparent hover:bg-gray-50 focus:bg-white focus:ring-1 focus:ring-blue-500 rounded px-2 py-1"
+                              placeholder={STATUS_DISPLAY_NAMES[status] || status.charAt(0).toUpperCase() + status.slice(1)}
+                              maxLength={20}
+                              title="空にするとデフォルト表示に戻ります"
+                            />
+                            <div className="text-xs text-gray-500 px-2 flex items-center">
+                              <span className="mr-2">{status}</span>
+                              {!customStatusDisplayNames[status] && (
+                                <span className="text-blue-600 text-xs">→ {getEffectiveStatusDisplayName(status)}</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="color"
+                            value={getEffectiveStatusColor(status)}
+                            onChange={(e) => handleStatusColorChange(status, e.target.value)}
+                            className="w-8 h-8 border border-gray-300 rounded cursor-pointer"
+                            title={`${getEffectiveStatusDisplayName(status)}の色を変更`}
+                          />
+                          {customStatusColors[status] && (
+                            <button
+                              onClick={() => {
+                                const newColors = { ...customStatusColors };
+                                delete newColors[status];
+                                setCustomStatusColors(newColors);
+                                localStorage.setItem('callstatus-statusColors', JSON.stringify(newColors));
+                                setIsStatusColorsModified(Object.keys(newColors).length > 0);
+                              }}
+                              className="text-xs text-gray-400 hover:text-red-600 transition-colors"
+                              title="この色をデフォルトに戻す"
+                            >
+                              ↻
+                            </button>
+                          )}
+                          {customStatusDisplayNames[status] && (
+                            <button
+                              onClick={() => {
+                                const newDisplayNames = { ...customStatusDisplayNames };
+                                delete newDisplayNames[status];
+                                setCustomStatusDisplayNames(newDisplayNames);
+                                localStorage.setItem('callstatus-statusDisplayNames', JSON.stringify(newDisplayNames));
+                                setIsStatusDisplayNamesModified(Object.keys(newDisplayNames).length > 0);
+                              }}
+                              className="text-xs text-gray-400 hover:text-red-600 transition-colors"
+                              title="この表示名をデフォルトに戻す"
+                            >
+                              🔤
+                            </button>
+                          )}
+                        </div>
                       </div>
                     ))}
+                  </div>
+                  <div className="mt-3 p-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-700">
+                    💡 <strong>ヒント:</strong> 表示名は20文字まで。空にするとデフォルト表示に戻ります。色と表示名の変更は即座に保存され、全ページに反映されます。
                   </div>
                 </div>
               </div>

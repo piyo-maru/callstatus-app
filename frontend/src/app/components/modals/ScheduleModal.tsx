@@ -3,8 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Staff, Schedule } from '../types/MainAppTypes';
-import { availableStatuses } from '../constants/MainAppConstants';
-import { generateTimeOptions, capitalizeStatus } from '../timeline/TimelineUtils';
+import { generateTimeOptions, capitalizeStatus, AVAILABLE_STATUSES } from '../timeline/TimelineUtils';
 
 interface ScheduleModalProps {
   isOpen: boolean;
@@ -99,7 +98,7 @@ export const ScheduleModal = ({ isOpen, onClose, staffList, onSave, scheduleToEd
           <div>
             <label htmlFor="status" className="block text-sm font-medium text-gray-700">ステータス</label>
             <select id="status" value={status} onChange={e => setStatus(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
-              {availableStatuses.map(s => <option key={s} value={s}>{capitalizeStatus(s)}</option>)}
+              {AVAILABLE_STATUSES.map(s => <option key={s} value={s}>{capitalizeStatus(s)}</option>)}
             </select>
           </div>
           <div className="grid grid-cols-2 gap-4">
@@ -115,7 +114,7 @@ export const ScheduleModal = ({ isOpen, onClose, staffList, onSave, scheduleToEd
           {(status === 'meeting' || status === 'training') && (
             <div>
               <label htmlFor="memo" className="block text-sm font-medium text-gray-700">
-                メモ ({capitalizeStatus(status) === 'Meeting' ? '会議' : '研修'}内容)
+                メモ ({status === 'meeting' ? '会議' : '研修'}内容)
               </label>
               <textarea
                 id="memo"
@@ -123,7 +122,7 @@ export const ScheduleModal = ({ isOpen, onClose, staffList, onSave, scheduleToEd
                 onChange={e => setMemo(e.target.value)}
                 className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                 rows={3}
-                placeholder={capitalizeStatus(status) === 'Meeting' ? '会議の内容を入力...' : '研修の内容を入力...'}
+                placeholder={status === 'meeting' ? '会議の内容を入力...' : '研修の内容を入力...'}
               />
             </div>
           )}

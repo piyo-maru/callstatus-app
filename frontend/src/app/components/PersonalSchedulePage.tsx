@@ -12,7 +12,8 @@ import {
   generateTimeOptions,
   STATUS_COLORS,
   TIMELINE_CONFIG,
-  capitalizeStatus
+  capitalizeStatus,
+  getEffectiveStatusColor
 } from './timeline/TimelineUtils';
 // 祝日関連のインポート
 import { Holiday } from './types/MainAppTypes';
@@ -1556,8 +1557,8 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
             {presetSchedules.map((preset) => {
               const status = preset.schedules[0]?.status || 'online';
               
-              // STATUS_COLORSから元の色を取得
-              const originalColor = STATUS_COLORS[status] || STATUS_COLORS.online;
+              // 現在有効な色を取得（カスタム設定を含む）
+              const originalColor = getEffectiveStatusColor(status);
               
               // 背景色を薄くした色を生成（白と70%ブレンド）
               const lightBackgroundColor = lightenColor(originalColor, 0.7);
@@ -1877,7 +1878,7 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
                               width: `${barWidth}%`,
                               top: '50%',
                               transform: 'translateY(-50%)',
-                              backgroundColor: STATUS_COLORS[schedule.status] || STATUS_COLORS.online,
+                              backgroundColor: getEffectiveStatusColor(schedule.status),
                               opacity: isContract ? 0.5 : isHistorical ? 0.8 : 1,
                               backgroundImage: isContract 
                                 ? 'repeating-linear-gradient(45deg, transparent, transparent 2px, rgba(255,255,255,0.3) 2px, rgba(255,255,255,0.3) 4px)' 
