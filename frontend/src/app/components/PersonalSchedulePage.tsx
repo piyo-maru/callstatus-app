@@ -22,6 +22,7 @@ import { fetchHolidays, getHoliday, getDateColor, formatDateWithHoliday } from '
 import { usePresetSettings } from '../hooks/usePresetSettings';
 import { UnifiedPreset } from './types/PresetTypes';
 import { UnifiedSettingsModal } from './modals/UnifiedSettingsModal';
+import { getApiUrl } from './constants/MainAppConstants';
 
 interface Schedule {
   id: number | string;
@@ -280,18 +281,7 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
 
   // TimelineUtilsの関数を使用（既にインポート済み）
 
-  // APIベースURLを取得
-  const getApiUrl = useCallback((): string => {
-    if (typeof window !== 'undefined') {
-      const hostname = window.location.hostname;
-      if (hostname === 'localhost' || hostname === '127.0.0.1') {
-        return 'http://localhost:3002';
-      } else {
-        return `http://${hostname}:3002`;
-      }
-    }
-    return '';
-  }, []);
+  // APIベースURLは統一されたgetApiUrl関数を使用
 
   // 認証付きfetch
   const authenticatedFetch = useCallback(async (url: string, options: RequestInit = {}) => {

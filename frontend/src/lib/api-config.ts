@@ -50,7 +50,7 @@ export const getApiBaseUrl = async (): Promise<string> => {
   
   // 特定のホスト設定
   if (hostname === '10.99.129.21') {
-    return `http://${hostname}:3003`; // 既知の設定
+    return `http://${hostname}:3003`; // 外部アクセス用ポート
   }
   
   // その他のホスト（本番環境等）
@@ -76,7 +76,7 @@ export const getApiBaseUrlSync = (): string => {
   }
   
   if (hostname === '10.99.129.21') {
-    return `http://${hostname}:3003`;
+    return `http://${hostname}:3003`; // 外部アクセス用ポート
   }
   
   return `http://${hostname}:3002`;

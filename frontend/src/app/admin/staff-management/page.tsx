@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../components/AuthProvider';
 import AuthGuard from '../../components/AuthGuard';
 import { useRouter } from 'next/navigation';
+import { getApiUrl } from '../../components/constants/MainAppConstants';
 
 // 型定義
 interface StaffMember {
@@ -23,6 +24,9 @@ interface StaffMember {
     isActive: boolean;
     lastLoginAt?: Date;
   };
+  Contract?: {
+    email: string;
+  }[];
 }
 
 interface ManagerPermissionEditProps {
@@ -35,6 +39,7 @@ interface ManagerPermissionUpdate {
   isManager: boolean;
   managerDepartments: string[];
   managerPermissions: string[];
+  isSystemAdmin?: boolean; // システム管理者権限フラグ
 }
 
 // 権限編集モーダルコンポーネント
@@ -46,6 +51,7 @@ const ManagerPermissionEditModal: React.FC<ManagerPermissionEditProps> = ({
   const [isManager, setIsManager] = useState(staff.isManager);
   const [selectedDepartments, setSelectedDepartments] = useState<string[]>(staff.managerDepartments || []);
   const [selectedPermissions, setSelectedPermissions] = useState<string[]>(staff.managerPermissions || []);
+  const [isSystemAdmin, setIsSystemAdmin] = useState(staff.user_auth?.userType === 'ADMIN');
   const [availableDepartments] = useState(['コールセンター', 'システム開発部', '営業部', '総務部']); // TODO: APIから取得
 
   const permissionOptions = [
@@ -75,7 +81,8 @@ const ManagerPermissionEditModal: React.FC<ManagerPermissionEditProps> = ({
     onSave(staff.id, {
       isManager,
       managerDepartments: isManager ? selectedDepartments : [],
-      managerPermissions: isManager ? selectedPermissions : []
+      managerPermissions: isManager ? selectedPermissions : [],
+      isSystemAdmin
     });
   };
 
@@ -109,12 +116,52 @@ const ManagerPermissionEditModal: React.FC<ManagerPermissionEditProps> = ({
                 <span className="text-gray-600">グループ:</span> {staff.group}
               </div>
               <div>
-                <span className="text-gray-600">メール:</span> {staff.user_auth?.email || 'なし'}
+                <span className="text-gray-600">メール:</span> {staff.user_auth?.email || 
+                 staff.Contract?.[0]?.email || 
+                 'なし'}
               </div>
             </div>
           </div>
 
-          {/* 管理者権限設定 */}
+          {/* システム管理者権限設定 */}
+          <div>
+            <div className="flex items-center mb-4">
+              <input
+                type="checkbox"
+                id="isSystemAdmin"
+                checked={isSystemAdmin}
+                onChange={(e) => setIsSystemAdmin(e.target.checked)}
+                className="w-4 h-4 text-red-600 border-gray-300 rounded focus:ring-red-500"
+              />
+              <label htmlFor="isSystemAdmin" className="ml-2 font-medium text-gray-900">
+                システム管理者権限を付与する
+              </label>
+            </div>
+            
+            {isSystemAdmin && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+                <div className="flex items-start">
+                  <div className="flex-shrink-0">
+                    <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <div className="ml-3">
+                    <h3 className="text-sm font-medium text-red-800">重要な権限です</h3>
+                    <div className="mt-2 text-sm text-red-700">
+                      <ul className="list-disc list-inside space-y-1">
+                        <li>システム全体の管理権限が付与されます</li>
+                        <li>全スタッフの管理・権限変更が可能になります</li>
+                        <li>認証アカウントが自動作成されます</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* 部署管理者権限設定 */}
           <div>
             <div className="flex items-center mb-4">
               <input
@@ -125,7 +172,7 @@ const ManagerPermissionEditModal: React.FC<ManagerPermissionEditProps> = ({
                 className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
               />
               <label htmlFor="isManager" className="ml-2 font-medium text-gray-900">
-                管理者権限を付与する
+                部署管理者権限を付与する
               </label>
             </div>
 
@@ -247,25 +294,50 @@ export default function StaffManagementPage() {
         isActive: true
       }
     }
-  ];
+  ].sort((a, b) => {
+    // 部署 → グループ → 社員番号 → 名前の順でソート
+    if (a.department !== b.department) return a.department.localeCompare(b.department);
+    if (a.group !== b.group) return a.group.localeCompare(b.group);
+    if (a.empNo !== b.empNo) return (a.empNo || '').localeCompare(b.empNo || '');
+    return a.name.localeCompare(b.name);
+  });
 
   // スタッフ一覧取得
   const fetchStaffList = useCallback(async () => {
     setLoading(true);
+    const apiUrl = getApiUrl();
+    console.log('Staff Management - API URL:', apiUrl);
+    console.log('Staff Management - Environment:', { 
+      hostname: typeof window !== 'undefined' ? window.location.hostname : 'SSR',
+      userAgent: typeof window !== 'undefined' ? navigator.userAgent : 'SSR'
+    });
+    
     try {
-      // TODO: 実際のAPI呼び出し（現在はモックデータ使用）
-      // const response = await fetch('/api/staff/management');
-      // const data = await response.json();
-      // setStaffList(data.data);
+      const fullUrl = `${apiUrl}/api/staff/management`;
+      console.log('Staff Management - Fetching from:', fullUrl);
       
-      // 一時的にモックデータを使用
-      setTimeout(() => {
+      const response = await fetch(fullUrl);
+      console.log('Staff Management - Response status:', response.status);
+      console.log('Staff Management - Response headers:', [...response.headers.entries()]);
+      
+      const data = await response.json();
+      console.log('Staff Management - Response data keys:', Object.keys(data));
+      
+      if (data.success) {
+        setStaffList(data.data);
+        console.log('Staff Management - Loaded', data.data.length, 'staff members');
+      } else {
+        console.error('API応答エラー:', data.error);
+        setError(`API応答エラー: ${data.error}`);
+        // フォールバックとしてモックデータを使用
         setStaffList(mockStaffData);
-        setLoading(false);
-      }, 500);
+      }
+      setLoading(false);
     } catch (error) {
       console.error('スタッフ一覧取得エラー:', error);
-      setError('スタッフ一覧の取得に失敗しました');
+      setError(`取得エラー: ${error instanceof Error ? error.message : '不明なエラー'}`);
+      // フォールバックとしてモックデータを使用
+      setStaffList(mockStaffData);
       setLoading(false);
     }
   }, []);
@@ -279,32 +351,48 @@ export default function StaffManagementPage() {
   // 権限更新
   const handlePermissionUpdate = async (staffId: number, permissions: ManagerPermissionUpdate) => {
     try {
-      // TODO: 実際のAPI呼び出し
-      // const response = await fetch(`/api/staff/${staffId}/manager-permissions`, {
-      //   method: 'PATCH',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify(permissions)
-      // });
+      // 部署管理者権限の更新
+      if (permissions.isManager !== undefined) {
+        const response = await fetch(`${getApiUrl()}/api/staff/${staffId}/manager-permissions`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            isManager: permissions.isManager,
+            managerDepartments: permissions.managerDepartments,
+            managerPermissions: permissions.managerPermissions,
+            updatedBy: user?.name || 'システム'
+          })
+        });
 
-      // 一時的にローカル状態を更新
-      setStaffList(prevList => 
-        prevList.map(staff => 
-          staff.id === staffId 
-            ? { 
-                ...staff, 
-                isManager: permissions.isManager,
-                managerDepartments: permissions.managerDepartments,
-                managerPermissions: permissions.managerPermissions
-              }
-            : staff
-        )
-      );
+        if (!response.ok) {
+          throw new Error('部署管理者権限の更新に失敗しました');
+        }
+      }
+
+      // システム管理者権限の更新
+      if (permissions.isSystemAdmin !== undefined) {
+        const response = await fetch(`${getApiUrl()}/api/staff/${staffId}/system-admin-permissions`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            isSystemAdmin: permissions.isSystemAdmin,
+            updatedBy: user?.name || 'システム'
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error('システム管理者権限の更新に失敗しました');
+        }
+      }
+
+      // スタッフ一覧を再取得
+      await fetchStaffList();
       
       setEditingStaff(null);
-      alert('権限を更新しました'); // TODO: より良いユーザーフィードバック
+      alert('権限を更新しました');
     } catch (error) {
       console.error('権限更新エラー:', error);
-      alert('権限更新に失敗しました');
+      alert(`権限更新に失敗しました: ${error instanceof Error ? error.message : '不明なエラー'}`);
     }
   };
 
@@ -319,7 +407,7 @@ export default function StaffManagementPage() {
     return true;
   });
 
-  const departments = [...new Set(staffList.map(s => s.department))];
+  const departments = Array.from(new Set(staffList.map(s => s.department)));
 
   if (authLoading) {
     return <div className="flex items-center justify-center min-h-screen">読み込み中...</div>;
@@ -405,6 +493,9 @@ export default function StaffManagementPage() {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    社員番号
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     スタッフ情報
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -425,10 +516,17 @@ export default function StaffManagementPage() {
                 {filteredStaff.map((staff) => (
                   <tr key={staff.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4">
+                      <div className="text-sm font-mono text-gray-900">
+                        {staff.empNo || 'なし'}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
                       <div>
                         <div className="font-medium text-gray-900">{staff.name}</div>
                         <div className="text-sm text-gray-500">
-                          {staff.empNo || 'なし'} | {staff.user_auth?.email || 'メールなし'}
+                          {staff.user_auth?.email || 
+                           staff.Contract?.[0]?.email || 
+                           'メールなし'}
                         </div>
                       </div>
                     </td>
@@ -436,20 +534,28 @@ export default function StaffManagementPage() {
                       {staff.department} / {staff.group}
                     </td>
                     <td className="px-6 py-4">
-                      {staff.isManager ? (
-                        <div>
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                            管理者
+                      <div className="space-y-1">
+                        {staff.user_auth?.userType === 'ADMIN' && (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                            システム管理者
                           </span>
-                          <div className="text-xs text-gray-500 mt-1">
-                            {staff.managerPermissions.join(', ')}
+                        )}
+                        {staff.isManager && (
+                          <div>
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                              部署管理者
+                            </span>
+                            <div className="text-xs text-gray-500 mt-1">
+                              {staff.managerPermissions.join(', ')}
+                            </div>
                           </div>
-                        </div>
-                      ) : (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                          一般ユーザー
-                        </span>
-                      )}
+                        )}
+                        {!staff.isManager && staff.user_auth?.userType !== 'ADMIN' && (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                            一般ユーザー
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-900">
                       {staff.managerDepartments.length > 0 ? staff.managerDepartments.join(', ') : 'なし'}

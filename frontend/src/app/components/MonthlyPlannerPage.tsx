@@ -11,6 +11,7 @@ import {
   STATUS_COLORS,
   capitalizeStatus
 } from './timeline/TimelineUtils';
+import { getApiUrl } from './constants/MainAppConstants';
 
 // 型定義（既存と同じ）
 interface Schedule {
@@ -67,18 +68,7 @@ const MonthlyPlannerPage: React.FC = () => {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
 
   // API設定（既存ページと同じ）
-  const getApiUrl = (): string => {
-    if (typeof window !== 'undefined') {
-      const hostname = window.location.hostname;
-      
-      if (hostname === 'localhost' || hostname === '127.0.0.1') {
-        return 'http://localhost:3002';
-      } else {
-        return `http://${hostname}:3002`;
-      }
-    }
-    return 'http://localhost:3002';
-  };
+  // APIのURL取得は統一されたgetApiUrl関数を使用
 
   const authenticatedFetch = useCallback(async (url: string, options: RequestInit = {}) => {
     const token = localStorage.getItem('accessToken');

@@ -15,6 +15,7 @@ import { Holiday } from '../components/types/MainAppTypes';
 import { usePresetSettings } from '../hooks/usePresetSettings';
 import { convertToLegacyFormat } from '../components/constants/PresetSchedules';
 import { UnifiedSettingsModal } from '../components/modals/UnifiedSettingsModal';
+import { getApiUrl } from '../components/constants/MainAppConstants';
 
 registerLocale('ja', ja);
 
@@ -58,14 +59,7 @@ type PresetSchedule = {
   end: number;
 };
 
-// APIのURL取得
-const getApiUrl = (): string => {
-  if (typeof window !== 'undefined' && window.APP_CONFIG?.API_HOST) {
-    return window.APP_CONFIG.API_HOST;
-  }
-  const currentHost = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
-  return `http://${currentHost}:3002`;
-};
+// APIのURL取得は統一されたgetApiUrl関数を使用
 
 // プリセット予定の定義（統一プリセットシステムに移行済み）
 // const presetSchedules: PresetSchedule[] = [

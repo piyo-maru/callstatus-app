@@ -9,6 +9,7 @@ import DatePicker, { registerLocale } from 'react-datepicker';
 import { ja } from 'date-fns/locale/ja';
 import "react-datepicker/dist/react-datepicker.css";
 import { useAuth } from './AuthProvider';
+import { getApiUrl } from './constants/MainAppConstants';
 
 // カレンダーの表示言語を日本語に設定
 registerLocale('ja', ja);
@@ -81,18 +82,7 @@ export default function MainApp() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
 
-  // API URL取得
-  const getApiUrl = () => {
-    if (typeof window !== 'undefined') {
-      const host = window.location.hostname;
-      if (host === 'localhost' || host === '127.0.0.1') {
-        return 'http://localhost:3002';
-      } else {
-        return `http://${host}:3002`;
-      }
-    }
-    return 'http://localhost:3002';
-  };
+  // API URL取得は統一されたgetApiUrl関数を使用
 
   // データ取得
   const fetchData = useCallback(async (date: Date) => {
