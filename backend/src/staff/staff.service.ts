@@ -543,8 +543,8 @@ export class StaffService {
         staffId,
         date,
         status: 'break',
-        start: new Date(`${date.toISOString().split('T')[0]}T12:00:00+09:00`),
-        end: new Date(`${date.toISOString().split('T')[0]}T13:00:00+09:00`),
+        start: new Date(`${date.toISOString().split('T')[0]}T03:00:00.000Z`), // JST 12:00 = UTC 03:00
+        end: new Date(`${date.toISOString().split('T')[0]}T04:00:00.000Z`),   // JST 13:00 = UTC 04:00
         memo: '昼休み（勤務日追加により自動追加）',
         reason: '勤務日追加による自動追加',
         isPending: false,
@@ -602,18 +602,20 @@ export class StaffService {
       }
 
       // 【バッチ処理最適化】対象期間の昼休み対象日を効率的に計算
-      const endDate = new Date(importDate);
-      endDate.setMonth(endDate.getMonth() + 3);
+      // JST日付を正しくUTC日付に変換（CLAUDE.md時刻処理ルール準拠）
+      const importDateStr = importDate.toISOString().split('T')[0];
+      const currentDateUTC = new Date(`${importDateStr}T00:00:00.000Z`);
+      const endDateUTC = new Date(currentDateUTC);
+      endDateUTC.setUTCMonth(endDateUTC.getUTCMonth() + 3);
       
-      // 対象日をまず全て収集
+      // 対象日をまず全て収集（UTC基準で処理）
       const targetDates = [];
-      const currentDate = new Date(importDate);
       
-      while (currentDate <= endDate) {
-        if (workingDays.includes(currentDate.getDay())) {
-          targetDates.push(new Date(currentDate));
+      while (currentDateUTC <= endDateUTC) {
+        if (workingDays.includes(currentDateUTC.getUTCDay())) {
+          targetDates.push(new Date(currentDateUTC));
         }
-        currentDate.setDate(currentDate.getDate() + 1);
+        currentDateUTC.setUTCDate(currentDateUTC.getUTCDate() + 1);
       }
       
       console.log(`対象日数: ${targetDates.length}日`);
@@ -624,24 +626,18 @@ export class StaffService {
       }
 
       // 【最適化】既存のbreak一括チェック（N回のクエリ → 1回のクエリ）
+      // 同じ日にstatus='break'の予定があるかのみをチェック（時間帯は問わない）
       const startDateStr = targetDates[0].toISOString().split('T')[0];
       const endDateStr = targetDates[targetDates.length - 1].toISOString().split('T')[0];
       
+      // 【シンプル修正】対象期間の全breakをチェック（時刻制限なし）
       const existingBreaks = await this.prisma.adjustment.findMany({
         where: {
           staffId,
           status: 'break',
           date: {
-            gte: new Date(startDateStr),
-            lte: new Date(endDateStr)
-          },
-          start: {
-            gte: new Date(`${startDateStr}T12:00:00+09:00`),
-            lte: new Date(`${endDateStr}T12:00:00+09:00`)
-          },
-          end: {
-            gte: new Date(`${startDateStr}T13:00:00+09:00`),
-            lte: new Date(`${endDateStr}T13:00:00+09:00`)
+            gte: new Date(`${startDateStr}T00:00:00.000Z`),
+            lte: new Date(`${endDateStr}T23:59:59.999Z`)
           }
         },
         select: { date: true }
@@ -652,7 +648,7 @@ export class StaffService {
         existingBreaks.map(b => b.date.toISOString().split('T')[0])
       );
       
-      console.log(`既存break数: ${existingBreaks.length}件`);
+      console.log(`既存break数: ${existingBreaks.length}件（時刻制限なし）`);
 
       // 【最適化】追加が必要な日付のみを抽出
       const breakDataToAdd = [];
@@ -663,10 +659,10 @@ export class StaffService {
         if (!existingBreakDates.has(dateString)) {
           breakDataToAdd.push({
             staffId,
-            date: new Date(dateString),
+            date: new Date(`${dateString}T00:00:00.000Z`), // UTC日付として明示的に設定
             status: 'break',
-            start: new Date(`${dateString}T12:00:00+09:00`),
-            end: new Date(`${dateString}T13:00:00+09:00`),
+            start: new Date(`${dateString}T03:00:00.000Z`), // JST 12:00 = UTC 03:00
+            end: new Date(`${dateString}T04:00:00.000Z`),   // JST 13:00 = UTC 04:00
             memo: '昼休み（社員インポート時自動追加）',
             reason: '社員インポート時自動追加',
             isPending: false,
@@ -971,13 +967,12 @@ export class StaffService {
           console.log(`契約${isUpdate ? '更新' : '新規作成'}完了: ${contract.name}`);
 
           // 昼休み自動追加（新規作成時のみ実行）
-          if (!isUpdate) {
-            console.log(`=== 新規スタッフ ${emp.name} に昼休み自動追加開始 ===`);
-            const lunchBreakResult = await this.addAutomaticLunchBreaks(staff.id, new Date());
-            console.log(`昼休み自動追加結果: ${lunchBreakResult.added}件追加`);
-            if (lunchBreakResult.error) {
-              console.error(`昼休み自動追加エラー: ${lunchBreakResult.error}`);
-            }
+          // 【修正】新規・既存問わず、不足しているbreakを追加
+          console.log(`=== スタッフ ${emp.name} (${isUpdate ? '既存' : '新規'}) に昼休み自動追加開始 ===`);
+          const lunchBreakResult = await this.addAutomaticLunchBreaks(staff.id, new Date());
+          console.log(`昼休み自動追加結果: ${lunchBreakResult.added}件追加`);
+          if (lunchBreakResult.error) {
+            console.error(`昼休み自動追加エラー: ${lunchBreakResult.error}`);
           }
 
           if (isUpdate) {
