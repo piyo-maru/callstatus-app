@@ -8,10 +8,13 @@ import { useAuth, UserRole } from '../AuthProvider';
 import { usePresetSettings } from '../../hooks/usePresetSettings';
 import { UnifiedPreset, PresetCategory, PresetEditFormData } from '../types/PresetTypes';
 import { DepartmentGroupSetting, SnapshotHistory, ImportHistory, DisplaySettings } from '../types/MainAppTypes';
-import { displayStatusColors } from '../constants/MainAppConstants';
-import { capitalizeStatus, STATUS_COLORS, STATUS_DISPLAY_NAMES, AVAILABLE_STATUSES, getEffectiveDisplayName } from '../timeline/TimelineUtils';
+import { statusColors } from '../constants/MainAppConstants';
+import { capitalizeStatus, STATUS_COLORS, STATUS_DISPLAY_NAMES, ALL_STATUSES, getEffectiveDisplayName } from '../timeline/TimelineUtils';
 import { getApiUrl } from '../constants/MainAppConstants';
 import { PresetEditModal } from './PresetEditModal';
+import { useSettingsImportExport } from '../../hooks/useSettingsImportExport';
+import { ExportOptions, ImportOptions, SettingsBackup } from '../types/SettingsTypes';
+import { SettingsValidator } from '../../utils/SettingsValidator';
 
 interface UnifiedSettingsModalProps {
   isOpen: boolean;
@@ -26,7 +29,7 @@ interface UnifiedSettingsModalProps {
   staffList?: any[];
 }
 
-type TabType = 'display' | 'presets' | 'import' | 'departments' | 'snapshots';
+type TabType = 'display' | 'presets' | 'settings-management' | 'import' | 'departments' | 'snapshots';
 
 export function UnifiedSettingsModal({ 
   isOpen, 
@@ -87,19 +90,55 @@ export function UnifiedSettingsModal({
     isDirty
   } = usePresetSettings();
 
+  // 設定インポート・エクスポート機能
+  const {
+    exportSettings,
+    importSettings,
+    validateImportFile,
+    createBackup,
+    loadBackup,
+    deleteBackup,
+    getBackupList,
+    isExporting,
+    isImporting,
+    lastImportResult,
+    lastValidationResult
+  } = useSettingsImportExport();
+
+  // 設定管理タブの状態
+  const [exportOptions, setExportOptions] = useState<ExportOptions>({
+    includeDisplay: true,
+    includePresets: true,
+    includeManagement: false,
+    includeMetadata: true
+  });
+  const [importOptions, setImportOptions] = useState<ImportOptions>({
+    includeDisplay: true,
+    includePresets: true,
+    includeManagement: false,
+    overwriteExisting: true,
+    mergePresets: false
+  });
+  const [selectedImportFile, setSelectedImportFile] = useState<File | null>(null);
+  const [backupName, setBackupName] = useState('');
+  const [backupList, setBackupList] = useState<SettingsBackup[]>([]);
+
   // 管理者権限チェック
   const isAdmin = user?.role === 'ADMIN';
   const canManage = isAdmin;
 
-  // タブリスト（既存設定モーダルと同じ構成）
+  // タブリスト（指定順序での並び）
   const tabs = useMemo(() => [
     { id: 'display' as TabType, name: '表示設定', icon: '🎨' },
+    ...(canManage ? [
+      { id: 'departments' as TabType, name: '部署・グループ設定', icon: '🏢' },
+    ] : []),
     { id: 'presets' as TabType, name: 'プリセット設定', icon: '⚡' },
     ...(canManage ? [
       { id: 'import' as TabType, name: 'インポート', icon: '📥' },
-      { id: 'departments' as TabType, name: '部署・グループ設定', icon: '🏢' },
-      { id: 'snapshots' as TabType, name: '過去表示設定', icon: '📜' }
-    ] : [])
+      { id: 'snapshots' as TabType, name: '過去表示設定', icon: '📜' },
+    ] : []),
+    { id: 'settings-management' as TabType, name: '設定管理', icon: '💾' }
   ], [canManage]);
 
   // 設定保存とモーダルクローズ
@@ -569,6 +608,105 @@ export function UnifiedSettingsModal({
     }
   }, [activeTab, canManage, fetchSnapshotHistory]);
 
+  // 設定管理タブが開かれた時にバックアップリストを更新
+  useEffect(() => {
+    if (activeTab === 'settings-management') {
+      setBackupList(getBackupList());
+      // 管理者の場合は管理設定もエクスポート・インポート対象に
+      if (isAdmin) {
+        setExportOptions(prev => ({ ...prev, includeManagement: true }));
+        setImportOptions(prev => ({ ...prev, includeManagement: true }));
+      }
+    }
+  }, [activeTab, getBackupList, isAdmin]);
+
+  // 設定管理タブ用のイベントハンドラー
+  const handleExport = useCallback(async () => {
+    try {
+      await exportSettings(exportOptions);
+    } catch (error) {
+      console.error('エクスポートエラー:', error);
+      alert(`エクスポートに失敗しました: ${error instanceof Error ? error.message : 'unknown error'}`);
+    }
+  }, [exportSettings, exportOptions]);
+
+  const handleImport = useCallback(async () => {
+    if (!selectedImportFile) {
+      alert('インポートファイルを選択してください');
+      return;
+    }
+
+    try {
+      const result = await importSettings(selectedImportFile, importOptions);
+      if (result.success) {
+        alert('設定のインポートが完了しました');
+        setSelectedImportFile(null);
+        // 設定が変更されたので画面をリロード
+        window.location.reload();
+      } else {
+        alert(`インポートに失敗しました: ${result.message}`);
+      }
+    } catch (error) {
+      console.error('インポートエラー:', error);
+      alert(`インポートに失敗しました: ${error instanceof Error ? error.message : 'unknown error'}`);
+    }
+  }, [selectedImportFile, importSettings, importOptions]);
+
+  const handleCreateBackup = useCallback(async () => {
+    if (!backupName.trim()) {
+      alert('バックアップ名を入力してください');
+      return;
+    }
+
+    try {
+      await createBackup(backupName.trim());
+      setBackupName('');
+      setBackupList(getBackupList());
+      alert('バックアップを作成しました');
+    } catch (error) {
+      console.error('バックアップ作成エラー:', error);
+      alert(`バックアップの作成に失敗しました: ${error instanceof Error ? error.message : 'unknown error'}`);
+    }
+  }, [backupName, createBackup, getBackupList]);
+
+  const handleLoadBackup = useCallback(async (backupId: string) => {
+    if (!confirm('バックアップを読み込みますか？現在の設定は上書きされます。')) {
+      return;
+    }
+
+    try {
+      const result = await loadBackup(backupId);
+      if (result.success) {
+        alert('バックアップを読み込みました');
+        // 設定が変更されたので画面をリロード
+        window.location.reload();
+      } else {
+        alert(`バックアップの読み込みに失敗しました: ${result.message}`);
+      }
+    } catch (error) {
+      console.error('バックアップ読み込みエラー:', error);
+      alert(`バックアップの読み込みに失敗しました: ${error instanceof Error ? error.message : 'unknown error'}`);
+    }
+  }, [loadBackup]);
+
+  const handleDeleteBackup = useCallback((backupId: string) => {
+    if (!confirm('バックアップを削除しますか？')) {
+      return;
+    }
+
+    deleteBackup(backupId);
+    setBackupList(getBackupList());
+  }, [deleteBackup, getBackupList]);
+
+  const handleFileSelect = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setSelectedImportFile(file);
+      // ファイル選択時に自動バリデーション
+      await validateImportFile(file);
+    }
+  }, [validateImportFile]);
+
   // モーダルの外側クリックでクローズ
   const handleBackdropClick = useCallback((e: React.MouseEvent) => {
     if (e.target === e.currentTarget) {
@@ -712,7 +850,7 @@ export function UnifiedSettingsModal({
                     各ステータスの表示色と表示名をカスタマイズできます。変更はすぐに反映されます。
                   </p>
                   <div className="space-y-3">
-                    {AVAILABLE_STATUSES.map((status) => (
+                    {ALL_STATUSES.map((status) => (
                       <div key={status} className="flex items-center justify-between p-3 border border-gray-100 rounded">
                         <div className="flex items-center space-x-3">
                           <div 
@@ -1056,6 +1194,290 @@ export function UnifiedSettingsModal({
                     <li>デフォルトプリセットは新規作成時に自動選択されます</li>
                   </ul>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* 設定管理タブ */}
+          {activeTab === 'settings-management' && (
+            <div className="space-y-6">
+              <div>
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-lg font-medium text-gray-900">💾 設定管理</h3>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        setExportOptions({
+                          includeDisplay: true,
+                          includePresets: true,
+                          includeManagement: isAdmin,
+                          includeMetadata: true
+                        });
+                        handleExport();
+                      }}
+                      className="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+                      disabled={isExporting}
+                    >
+                      🚀 全設定エクスポート
+                    </button>
+                    <button
+                      onClick={() => {
+                        const name = `自動バックアップ_${new Date().toLocaleDateString().replace(/\//g, '-')}`;
+                        createBackup(name, true);
+                      }}
+                      className="px-3 py-1 text-sm bg-purple-500 text-white rounded hover:bg-purple-600 transition-colors"
+                    >
+                      ⚡ クイックバックアップ
+                    </button>
+                  </div>
+                </div>
+                
+                {/* エクスポート機能 */}
+                <div className="border rounded-lg p-4 mb-6">
+                  <h4 className="font-medium text-gray-900 mb-3">設定のエクスポート</h4>
+                  <div className="space-y-3">
+                    <div className="flex flex-wrap gap-4">
+                      <label className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={exportOptions.includeDisplay}
+                          onChange={(e) => setExportOptions(prev => ({ ...prev, includeDisplay: e.target.checked }))}
+                          className="mr-2"
+                        />
+                        表示設定
+                      </label>
+                      <label className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={exportOptions.includePresets}
+                          onChange={(e) => setExportOptions(prev => ({ ...prev, includePresets: e.target.checked }))}
+                          className="mr-2"
+                        />
+                        プリセット設定
+                      </label>
+                      {isAdmin && (
+                        <label className="flex items-center">
+                          <input
+                            type="checkbox"
+                            checked={exportOptions.includeManagement}
+                            onChange={(e) => setExportOptions(prev => ({ ...prev, includeManagement: e.target.checked }))}
+                            className="mr-2"
+                          />
+                          管理設定
+                        </label>
+                      )}
+                    </div>
+                    <button
+                      onClick={handleExport}
+                      disabled={isExporting || (!exportOptions.includeDisplay && !exportOptions.includePresets && !exportOptions.includeManagement)}
+                      className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {isExporting ? 'エクスポート中...' : '📤 設定をエクスポート'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* インポート機能 */}
+                <div className="border rounded-lg p-4 mb-6">
+                  <h4 className="font-medium text-gray-900 mb-3">設定のインポート</h4>
+                  <div className="space-y-3">
+                    <div>
+                      <input
+                        type="file"
+                        accept=".json"
+                        onChange={handleFileSelect}
+                        className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                      />
+                      {selectedImportFile && (
+                        <div className="text-sm text-gray-600 mt-1">
+                          <p>選択されたファイル: {selectedImportFile.name}</p>
+                          <p>ファイルサイズ: {SettingsValidator.formatFileSize(selectedImportFile.size)}</p>
+                          {lastValidationResult?.parsedSettings && (
+                            <div className="mt-1">
+                              {(() => {
+                                const stats = SettingsValidator.getSettingsStatistics(lastValidationResult.parsedSettings);
+                                return (
+                                  <p className="text-xs">
+                                    プリセット: {stats.presetsCount}件, 
+                                    部署: {stats.departmentsCount}件, 
+                                    グループ: {stats.groupsCount}件, 
+                                    カスタム色: {stats.customColorsCount}件, 
+                                    カスタム表示名: {stats.customDisplayNamesCount}件
+                                  </p>
+                                );
+                              })()}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    
+                    {lastValidationResult && (
+                      <div className={`p-3 rounded ${lastValidationResult.isValid ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
+                        {lastValidationResult.isValid ? (
+                          <p className="text-sm text-green-700">✅ ファイルは有効です</p>
+                        ) : (
+                          <div>
+                            <p className="text-sm text-red-700 font-medium">❌ エラーが見つかりました:</p>
+                            <ul className="text-sm text-red-600 mt-1 ml-4 list-disc">
+                              {lastValidationResult.errors.map((error, index) => (
+                                <li key={index}>{error}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        {lastValidationResult.warnings.length > 0 && (
+                          <div className="mt-2">
+                            <p className="text-sm text-yellow-700 font-medium">⚠️ 警告:</p>
+                            <ul className="text-sm text-yellow-600 mt-1 ml-4 list-disc">
+                              {lastValidationResult.warnings.map((warning, index) => (
+                                <li key={index}>{warning}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    <div className="flex flex-wrap gap-4">
+                      <label className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={importOptions.includeDisplay}
+                          onChange={(e) => setImportOptions(prev => ({ ...prev, includeDisplay: e.target.checked }))}
+                          className="mr-2"
+                        />
+                        表示設定
+                      </label>
+                      <label className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={importOptions.includePresets}
+                          onChange={(e) => setImportOptions(prev => ({ ...prev, includePresets: e.target.checked }))}
+                          className="mr-2"
+                        />
+                        プリセット設定
+                      </label>
+                      {isAdmin && (
+                        <label className="flex items-center">
+                          <input
+                            type="checkbox"
+                            checked={importOptions.includeManagement}
+                            onChange={(e) => setImportOptions(prev => ({ ...prev, includeManagement: e.target.checked }))}
+                            className="mr-2"
+                          />
+                          管理設定
+                        </label>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-4">
+                      <label className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={importOptions.mergePresets}
+                          onChange={(e) => setImportOptions(prev => ({ ...prev, mergePresets: e.target.checked }))}
+                          className="mr-2"
+                        />
+                        プリセットをマージ（チェックなしで完全置換）
+                      </label>
+                    </div>
+
+                    <button
+                      onClick={handleImport}
+                      disabled={isImporting || !selectedImportFile || !lastValidationResult?.isValid}
+                      className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {isImporting ? 'インポート中...' : '📥 設定をインポート'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* バックアップ機能 */}
+                <div className="border rounded-lg p-4">
+                  <h4 className="font-medium text-gray-900 mb-3">設定バックアップ</h4>
+                  
+                  {/* バックアップ作成 */}
+                  <div className="flex gap-2 mb-4">
+                    <input
+                      type="text"
+                      value={backupName}
+                      onChange={(e) => setBackupName(e.target.value)}
+                      placeholder="バックアップ名を入力"
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <button
+                      onClick={handleCreateBackup}
+                      disabled={!backupName.trim()}
+                      className="px-4 py-2 bg-purple-500 text-white rounded hover:bg-purple-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                    >
+                      💾 バックアップ作成
+                    </button>
+                  </div>
+
+                  {/* バックアップリスト */}
+                  <div className="space-y-2">
+                    <h5 className="text-sm font-medium text-gray-700">保存されたバックアップ</h5>
+                    {backupList.length === 0 ? (
+                      <p className="text-sm text-gray-500">バックアップがありません</p>
+                    ) : (
+                      <div className="max-h-48 overflow-y-auto">
+                        {backupList.map((backup) => (
+                          <div key={backup.id} className="flex items-center justify-between p-2 border rounded bg-gray-50">
+                            <div className="flex-1">
+                              <p className="text-sm font-medium">{backup.name}</p>
+                              <p className="text-xs text-gray-500">
+                                {new Date(backup.createdAt).toLocaleDateString()} {new Date(backup.createdAt).toLocaleTimeString()}
+                                {backup.isAutoBackup && ' (自動)'}
+                              </p>
+                            </div>
+                            <div className="flex gap-1">
+                              <button
+                                onClick={() => handleLoadBackup(backup.id)}
+                                className="px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+                              >
+                                読み込み
+                              </button>
+                              <button
+                                onClick={() => handleDeleteBackup(backup.id)}
+                                className="px-2 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600 transition-colors"
+                              >
+                                削除
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* インポート結果表示 */}
+                {lastImportResult && (
+                  <div className={`border rounded-lg p-4 ${lastImportResult.success ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+                    <h4 className="font-medium text-gray-900 mb-2">
+                      {lastImportResult.success ? '✅ インポート完了' : '❌ インポート失敗'}
+                    </h4>
+                    <p className="text-sm text-gray-700 mb-2">{lastImportResult.message}</p>
+                    {lastImportResult.details && (
+                      <div className="text-sm text-gray-600">
+                        <p>表示設定: {lastImportResult.details.displaySettingsImported ? '✅' : '❌'}</p>
+                        <p>プリセット: {lastImportResult.details.presetsImported}件インポート</p>
+                        <p>管理設定: {lastImportResult.details.managementSettingsImported ? '✅' : '❌'}</p>
+                        {lastImportResult.details.errors.length > 0 && (
+                          <div className="mt-2">
+                            <p className="font-medium">エラー:</p>
+                            <ul className="ml-4 list-disc">
+                              {lastImportResult.details.errors.map((error, index) => (
+                                <li key={index}>{error}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           )}

@@ -2516,21 +2516,20 @@ export default function FullMainApp() {
           <span className="text-sm text-gray-600">
             {user?.name || user?.email} ({user?.role === 'ADMIN' ? '管理者' : '一般ユーザー'})
           </span>
-          {user?.role === 'ADMIN' ? (
+          {user?.role === 'ADMIN' && (
             <a
               href="/admin/staff-management"
               className="text-sm bg-orange-100 hover:bg-orange-200 text-orange-800 px-3 py-1 rounded border border-orange-300 transition-colors"
             >
               ⚙️ 管理者設定
             </a>
-          ) : (
-            <a
-              href="/personal"
-              className="text-sm bg-blue-100 hover:bg-blue-200 text-blue-800 px-3 py-1 rounded border border-blue-300 transition-colors"
-            >
-              👤 個人ページ
-            </a>
           )}
+          <a
+            href="/personal"
+            className="text-sm bg-blue-100 hover:bg-blue-200 text-blue-800 px-3 py-1 rounded border border-blue-300 transition-colors"
+          >
+            👤 個人ページ
+          </a>
           <a
             href="/monthly-planner"
             className="text-sm bg-purple-100 hover:bg-purple-200 text-purple-800 px-3 py-1 rounded border border-purple-300 transition-colors"
