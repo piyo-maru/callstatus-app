@@ -140,7 +140,16 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
       topScrollRef.current.scrollLeft = e.currentTarget.scrollLeft;
     }
   };
-  const [savedScrollPosition, setSavedScrollPosition] = useState<number>(0);
+  // スクロール位置保存用（縦・横両対応）
+  const [savedScrollPosition, setSavedScrollPosition] = useState({ x: 0, y: 0 });
+  
+  // スクロール位置キャプチャ関数
+  const captureScrollPosition = useCallback(() => {
+    const horizontalScroll = bottomScrollRef.current?.scrollLeft || 0;
+    const verticalScroll = window.scrollY || document.documentElement.scrollTop || 0;
+    
+    setSavedScrollPosition({ x: horizontalScroll, y: verticalScroll });
+  }, []);
   
   // モーダル関連の状態
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -473,21 +482,27 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
     }
   }, [user, getApiUrl, authenticatedFetch]);
 
-  // スクロール位置保存・復元関数
-  const saveScrollPosition = useCallback(() => {
-    if (bottomScrollRef.current) {
-      setSavedScrollPosition(bottomScrollRef.current.scrollLeft);
-    }
-  }, []);
-
+  // スクロール位置復元関数（縦・横両対応）
   const restoreScrollPosition = useCallback(() => {
-    if (bottomScrollRef.current && savedScrollPosition > 0) {
-      setTimeout(() => {
-        if (bottomScrollRef.current) {
-          bottomScrollRef.current.scrollLeft = savedScrollPosition;
+    const restoreScroll = () => {
+      if (topScrollRef.current && bottomScrollRef.current) {
+        // 横スクロール復元（2つの要素を同期）
+        if (savedScrollPosition.x > 0) {
+          topScrollRef.current.scrollLeft = savedScrollPosition.x;
+          bottomScrollRef.current.scrollLeft = savedScrollPosition.x;
         }
-      }, 50); // DOM更新後に復元
-    }
+        
+        // 縦スクロール復元
+        if (savedScrollPosition.y >= 0) {
+          window.scrollTo(0, savedScrollPosition.y);
+        }
+      }
+    };
+    
+    // 複数回復元を試行（DOM更新タイミングの違いに対応）
+    setTimeout(restoreScroll, 50);
+    setTimeout(restoreScroll, 200);
+    setTimeout(restoreScroll, 500);
   }, [savedScrollPosition]);
 
   // 開発環境でのみデバッグログを出力する制御
@@ -852,6 +867,8 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
         console.log('スケジュール更新成功');
         // データを再取得して更新
         await fetchSchedules();
+        // スクロール位置を復元
+        restoreScrollPosition();
       } else {
         console.error('スケジュール更新失敗:', response.status);
         const errorData = await response.json().catch(() => ({}));
@@ -861,7 +878,7 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
       console.error('スケジュール更新エラー:', error);
       setError('スケジュールの更新に失敗しました');
     }
-  }, [authenticatedFetch, getApiUrl, fetchSchedules]);
+  }, [authenticatedFetch, getApiUrl, fetchSchedules, restoreScrollPosition]);
 
   // ドロップハンドラー（メイン画面と同じ）
   const handleDrop = useCallback((e: React.DragEvent, day: Date) => {
@@ -996,8 +1013,9 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
       }
       
       // 全スケジュール追加後にデータを再取得
-      saveScrollPosition();
       await fetchSchedules();
+      // スクロール位置を復元
+      restoreScrollPosition();
       
       // 成功メッセージ
       setError(null);
@@ -1007,7 +1025,7 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
       console.error('スケジュール追加エラー:', err); // エラーログは保持
       setError(`${preset.name}の追加に失敗しました`);
     }
-  }, [currentStaff, getApiUrl, authenticatedFetch, fetchSchedules, saveScrollPosition]);
+  }, [currentStaff, getApiUrl, authenticatedFetch, fetchSchedules, restoreScrollPosition]);
 
   // スケジュール保存ハンドラー（メイン画面と同じ）
   const handleSaveSchedule = useCallback(async (scheduleData: Schedule & { id?: number | string; date?: string }) => {
@@ -1036,8 +1054,9 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
           
           if (response.ok) {
             if (isDev) console.log('スケジュール作成成功');
-            saveScrollPosition();
-            await fetchSchedules();
+                await fetchSchedules();
+            // スクロール位置を復元
+            restoreScrollPosition();
             setIsModalOpen(false);
             setEditingSchedule(null);
           } else {
@@ -1060,8 +1079,9 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
           
           if (response.ok) {
             if (isDev) console.log('スケジュール更新成功');
-            saveScrollPosition();
-            await fetchSchedules();
+                await fetchSchedules();
+            // スクロール位置を復元
+            restoreScrollPosition();
             setIsModalOpen(false);
             setEditingSchedule(null);
           } else {
@@ -1087,7 +1107,9 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
         
         if (response.ok) {
           if (isDev) console.log('スケジュール作成成功');
-          await fetchSchedules();
+            await fetchSchedules();
+          // スクロール位置を復元
+          restoreScrollPosition();
           setIsModalOpen(false);
           setDraggedSchedule(null);
         } else {
@@ -1099,7 +1121,7 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
       console.error('スケジュール保存エラー:', err); // エラーログは保持
       setError('スケジュールの保存中にエラーが発生しました');
     }
-  }, [currentStaff, getApiUrl, authenticatedFetch, fetchSchedules, saveScrollPosition]);
+  }, [currentStaff, getApiUrl, authenticatedFetch, fetchSchedules, restoreScrollPosition]);
 
   // スケジュール削除ハンドラー
   const handleDeleteSchedule = useCallback(async (scheduleId: number | string) => {
@@ -1130,8 +1152,9 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
       
       if (response.ok) {
         if (isDev) console.log('スケジュール削除成功');
-        saveScrollPosition();
         await fetchSchedules();
+        // スクロール位置を復元
+        restoreScrollPosition();
         setDeletingScheduleId(null);
         setSelectedSchedule(null); // 選択解除
       } else {
@@ -1142,7 +1165,7 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
       console.error('スケジュール削除エラー:', err); // エラーログは保持
       setError('スケジュールの削除中にエラーが発生しました');
     }
-  }, [getApiUrl, authenticatedFetch, fetchSchedules, saveScrollPosition]);
+  }, [getApiUrl, authenticatedFetch, fetchSchedules, restoreScrollPosition]);
 
   // 月変更ハンドラー
   const handleMonthChange = useCallback((direction: 'prev' | 'next') => {
@@ -1297,7 +1320,8 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
             date: format(dragInfo.day, 'yyyy-MM-dd')
           });
         }
-        // 予定作成モーダルを開く
+        // 予定作成モーダルを開く前にスクロール位置をキャプチャ
+        captureScrollPosition();
         setDraggedSchedule({
           staffId: dragInfo.staff.id,
           status: 'online',
@@ -1336,7 +1360,8 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
     if (currentSelection && 
         currentSelection.schedule.id === schedule.id && 
         currentSelection.layer === scheduleLayer) {
-      // 同じ予定を再クリック → 編集モーダルを開く
+      // 同じ予定を再クリック → 編集モーダルを開く前にスクロール位置をキャプチャ
+      captureScrollPosition();
       setEditingSchedule(schedule);
       setDraggedSchedule(null);
       setIsModalOpen(true);
@@ -1547,6 +1572,8 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
                 <button
                   key={preset.id}
                   onClick={() => {
+                    // プリセット適用前にスクロール位置をキャプチャ
+                    captureScrollPosition();
                     const targetDate = selectedDateForPreset || new Date();
                     addPresetSchedule(preset, targetDate);
                   }}
@@ -1639,6 +1666,8 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
                       if (isPastDate) return; // 過去の日付は選択不可
                       
                       if (selectedDateForPreset && isSameDay(selectedDateForPreset, day)) {
+                        // 担当設定モーダルを開く前にスクロール位置をキャプチャ
+                        captureScrollPosition();
                         setSelectedDateForResponsibility(day);
                         setIsResponsibilityModalOpen(true);
                       } else {
@@ -1861,6 +1890,8 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
                               e.stopPropagation();
                               console.log('スケジュールクリック:', { id: schedule.id, layer: scheduleLayer, isContract, isHistorical });
                               if (!isContract && !isHistorical) {
+                                // モーダル開く前にスクロール位置をキャプチャ
+                                captureScrollPosition();
                                 handleScheduleClick(schedule, scheduleLayer, day);
                               }
                             }}
@@ -1906,6 +1937,8 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
                                 onClick={(e) => { 
                                   e.stopPropagation(); 
                                   console.log('削除ボタンクリック:', { id: schedule.id, type: typeof schedule.id });
+                                  // 削除モーダル開く前にスクロール位置をキャプチャ
+                                  captureScrollPosition();
                                   setDeletingScheduleId(schedule.id); 
                                 }} 
                                 className="text-white hover:text-red-200 ml-2 opacity-0 group-hover:opacity-100 transition-opacity"

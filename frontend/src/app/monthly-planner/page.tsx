@@ -195,7 +195,8 @@ const DraggablePending: React.FC<{
   onDragStart: (pending: PendingSchedule) => void;
   onApprovalClick?: (pending: PendingSchedule) => void;
   isApprovalMode?: boolean;
-}> = ({ pending, textColor, pendingStyle, isTransparent, onDragStart, onApprovalClick, isApprovalMode }) => {
+  onCaptureScrollPosition?: () => void;
+}> = ({ pending, textColor, pendingStyle, isTransparent, onDragStart, onApprovalClick, isApprovalMode, onCaptureScrollPosition }) => {
   const canDrag = !pending.approvedAt && !pending.rejectedAt; // 未承認のみドラッグ可能
   const canApprove = !pending.approvedAt && !pending.rejectedAt; // 未承認のみ承認可能
   const isRejected = pending.rejectedAt && !pending.approvedAt; // 却下済み
@@ -205,6 +206,12 @@ const DraggablePending: React.FC<{
       e.preventDefault();
       return;
     }
+    
+    // ドラッグ開始時にスクロール位置をキャプチャ
+    if (onCaptureScrollPosition) {
+      onCaptureScrollPosition();
+    }
+    
     e.dataTransfer.setData('application/json', JSON.stringify(pending));
     e.dataTransfer.effectAllowed = 'move';
     onDragStart(pending);
@@ -459,18 +466,54 @@ function MonthlyPlannerPageContent() {
 
   // スクロール同期のためのref
   const topScrollRef = useRef<HTMLDivElement>(null);
+  const headerScrollRef = useRef<HTMLDivElement>(null);
   const bottomScrollRef = useRef<HTMLDivElement>(null);
+  
+  // スクロール位置保存用（縦・横両対応）
+  const [savedScrollPosition, setSavedScrollPosition] = useState({ x: 0, y: 0 });
+  
+  // スクロール位置キャプチャ関数
+  const captureScrollPosition = useCallback(() => {
+    const verticalScroll = window.scrollY || document.documentElement.scrollTop || 0;
+    const windowScrollX = window.scrollX || document.documentElement.scrollLeft || 0;
+    
+    // window全体の横スクロール優先、なければ内部要素のスクロール位置を確認
+    const topScrollLeft = topScrollRef.current?.scrollLeft || 0;
+    const headerScrollLeft = headerScrollRef.current?.scrollLeft || 0;
+    const bottomScrollLeft = bottomScrollRef.current?.scrollLeft || 0;
+    const horizontalScroll = windowScrollX || Math.max(topScrollLeft, headerScrollLeft, bottomScrollLeft);
+    
+    setSavedScrollPosition({ x: horizontalScroll, y: verticalScroll });
+  }, []);
 
   // スクロール同期ハンドラー
   const handleTopScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const scrollLeft = e.currentTarget.scrollLeft;
+    if (headerScrollRef.current) {
+      headerScrollRef.current.scrollLeft = scrollLeft;
+    }
     if (bottomScrollRef.current) {
-      bottomScrollRef.current.scrollLeft = e.currentTarget.scrollLeft;
+      bottomScrollRef.current.scrollLeft = scrollLeft;
+    }
+  };
+  
+  const handleHeaderScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const scrollLeft = e.currentTarget.scrollLeft;
+    if (topScrollRef.current) {
+      topScrollRef.current.scrollLeft = scrollLeft;
+    }
+    if (bottomScrollRef.current) {
+      bottomScrollRef.current.scrollLeft = scrollLeft;
     }
   };
   
   const handleBottomScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const scrollLeft = e.currentTarget.scrollLeft;
     if (topScrollRef.current) {
-      topScrollRef.current.scrollLeft = e.currentTarget.scrollLeft;
+      topScrollRef.current.scrollLeft = scrollLeft;
+    }
+    if (headerScrollRef.current) {
+      headerScrollRef.current.scrollLeft = scrollLeft;
     }
   };
 
@@ -778,6 +821,9 @@ function MonthlyPlannerPageContent() {
         return;
       }
       
+      // モーダル開く前にスクロール位置をキャプチャ（統一関数を使用）
+      captureScrollPosition();
+      
       setSelectedCell({
         staffId: staff.id,
         staffName: staff.name,
@@ -796,6 +842,9 @@ function MonthlyPlannerPageContent() {
 
   // 予定クリック処理（承認モード・編集モード対応）
   const handleApprovalClick = useCallback((pending: PendingSchedule) => {
+    // モーダル開く前にスクロール位置をキャプチャ（統一関数を使用）
+    captureScrollPosition();
+    
     if (pending.rejectedAt && !pending.approvedAt) {
       // 却下済み予定の場合
       setSelectedRejectedPending(pending);
@@ -834,6 +883,29 @@ function MonthlyPlannerPageContent() {
       if (response.ok) {
         alert('予定を承認しました');
         await fetchPendingSchedules();
+        
+        // データ更新後、保存した位置に復元
+        const restoreScroll = () => {
+          // window全体の横スクロール復元
+          if (savedScrollPosition.x > 0) {
+            window.scrollTo(savedScrollPosition.x, savedScrollPosition.y || 0);
+          } else if (savedScrollPosition.y >= 0) {
+            window.scrollTo(0, savedScrollPosition.y);
+          }
+          
+          // 内部要素の横スクロール復元（念のため）
+          if (topScrollRef.current && headerScrollRef.current && bottomScrollRef.current && savedScrollPosition.x > 0) {
+            topScrollRef.current.scrollLeft = savedScrollPosition.x;
+            headerScrollRef.current.scrollLeft = savedScrollPosition.x;
+            bottomScrollRef.current.scrollLeft = savedScrollPosition.x;
+          }
+        };
+        
+        // 複数回復元を試行（DOM更新タイミングの違いに対応）
+        setTimeout(restoreScroll, 50);
+        setTimeout(restoreScroll, 200);
+        setTimeout(restoreScroll, 500);
+        
         setShowApprovalModal(false);
         setSelectedPendingForApproval(null);
       } else {
@@ -865,6 +937,29 @@ function MonthlyPlannerPageContent() {
       if (response.ok) {
         alert('予定を却下しました');
         await fetchPendingSchedules();
+        
+        // データ更新後、保存した位置に復元
+        const restoreScroll = () => {
+          // window全体の横スクロール復元
+          if (savedScrollPosition.x > 0) {
+            window.scrollTo(savedScrollPosition.x, savedScrollPosition.y || 0);
+          } else if (savedScrollPosition.y >= 0) {
+            window.scrollTo(0, savedScrollPosition.y);
+          }
+          
+          // 内部要素の横スクロール復元（念のため）
+          if (topScrollRef.current && headerScrollRef.current && bottomScrollRef.current && savedScrollPosition.x > 0) {
+            topScrollRef.current.scrollLeft = savedScrollPosition.x;
+            headerScrollRef.current.scrollLeft = savedScrollPosition.x;
+            bottomScrollRef.current.scrollLeft = savedScrollPosition.x;
+          }
+        };
+        
+        // 複数回復元を試行（DOM更新タイミングの違いに対応）
+        setTimeout(restoreScroll, 50);
+        setTimeout(restoreScroll, 200);
+        setTimeout(restoreScroll, 500);
+        
         setShowApprovalModal(false);
         setSelectedPendingForApproval(null);
       } else {
@@ -894,6 +989,29 @@ function MonthlyPlannerPageContent() {
       if (response.ok) {
         alert('予定を削除しました');
         await fetchPendingSchedules();
+        
+        // データ更新後、保存した位置に復元
+        const restoreScroll = () => {
+          // window全体の横スクロール復元
+          if (savedScrollPosition.x > 0) {
+            window.scrollTo(savedScrollPosition.x, savedScrollPosition.y || 0);
+          } else if (savedScrollPosition.y >= 0) {
+            window.scrollTo(0, savedScrollPosition.y);
+          }
+          
+          // 内部要素の横スクロール復元（念のため）
+          if (topScrollRef.current && headerScrollRef.current && bottomScrollRef.current && savedScrollPosition.x > 0) {
+            topScrollRef.current.scrollLeft = savedScrollPosition.x;
+            headerScrollRef.current.scrollLeft = savedScrollPosition.x;
+            bottomScrollRef.current.scrollLeft = savedScrollPosition.x;
+          }
+        };
+        
+        // 複数回復元を試行（DOM更新タイミングの違いに対応）
+        setTimeout(restoreScroll, 50);
+        setTimeout(restoreScroll, 200);
+        setTimeout(restoreScroll, 500);
+        
         setShowRejectedModal(false);
         setSelectedRejectedPending(null);
       } else {
@@ -922,6 +1040,29 @@ function MonthlyPlannerPageContent() {
       if (response.ok) {
         alert('承認を取り消しました');
         await fetchPendingSchedules();
+        
+        // データ更新後、保存した位置に復元
+        const restoreScroll = () => {
+          // window全体の横スクロール復元
+          if (savedScrollPosition.x > 0) {
+            window.scrollTo(savedScrollPosition.x, savedScrollPosition.y || 0);
+          } else if (savedScrollPosition.y >= 0) {
+            window.scrollTo(0, savedScrollPosition.y);
+          }
+          
+          // 内部要素の横スクロール復元（念のため）
+          if (topScrollRef.current && headerScrollRef.current && bottomScrollRef.current && savedScrollPosition.x > 0) {
+            topScrollRef.current.scrollLeft = savedScrollPosition.x;
+            headerScrollRef.current.scrollLeft = savedScrollPosition.x;
+            bottomScrollRef.current.scrollLeft = savedScrollPosition.x;
+          }
+        };
+        
+        // 複数回復元を試行（DOM更新タイミングの違いに対応）
+        setTimeout(restoreScroll, 50);
+        setTimeout(restoreScroll, 200);
+        setTimeout(restoreScroll, 500);
+        
         setShowApprovedDeleteModal(false);
         setSelectedApprovedPending(null);
         setUnapprovalReason('');
@@ -984,6 +1125,28 @@ function MonthlyPlannerPageContent() {
       if (response.ok) {
         alert(`${preset.label}のPending予定を作成しました（承認待ち）`);
         await fetchPendingSchedules();
+        
+        // データ更新後、保存した位置に復元
+        const restoreScroll = () => {
+          // window全体の横スクロール復元
+          if (savedScrollPosition.x > 0) {
+            window.scrollTo(savedScrollPosition.x, savedScrollPosition.y || 0);
+          } else if (savedScrollPosition.y >= 0) {
+            window.scrollTo(0, savedScrollPosition.y);
+          }
+          
+          // 内部要素の横スクロール復元（念のため）
+          if (topScrollRef.current && headerScrollRef.current && bottomScrollRef.current && savedScrollPosition.x > 0) {
+            topScrollRef.current.scrollLeft = savedScrollPosition.x;
+            headerScrollRef.current.scrollLeft = savedScrollPosition.x;
+            bottomScrollRef.current.scrollLeft = savedScrollPosition.x;
+          }
+        };
+        
+        // 複数回復元を試行（DOM更新タイミングの違いに対応）
+        setTimeout(restoreScroll, 50);
+        setTimeout(restoreScroll, 200);
+        setTimeout(restoreScroll, 500);
       } else {
         alert('Pending予定の作成に失敗しました');
       }
@@ -1041,7 +1204,33 @@ function MonthlyPlannerPageContent() {
       }
 
       alert('Pending予定を削除しました');
+      console.log('復元予定のスクロール位置:', savedScrollPosition);
       await fetchPendingSchedules();
+      
+      // データ更新後、保存した位置に復元
+      const restoreScroll = () => {
+        if (topScrollRef.current && bottomScrollRef.current) {
+          console.log('スクロール復元実行:', savedScrollPosition, 'current横:', topScrollRef.current.scrollLeft, 'current縦:', window.scrollY);
+          
+          // 横スクロール復元
+          if (savedScrollPosition.x > 0) {
+            topScrollRef.current.scrollLeft = savedScrollPosition.x;
+            bottomScrollRef.current.scrollLeft = savedScrollPosition.x;
+          }
+          
+          // 縦スクロール復元
+          if (savedScrollPosition.y >= 0) {
+            window.scrollTo(savedScrollPosition.x || 0, savedScrollPosition.y);
+          }
+        } else {
+          console.log('スクロール要素が見つかりません');
+        }
+      };
+      
+      // 複数回復元を試行（DOM更新タイミングの違いに対応）
+      setTimeout(restoreScroll, 50);
+      setTimeout(restoreScroll, 200);
+      setTimeout(restoreScroll, 500);
     } catch (error) {
       console.error('Failed to delete pending:', error);
       alert('削除に失敗しました');
@@ -1071,6 +1260,28 @@ function MonthlyPlannerPageContent() {
       if (response.ok) {
         alert('未承認予定を削除しました');
         await fetchPendingSchedules();
+        
+        // データ更新後、保存した位置に復元
+        const restoreScroll = () => {
+          // window全体の横スクロール復元
+          if (savedScrollPosition.x > 0) {
+            window.scrollTo(savedScrollPosition.x, savedScrollPosition.y || 0);
+          } else if (savedScrollPosition.y >= 0) {
+            window.scrollTo(0, savedScrollPosition.y);
+          }
+          
+          // 内部要素の横スクロール復元（念のため）
+          if (topScrollRef.current && headerScrollRef.current && bottomScrollRef.current && savedScrollPosition.x > 0) {
+            topScrollRef.current.scrollLeft = savedScrollPosition.x;
+            headerScrollRef.current.scrollLeft = savedScrollPosition.x;
+            bottomScrollRef.current.scrollLeft = savedScrollPosition.x;
+          }
+        };
+        
+        // 複数回復元を試行（DOM更新タイミングの違いに対応）
+        setTimeout(restoreScroll, 50);
+        setTimeout(restoreScroll, 200);
+        setTimeout(restoreScroll, 500);
       } else {
         alert('削除に失敗しました');
       }
@@ -1106,6 +1317,28 @@ function MonthlyPlannerPageContent() {
       if (response.ok) {
         alert(`未承認予定を${preset.label}に更新しました`);
         await fetchPendingSchedules();
+        
+        // データ更新後、保存した位置に復元
+        const restoreScroll = () => {
+          // window全体の横スクロール復元
+          if (savedScrollPosition.x > 0) {
+            window.scrollTo(savedScrollPosition.x, savedScrollPosition.y || 0);
+          } else if (savedScrollPosition.y >= 0) {
+            window.scrollTo(0, savedScrollPosition.y);
+          }
+          
+          // 内部要素の横スクロール復元（念のため）
+          if (topScrollRef.current && headerScrollRef.current && bottomScrollRef.current && savedScrollPosition.x > 0) {
+            topScrollRef.current.scrollLeft = savedScrollPosition.x;
+            headerScrollRef.current.scrollLeft = savedScrollPosition.x;
+            bottomScrollRef.current.scrollLeft = savedScrollPosition.x;
+          }
+        };
+        
+        // 複数回復元を試行（DOM更新タイミングの違いに対応）
+        setTimeout(restoreScroll, 50);
+        setTimeout(restoreScroll, 200);
+        setTimeout(restoreScroll, 500);
       } else {
         alert('更新に失敗しました');
       }
@@ -1204,6 +1437,28 @@ function MonthlyPlannerPageContent() {
       if (response.ok) {
         alert('予定を移動しました');
         await fetchPendingSchedules();
+        
+        // データ更新後、保存した位置に復元
+        const restoreScroll = () => {
+          // window全体の横スクロール復元
+          if (savedScrollPosition.x > 0) {
+            window.scrollTo(savedScrollPosition.x, savedScrollPosition.y || 0);
+          } else if (savedScrollPosition.y >= 0) {
+            window.scrollTo(0, savedScrollPosition.y);
+          }
+          
+          // 内部要素の横スクロール復元（念のため）
+          if (topScrollRef.current && headerScrollRef.current && bottomScrollRef.current && savedScrollPosition.x > 0) {
+            topScrollRef.current.scrollLeft = savedScrollPosition.x;
+            headerScrollRef.current.scrollLeft = savedScrollPosition.x;
+            bottomScrollRef.current.scrollLeft = savedScrollPosition.x;
+          }
+        };
+        
+        // 複数回復元を試行（DOM更新タイミングの違いに対応）
+        setTimeout(restoreScroll, 50);
+        setTimeout(restoreScroll, 200);
+        setTimeout(restoreScroll, 500);
       } else {
         alert('予定の移動に失敗しました');
       }
@@ -1258,6 +1513,9 @@ function MonthlyPlannerPageContent() {
     if (!isApprovalMode) {
       return;
     }
+    
+    // モーダル開く前にスクロール位置をキャプチャ（統一関数を使用）
+    captureScrollPosition();
     
     const year = currentMonth.getFullYear();
     const month = currentMonth.getMonth() + 1;
@@ -1494,11 +1752,11 @@ function MonthlyPlannerPageContent() {
                 <div className="flex-1 flex flex-col">
                   {/* 上部スクロールバー */}
                   <div className="overflow-x-auto border-b" ref={topScrollRef} onScroll={handleTopScroll}>
-                    <div className="min-w-fit h-[17px]" style={{ width: `${dateArray.length * 96}px` }}></div>
+                    <div className="min-w-[1300px] h-[17px]" style={{ width: `${dateArray.length * 96}px` }}></div>
                   </div>
                   {/* 日付ヘッダー */}
-                  <div className="sticky top-0 z-10 bg-gray-100 border-b overflow-hidden">
-                    <div className="min-w-fit" style={{ width: `${dateArray.length * 96}px` }}>
+                  <div className="sticky top-0 z-10 bg-gray-100 border-b overflow-x-auto" ref={headerScrollRef} onScroll={handleHeaderScroll} style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+                    <div className="min-w-[1300px]" style={{ width: `${dateArray.length * 96}px` }}>
                       <div className="flex">
                         {dateArray.map(day => {
                           const year = currentMonth.getFullYear();
@@ -1531,7 +1789,7 @@ function MonthlyPlannerPageContent() {
 
                   {/* セルグリッド */}
                   <div className="overflow-x-auto" ref={bottomScrollRef} onScroll={handleBottomScroll}>
-                    <div className="min-w-fit" style={{ width: `${dateArray.length * 96}px` }}>
+                    <div className="min-w-[1300px]" style={{ width: `${dateArray.length * 96}px` }}>
                     {Object.keys(groupedStaffForDisplay).length > 0 ? (
                       sortByDisplayOrder(Object.entries(groupedStaffForDisplay), 'department').map(([department, groups]) => (
                         <div key={department}>
@@ -1596,6 +1854,7 @@ function MonthlyPlannerPageContent() {
                                                     onDragStart={setDraggedPending}
                                                     onApprovalClick={handleApprovalClick}
                                                     isApprovalMode={isApprovalMode}
+                                                    onCaptureScrollPosition={captureScrollPosition}
                                                   />
                                                 </div>
                                               );
