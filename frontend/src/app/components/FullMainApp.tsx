@@ -24,7 +24,9 @@ import {
   getEffectiveStatusColor,
   getEffectiveDisplayName,
   getDepartmentGroupStyle,
-  LIGHT_ANIMATIONS
+  LIGHT_ANIMATIONS,
+  BRAND_COLORS,
+  BUTTON_STYLES
 } from './timeline/TimelineUtils';
 // ★★★ 分離されたモジュールのインポート ★★★
 import { 
@@ -2541,39 +2543,51 @@ export default function FullMainApp() {
 
   // 認証ヘッダーコンポーネント
   const AuthHeader = () => (
-    <div className="bg-white rounded-lg shadow-sm mb-4">
+    <div className="bg-indigo-600 shadow-lg mb-4">
       <div className="px-6 py-3 flex justify-between items-center">
-        <h1 className="text-lg font-semibold text-gray-900">
+        <h1 className="text-lg font-semibold text-white">
           出社状況
         </h1>
         <div className="flex items-center space-x-4">
-          <span className="text-sm text-gray-600">
+          <span className="text-sm text-indigo-100">
             {user?.name || user?.email} ({user?.role === 'ADMIN' ? '管理者' : user?.role === 'SYSTEM_ADMIN' ? 'システム管理者' : '一般ユーザー'})
           </span>
           {user?.role === 'SYSTEM_ADMIN' && (
             <a
               href="/admin/staff-management"
-              className="text-sm bg-orange-100 hover:bg-orange-200 text-orange-800 px-3 py-1 rounded-md border border-orange-300 transition-colors duration-150 h-7 flex items-center font-medium"
+              className={BUTTON_STYLES.headerPrimary}
             >
-              ⚙️ 管理者設定
+              <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
+              </svg>
+              管理者設定
             </a>
           )}
           <a
             href="/personal"
-            className="text-sm bg-blue-100 hover:bg-blue-200 text-blue-800 px-3 py-1 rounded-md border border-blue-300 transition-colors duration-150 h-7 flex items-center font-medium"
+            className={BUTTON_STYLES.headerSecondary}
           >
-            👤 個人ページ
+            <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+            </svg>
+            個人ページ
           </a>
           <a
             href="/monthly-planner"
-            className="text-sm bg-purple-100 hover:bg-purple-200 text-purple-800 px-3 py-1 rounded-md border border-purple-300 transition-colors duration-150 h-7 flex items-center font-medium"
+            className={BUTTON_STYLES.headerSecondary}
           >
-            📅 月次プランナー
+            <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
+            </svg>
+            月次プランナー
           </a>
           <button
             onClick={logout}
-            className="text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1 rounded-md border border-gray-300 transition-colors duration-150 h-7 flex items-center font-medium"
+            className={BUTTON_STYLES.headerNeutral}
           >
+            <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clipRule="evenodd" />
+            </svg>
             ログアウト
           </button>
         </div>
@@ -2696,8 +2710,11 @@ export default function FullMainApp() {
                   <button onClick={() => {
                     setSelectedSchedule(null);
                     setIsSettingsModalOpen(true);
-                  }} className="px-3 py-1 text-xs font-medium text-white bg-gray-600 border border-transparent rounded-md hover:bg-gray-700 h-7 transition-colors duration-150">
-                      ⚙️ 設定
+                  }} className="flex items-center px-4 py-1 text-xs font-medium text-white bg-gray-600 border border-transparent rounded-md hover:bg-gray-700 h-7 transition-colors duration-150 min-w-fit whitespace-nowrap">
+                      <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+        <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
+      </svg>
+      設定
                   </button>
                 )}
                 <div className="flex items-center space-x-2">
@@ -2707,9 +2724,13 @@ export default function FullMainApp() {
                   <button 
                     onClick={toggleViewMode}
                     title={`表示密度: ${viewMode === 'normal' ? '標準' : 'コンパクト'}`}
-                    className={`toggle-switch ${viewMode === 'compact' ? 'active' : ''}`}
+                    className={`relative w-12 h-6 rounded-full transition-colors duration-200 ${
+                      viewMode === 'compact' ? 'bg-indigo-600' : 'bg-gray-300'
+                    }`}
                   >
-                    <div className={`toggle-thumb ${viewMode === 'compact' ? 'active' : ''}`}></div>
+                    <div className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform duration-200 ${
+                      viewMode === 'compact' ? 'translate-x-6' : 'translate-x-0'
+                    }`}></div>
                   </button>
                   <span className={`text-xs ${viewMode === 'compact' ? 'text-gray-900 font-medium' : 'text-gray-500'}`}>
                     コンパクト
@@ -2723,15 +2744,15 @@ export default function FullMainApp() {
                 <select onChange={(e) => setSelectedDepartment(e.target.value)} value={selectedDepartment} className="rounded-md border-gray-300 shadow-sm text-xs h-7 px-2 font-medium text-gray-700 bg-white transition-colors duration-150 hover:border-gray-400 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"><option value="all">すべての部署</option>{sortedDepartmentsForFilter.map(dep => <option key={dep} value={dep}>{dep}</option>)}</select>
                 <select onChange={(e) => setSelectedGroup(e.target.value)} value={selectedGroup} className="rounded-md border-gray-300 shadow-sm text-xs h-7 px-2 font-medium text-gray-700 bg-white transition-colors duration-150 hover:border-gray-400 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"><option value="all">すべてのグループ</option>{sortedGroupsForFilter.map(grp => <option key={grp} value={grp}>{grp}</option>)}</select>
                 <div className="inline-flex rounded-md shadow-sm" role="group">
-                    <button type="button" onClick={() => setSelectedSettingFilter('all')} className={`px-3 py-1 text-xs font-medium transition-colors duration-150 rounded-l-md border h-7 ${selectedSettingFilter === 'all' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}>すべて</button>
-                    <button type="button" onClick={() => setSelectedSettingFilter('responsibility')} className={`px-3 py-1 text-xs font-medium transition-colors duration-150 border-t border-b border-r h-7 ${selectedSettingFilter === 'responsibility' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}>担当設定</button>
-                    <button type="button" onClick={() => setSelectedSettingFilter('support')} className={`px-3 py-1 text-xs font-medium transition-colors duration-150 rounded-r-md border h-7 ${selectedSettingFilter === 'support' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}>支援設定</button>
+                    <button type="button" onClick={() => setSelectedSettingFilter('all')} className={`${selectedSettingFilter === 'all' ? BUTTON_STYLES.primaryGroup.active : BUTTON_STYLES.primaryGroup.inactive} ${BUTTON_STYLES.primaryGroup.transition} rounded-l-md border h-7`}>すべて</button>
+                    <button type="button" onClick={() => setSelectedSettingFilter('responsibility')} className={`${selectedSettingFilter === 'responsibility' ? BUTTON_STYLES.primaryGroup.active : BUTTON_STYLES.primaryGroup.inactive} ${BUTTON_STYLES.primaryGroup.transition} border-t border-b border-r h-7`}>担当設定</button>
+                    <button type="button" onClick={() => setSelectedSettingFilter('support')} className={`${selectedSettingFilter === 'support' ? BUTTON_STYLES.primaryGroup.active : BUTTON_STYLES.primaryGroup.inactive} ${BUTTON_STYLES.primaryGroup.transition} rounded-r-md border h-7`}>支援設定</button>
                 </div>
                 {isToday && (
                   <div className="inline-flex rounded-md shadow-sm" role="group">
-                      <button type="button" onClick={() => setSelectedStatus('all')} className={`px-3 py-1 text-xs font-medium transition-colors duration-150 rounded-l-md border h-7 ${selectedStatus === 'all' ? 'bg-teal-500 text-white border-teal-500' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}>すべて</button>
-                      <button type="button" onClick={() => setSelectedStatus('available')} className={`px-3 py-1 text-xs font-medium transition-colors duration-150 border-t border-b border-r h-7 ${selectedStatus === 'available' ? 'bg-teal-500 text-white border-teal-500' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}>対応可能</button>
-                      <button type="button" onClick={() => setSelectedStatus('unavailable')} className={`px-3 py-1 text-xs font-medium transition-colors duration-150 rounded-r-md border h-7 ${selectedStatus === 'unavailable' ? 'bg-teal-500 text-white border-teal-500' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}>対応不可</button>
+                      <button type="button" onClick={() => setSelectedStatus('all')} className={`${selectedStatus === 'all' ? BUTTON_STYLES.secondaryGroup.active : BUTTON_STYLES.secondaryGroup.inactive} ${BUTTON_STYLES.secondaryGroup.transition} rounded-l-md border h-7`}>すべて</button>
+                      <button type="button" onClick={() => setSelectedStatus('available')} className={`${selectedStatus === 'available' ? BUTTON_STYLES.secondaryGroup.active : BUTTON_STYLES.secondaryGroup.inactive} ${BUTTON_STYLES.secondaryGroup.transition} border-t border-b border-r h-7`}>対応可能</button>
+                      <button type="button" onClick={() => setSelectedStatus('unavailable')} className={`${selectedStatus === 'unavailable' ? BUTTON_STYLES.secondaryGroup.active : BUTTON_STYLES.secondaryGroup.inactive} ${BUTTON_STYLES.secondaryGroup.transition} rounded-r-md border h-7`}>対応不可</button>
                   </div>
                 )}
             </div>

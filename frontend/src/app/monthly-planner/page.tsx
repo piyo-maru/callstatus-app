@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '../components/AuthProvider';
 import AuthGuard from '../components/AuthGuard';
 import { createPortal } from 'react-dom';
-import { STATUS_COLORS, capitalizeStatus, getEffectiveStatusColor, getDepartmentGroupStyle } from '../components/timeline/TimelineUtils';
+import { STATUS_COLORS, capitalizeStatus, getEffectiveStatusColor, getDepartmentGroupStyle, BUTTON_STYLES } from '../components/timeline/TimelineUtils';
 import { registerLocale } from 'react-datepicker';
 import { ja } from 'date-fns/locale/ja';
 import { format } from 'date-fns';
@@ -1925,37 +1925,49 @@ function MonthlyPlannerPageContent() {
       {/* ヘッダー - 個人ページと同じレイアウト */}
       <div className="bg-white rounded-lg shadow-sm mb-4">
         {/* タイトル行 */}
-        <div className="px-6 py-3 border-b">
+        <div className="bg-indigo-600 px-6 py-3 rounded-t-lg">
           <div className="flex items-center justify-between">
-            <h1 className="text-lg font-semibold text-gray-900">月次プランナー</h1>
+            <h1 className="text-lg font-semibold text-white">月次プランナー</h1>
             <div className="flex items-center space-x-4">  
-              <span className="text-sm text-gray-600">
+              <span className="text-sm text-indigo-100">
                 {user?.name || user?.email} ({user?.role === 'ADMIN' ? '管理者' : user?.role === 'SYSTEM_ADMIN' ? 'システム管理者' : '一般ユーザー'})
               </span>
               <a
                 href="/"
-                className="text-sm bg-green-100 hover:bg-green-200 text-green-800 px-3 py-1 rounded-md border border-green-300 transition-colors duration-150 h-7 flex items-center font-medium"
+                className={BUTTON_STYLES.headerSecondary}
               >
-                📊 出社状況
+                <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z" clipRule="evenodd" />
+                </svg>
+                出社状況
               </a>
               <a
                 href="/personal"
-                className="text-sm bg-blue-100 hover:bg-blue-200 text-blue-800 px-3 py-1 rounded-md border border-blue-300 transition-colors duration-150 h-7 flex items-center font-medium"
+                className={BUTTON_STYLES.headerSecondary}
               >
-                👤 個人ページ
+                <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                </svg>
+                個人ページ
               </a>
               {(user?.role === 'ADMIN' || user?.role === 'SYSTEM_ADMIN') && (
                 <a
                   href="/admin/pending-approval"
-                  className="text-sm bg-orange-100 hover:bg-orange-200 text-orange-800 px-3 py-1 rounded-md border border-orange-300 transition-colors duration-150 h-7 flex items-center font-medium"
+                  className={BUTTON_STYLES.headerPrimary}
                 >
-                  🔐 申請承認管理
+                  <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" clipRule="evenodd" />
+                  </svg>
+                  申請承認管理
                 </a>
               )}
               <button
                 onClick={logout}
-                className="text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1 rounded-md border border-gray-300 transition-colors duration-150 h-7 flex items-center font-medium"
+                className={BUTTON_STYLES.headerNeutral}
               >
+                <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clipRule="evenodd" />
+                </svg>
                 ログアウト
               </button>
             </div>

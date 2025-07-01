@@ -558,6 +558,90 @@ export function getDepartmentGroupStyle(backgroundColor: string): React.CSSPrope
   };
 }
 
+// === 統一カラーシステム（Airシフト風プロフェッショナルデザイン） ===
+export const BRAND_COLORS = {
+  // プライマリ（青系）- メイン機能・設定系
+  primary: {
+    50: 'bg-indigo-50',
+    100: 'bg-indigo-100', 
+    500: 'bg-indigo-500',
+    600: 'bg-indigo-600',
+    700: 'bg-indigo-700',
+    text: 'text-indigo-600',
+    textWhite: 'text-white',
+    border: 'border-indigo-600',
+    hover: 'hover:bg-indigo-700',
+    ring: 'focus:ring-indigo-500'
+  },
+  
+  // セカンダリ（緑系）- ステータス・状態系 
+  secondary: {
+    50: 'bg-teal-50',
+    100: 'bg-teal-100',
+    500: 'bg-teal-500', 
+    600: 'bg-teal-600',
+    700: 'bg-teal-700',
+    text: 'text-teal-600',
+    textWhite: 'text-white',
+    border: 'border-teal-500',
+    hover: 'hover:bg-teal-600',
+    ring: 'focus:ring-teal-500'
+  },
+  
+  // ニュートラル（グレー系）- 非選択・背景
+  neutral: {
+    50: 'bg-gray-50',
+    100: 'bg-gray-100',
+    200: 'bg-gray-200',
+    300: 'bg-gray-300',
+    400: 'bg-gray-400',
+    500: 'bg-gray-500',
+    600: 'bg-gray-600',
+    700: 'bg-gray-700',
+    800: 'bg-gray-800',
+    text: 'text-gray-700',
+    textLight: 'text-gray-500',
+    textDark: 'text-gray-800',
+    textWhite: 'text-white',
+    border: 'border-gray-300',
+    borderLight: 'border-gray-200',
+    hover: 'hover:bg-gray-50',
+    ring: 'focus:ring-gray-500'
+  }
+} as const;
+
+// === 統一ボタンスタイル（商用製品クオリティ） ===
+export const BUTTON_STYLES = {
+  // プライマリボタングループ（設定系：すべて|担当設定|支援設定）
+  primaryGroup: {
+    active: `px-3 py-1 text-xs font-medium ${BRAND_COLORS.primary[600]} ${BRAND_COLORS.primary.textWhite} ${BRAND_COLORS.primary.border}`,
+    inactive: `px-3 py-1 text-xs font-medium bg-white ${BRAND_COLORS.neutral.text} ${BRAND_COLORS.neutral.border} ${BRAND_COLORS.neutral.hover}`,
+    transition: "transition-colors duration-150 ease-out"
+  },
+  
+  // セカンダリボタングループ（ステータス系：すべて|対応可能|対応不可）
+  secondaryGroup: {
+    active: `px-3 py-1 text-xs font-medium ${BRAND_COLORS.secondary[500]} ${BRAND_COLORS.secondary.textWhite} ${BRAND_COLORS.secondary.border}`,
+    inactive: `px-3 py-1 text-xs font-medium bg-white ${BRAND_COLORS.neutral.text} ${BRAND_COLORS.neutral.border} ${BRAND_COLORS.neutral.hover}`,
+    transition: "transition-colors duration-150 ease-out"
+  },
+  
+  // 単体ボタン
+  primary: `px-4 py-2 text-sm font-medium ${BRAND_COLORS.primary[600]} ${BRAND_COLORS.primary.textWhite} border-transparent rounded-md ${BRAND_COLORS.primary.hover}`,
+  secondary: `px-4 py-2 text-sm font-medium ${BRAND_COLORS.secondary[500]} ${BRAND_COLORS.secondary.textWhite} border-transparent rounded-md ${BRAND_COLORS.secondary.hover}`,
+  neutral: `px-4 py-2 text-sm font-medium ${BRAND_COLORS.neutral.text} bg-white ${BRAND_COLORS.neutral.border} rounded-md ${BRAND_COLORS.neutral.hover}`,
+  
+  // ナビゲーションボタン（ヘッダー右上用・白テキスト + 濃い背景）
+  navPrimary: `text-xs font-medium ${BRAND_COLORS.primary[600]} ${BRAND_COLORS.primary.textWhite} px-3 py-1 rounded-md border-transparent ${BRAND_COLORS.primary.hover} transition-colors duration-150 h-7 flex items-center`,
+  navSecondary: `text-xs font-medium ${BRAND_COLORS.secondary[500]} ${BRAND_COLORS.secondary.textWhite} px-3 py-1 rounded-md border-transparent ${BRAND_COLORS.secondary.hover} transition-colors duration-150 h-7 flex items-center`,
+  navNeutral: `text-xs font-medium ${BRAND_COLORS.neutral[600]} ${BRAND_COLORS.neutral.textWhite} px-3 py-1 rounded-md border-transparent hover:bg-gray-700 transition-colors duration-150 h-7 flex items-center`,
+  
+  // 青いヘッダー用ボタン（色を保持 + 白境界線で統一）
+  headerPrimary: `text-xs font-medium text-white bg-indigo-700 px-3 py-1 rounded-md border border-white border-opacity-40 hover:bg-indigo-800 transition-colors duration-150 h-7 flex items-center`,
+  headerSecondary: `text-xs font-medium text-gray-100 bg-teal-600 px-3 py-1 rounded-md border border-white border-opacity-40 hover:bg-teal-700 transition-colors duration-150 h-7 flex items-center`,
+  headerNeutral: `text-xs font-medium text-white bg-gray-600 px-3 py-1 rounded-md border border-white border-opacity-40 hover:bg-gray-700 transition-colors duration-150 h-7 flex items-center`
+} as const;
+
 // === 軽量アニメーション効果クラス（パフォーマンス優先） ===
 // 軽快さを保ちながら操作感を向上させる軽量なCSS効果
 export const LIGHT_ANIMATIONS = {

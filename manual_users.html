@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>出社状況管理システム - 一般ユーザー操作マニュアル</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', 'Yu Gothic UI', 'Hiragino Sans', sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f8f9fa;
+        }
+        
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 2rem;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2.2rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+        
+        .toc {
+            background: #f8f9fa;
+            padding: 1.5rem;
+            border-bottom: 3px solid #e9ecef;
+        }
+        
+        .toc h2 {
+            color: #495057;
+            margin-bottom: 1rem;
+            font-size: 1.3rem;
+        }
+        
+        .toc ul {
+            list-style: none;
+        }
+        
+        .toc li {
+            margin: 0.5rem 0;
+        }
+        
+        .toc a {
+            color: #0066cc;
+            text-decoration: none;
+            padding: 0.3rem 0;
+            display: block;
+            border-left: 3px solid transparent;
+            padding-left: 1rem;
+        }
+        
+        .toc a:hover {
+            border-left-color: #0066cc;
+            background: #e7f3ff;
+        }
+        
+        .content {
+            padding: 2rem;
+        }
+        
+        .section {
+            margin-bottom: 3rem;
+            border-bottom: 1px solid #e9ecef;
+            padding-bottom: 2rem;
+        }
+        
+        .section:last-child {
+            border-bottom: none;
+        }
+        
+        h2 {
+            color: #495057;
+            font-size: 1.8rem;
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid #e9ecef;
+        }
+        
+        h3 {
+            color: #6c757d;
+            font-size: 1.4rem;
+            margin: 1.5rem 0 1rem 0;
+        }
+        
+        h4 {
+            color: #6c757d;
+            font-size: 1.2rem;
+            margin: 1rem 0 0.5rem 0;
+        }
+        
+        .important {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            padding: 1rem;
+            border-radius: 5px;
+            margin: 1rem 0;
+        }
+        
+        .important-title {
+            font-weight: bold;
+            color: #856404;
+            margin-bottom: 0.5rem;
+        }
+        
+        .tip {
+            background: #d1ecf1;
+            border: 1px solid #bee5eb;
+            padding: 1rem;
+            border-radius: 5px;
+            margin: 1rem 0;
+        }
+        
+        .tip-title {
+            font-weight: bold;
+            color: #0c5460;
+            margin-bottom: 0.5rem;
+        }
+        
+        .warning {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            padding: 1rem;
+            border-radius: 5px;
+            margin: 1rem 0;
+        }
+        
+        .warning-title {
+            font-weight: bold;
+            color: #721c24;
+            margin-bottom: 0.5rem;
+        }
+        
+        .steps {
+            background: #f8f9fa;
+            padding: 1.5rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+        }
+        
+        .steps ol {
+            margin-left: 1.5rem;
+        }
+        
+        .steps li {
+            margin: 0.8rem 0;
+            padding-left: 0.5rem;
+        }
+        
+        .highlight {
+            background: #ffeb3b;
+            padding: 0.2rem 0.4rem;
+            border-radius: 3px;
+            font-weight: bold;
+        }
+        
+        .button-example {
+            display: inline-block;
+            background: #007bff;
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            text-decoration: none;
+            font-size: 0.9rem;
+            margin: 0.2rem;
+        }
+        
+        .color-legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+        
+        .color-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .color-box {
+            width: 20px;
+            height: 20px;
+            border-radius: 3px;
+            border: 1px solid #ccc;
+        }
+        
+        .flow-diagram {
+            background: #f8f9fa;
+            padding: 2rem;
+            border-radius: 8px;
+            text-align: center;
+            margin: 1.5rem 0;
+        }
+        
+        .flow-step {
+            display: inline-block;
+            background: white;
+            border: 2px solid #007bff;
+            border-radius: 8px;
+            padding: 1rem;
+            margin: 0.5rem;
+            min-width: 150px;
+        }
+        
+        .flow-arrow {
+            display: inline-block;
+            font-size: 1.5rem;
+            color: #007bff;
+            margin: 0 0.5rem;
+        }
+        
+        .faq-item {
+            background: #f8f9fa;
+            border-radius: 5px;
+            margin: 1rem 0;
+            overflow: hidden;
+        }
+        
+        .faq-question {
+            background: #e9ecef;
+            padding: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        
+        .faq-answer {
+            padding: 1rem;
+        }
+        
+        .screenshot-placeholder {
+            background: #e9ecef;
+            border: 2px dashed #adb5bd;
+            padding: 2rem;
+            text-align: center;
+            margin: 1rem 0;
+            border-radius: 8px;
+            color: #6c757d;
+        }
+        
+        @media print {
+            .container {
+                box-shadow: none;
+            }
+            .header {
+                background: #495057 !important;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .content {
+                padding: 1rem;
+            }
+            .header {
+                padding: 1rem;
+            }
+            .header h1 {
+                font-size: 1.8rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- ヘッダー -->
+        <div class="header">
+            <h1>📋 出社状況管理システム</h1>
+            <p>一般ユーザー操作マニュアル</p>
+        </div>
+        
+        <!-- 目次 -->
+        <div class="toc">
+            <h2>📖 目次</h2>
+            <ul>
+                <li><a href="#overview">1. システムの概要</a></li>
+                <li><a href="#login">2. ログイン方法</a></li>
+                <li><a href="#attendance">3. 出社状況ページの使い方</a></li>
+                <li><a href="#monthly-planner">4. 月次プランナーの使い方</a></li>
+                <li><a href="#personal">5. 個人ページの使い方</a></li>
+                <li><a href="#workflow">6. 基本的な使い方の流れ</a></li>
+                <li><a href="#faq">7. よくある質問</a></li>
+                <li><a href="#troubleshooting">8. トラブル対応</a></li>
+            </ul>
+        </div>
+        
+        <!-- コンテンツ -->
+        <div class="content">
+            <!-- 1. システムの概要 -->
+            <div id="overview" class="section">
+                <h2>1. システムの概要</h2>
+                
+                <h3>🎯 このシステムでできること</h3>
+                <p>出社状況管理システムは、あなたの勤務予定を管理し、チーム全体の出社状況を確認できるシステムです。</p>
+                
+                <div class="important">
+                    <div class="important-title">💡 重要なポイント</div>
+                    <ul>
+                        <li><strong>月次プランナー</strong>で翌月の予定を事前に申請</li>
+                        <li><strong>管理者が承認</strong>すると、出社状況と個人ページに反映</li>
+                        <li><strong>当日の急な変更</strong>は出社状況ページで直接変更可能</li>
+                    </ul>
+                </div>
+                
+                <h3>🌐 3つの主要ページ</h3>
+                <div class="steps">
+                    <ol>
+                        <li><strong>📊 出社状況ページ</strong> - チーム全体の今日の状況確認・当日の予定変更</li>
+                        <li><strong>📅 月次プランナー</strong> - 翌月の予定を事前に申請</li>
+                        <li><strong>👤 個人ページ</strong> - 自分の予定確認・履歴閲覧</li>
+                    </ol>
+                </div>
+            </div>
+            
+            <!-- 2. ログイン方法 -->
+            <div id="login" class="section">
+                <h2>2. ログイン方法</h2>
+                
+                <div class="steps">
+                    <h4>ログイン手順</h4>
+                    <ol>
+                        <li>ブラウザ（Chrome または Edge推奨）を開く</li>
+                        <li>システムのURL を入力してアクセス</li>
+                        <li><span class="highlight">メールアドレス</span>と<span class="highlight">パスワード</span>を入力</li>
+                        <li>「ログイン」ボタンをクリック</li>
+                    </ol>
+                </div>
+                
+                <div class="screenshot-placeholder">
+                    📸 ログイン画面のスクリーンショット
+                    <br>（メールアドレス・パスワード入力欄、ログインボタン）
+                </div>
+                
+                <div class="tip">
+                    <div class="tip-title">💡 ワンポイント</div>
+                    <p>パスワードを忘れた場合は、「パスワードを忘れた方はこちら」リンクから再設定できます。</p>
+                </div>
+            </div>
+            
+            <!-- 3. 出社状況ページの使い方 -->
+            <div id="attendance" class="section">
+                <h2>3. 📊 出社状況ページの使い方</h2>
+                <p>ログイン後に最初に表示される画面です。チーム全体の今日の出社状況が一目で分かります。</p>
+                
+                <h3>📱 画面の見方</h3>
+                
+                <div class="screenshot-placeholder">
+                    📸 出社状況メイン画面のスクリーンショット
+                    <br>（全体レイアウト、タイムライン、スタッフ一覧）
+                </div>
+                
+                <h4>🎨 色分けの意味</h4>
+                <div class="color-legend">
+                    <div class="color-item">
+                        <div class="color-box" style="background-color: #22c55e;"></div>
+                        <span>緑色 = 出社・オンライン</span>
+                    </div>
+                    <div class="color-item">
+                        <div class="color-box" style="background-color: #3b82f6;"></div>
+                        <span>青色 = リモート・在宅</span>
+                    </div>
+                    <div class="color-item">
+                        <div class="color-box" style="background-color: #f59e0b;"></div>
+                        <span>オレンジ = 会議・外出</span>
+                    </div>
+                    <div class="color-item">
+                        <div class="color-box" style="background-color: #ef4444;"></div>
+                        <span>赤色 = 休暇・不在</span>
+                    </div>
+                    <div class="color-item">
+                        <div class="color-box" style="background-color: #8b5cf6;"></div>
+                        <span>紫色 = 研修・特別業務</span>
+                    </div>
+                </div>
+                
+                <h3>🖱️ 基本操作</h3>
+                
+                <h4>時間軸の移動</h4>
+                <div class="steps">
+                    <ol>
+                        <li><strong>横スクロール</strong>で時間軸を左右に移動</li>
+                        <li><span class="button-example">今日</span>ボタンで現在時刻にジャンプ</li>
+                        <li>マウスホイールでも横スクロール可能</li>
+                    </ol>
+                </div>
+                
+                <h4>表示の絞り込み</h4>
+                <div class="steps">
+                    <ol>
+                        <li><strong>部署フィルター</strong>で特定の部署のみ表示</li>
+                        <li><strong>グループフィルター</strong>で更に細かく絞り込み</li>
+                        <li><strong>「すべて」</strong>を選択すると全員表示に戻る</li>
+                    </ol>
+                </div>
+                
+                <h3>✏️ 当日の予定変更方法</h3>
+                
+                <div class="important">
+                    <div class="important-title">⚡ 緊急時の予定変更</div>
+                    <p>急な体調不良や会議の追加など、当日の予定変更はここで行います。</p>
+                </div>
+                
+                <h4>📝 予定の追加・変更手順</h4>
+                <div class="steps">
+                    <ol>
+                        <li>画面上で<strong>自分の名前の行</strong>を見つける</li>
+                        <li>予定を追加したい<strong>時間帯をクリック</strong></li>
+                        <li>予定編集画面が開く</li>
+                        <li><strong>ステータス</strong>（出社、リモート、休暇など）を選択</li>
+                        <li><strong>開始時間</strong>と<strong>終了時間</strong>を設定</li>
+                        <li>必要に応じて<strong>メモ</strong>を入力</li>
+                        <li><span class="button-example">保存</span>ボタンをクリック</li>
+                    </ol>
+                </div>
+                
+                <div class="screenshot-placeholder">
+                    📸 予定編集モーダルのスクリーンショット
+                    <br>（ステータス選択、時間設定、メモ入力、保存ボタン）
+                </div>
+                
+                <h4>🗑️ 予定の削除</h4>
+                <div class="steps">
+                    <ol>
+                        <li>削除したい<strong>予定をクリック</strong></li>
+                        <li>予定編集画面の<span class="button-example" style="background: #dc3545;">削除</span>ボタンをクリック</li>
+                        <li>確認画面で「はい」をクリック</li>
+                    </ol>
+                </div>
+                
+                <div class="tip">
+                    <div class="tip-title">💡 便利な機能</div>
+                    <ul>
+                        <li><strong>プリセット</strong>機能で、よく使う予定パターンを素早く設定</li>
+                        <li><strong>ドラッグ&ドロップ</strong>で予定の時間をかんたん調整</li>
+                        <li><strong>右クリック</strong>でメニューを表示（ブラウザによる）</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <!-- 4. 月次プランナーの使い方 -->
+            <div id="monthly-planner" class="section">
+                <h2>4. 📅 月次プランナーの使い方</h2>
+                <p>翌月の予定を事前に申請するページです。管理者が承認すると、正式な予定として登録されます。</p>
+                
+                <div class="important">
+                    <div class="important-title">📋 月次プランナーの目的</div>
+                    <p>来月の休暇や研修、出張などの予定を事前に申請することで、チーム全体のスケジュール調整がスムーズになります。</p>
+                </div>
+                
+                <h3>🌐 ページへの移動</h3>
+                <div class="steps">
+                    <ol>
+                        <li>出社状況ページの右上にある<span class="button-example" style="background: #8b5cf6;">📅 月次プランナー</span>をクリック</li>
+                        <li>月次プランナーページが開きます</li>
+                    </ol>
+                </div>
+                
+                <div class="screenshot-placeholder">
+                    📸 月次プランナー画面のスクリーンショット
+                    <br>（月表示カレンダー、月切り替えボタン、申請ボタン）
+                </div>
+                
+                <h3>📅 月の切り替え</h3>
+                <div class="steps">
+                    <ol>
+                        <li><span class="button-example">&lt;</span>ボタンで前の月</li>
+                        <li><span class="button-example">&gt;</span>ボタンで次の月</li>
+                        <li><span class="button-example">今月</span>ボタンで現在の月に戻る</li>
+                    </ol>
+                </div>
+                
+                <h3>✏️ 予定の申請方法</h3>
+                
+                <h4>📝 予定追加の手順</h4>
+                <div class="steps">
+                    <ol>
+                        <li>申請したい<strong>日付をクリック</strong></li>
+                        <li>予定作成画面が開く</li>
+                        <li><strong>ステータス</strong>を選択（休暇、研修、出張など）</li>
+                        <li><strong>時間</strong>を設定（終日の場合は9:00-18:00など）</li>
+                        <li><strong>理由・メモ</strong>を入力（例：「年次休暇」「客先訪問」）</li>
+                        <li><span class="button-example">保存</span>ボタンをクリック</li>
+                    </ol>
+                </div>
+                
+                <h4>📤 申請の送信</h4>
+                <div class="steps">
+                    <ol>
+                        <li>すべての予定を入力後、画面上部の<span class="button-example" style="background: #22c55e;">申請送信</span>ボタンをクリック</li>
+                        <li>確認画面で内容を確認</li>
+                        <li>「送信」をクリックして申請完了</li>
+                    </ol>
+                </div>
+                
+                <h3>📊 申請状況の確認</h3>
+                
+                <div class="color-legend">
+                    <div class="color-item">
+                        <div class="color-box" style="background-color: #9ca3af; border: 2px dashed #6b7280;"></div>
+                        <span>グレー（点線） = 申請中（承認待ち）</span>
+                    </div>
+                    <div class="color-item">
+                        <div class="color-box" style="background-color: #22c55e;"></div>
+                        <span>色付き（実線） = 承認済み</span>
+                    </div>
+                    <div class="color-item">
+                        <div class="color-box" style="background-color: #ef4444; border: 2px solid #dc2626;"></div>
+                        <span>赤色（太線） = 却下</span>
+                    </div>
+                </div>
+                
+                <div class="tip">
+                    <div class="tip-title">💡 申請のコツ</div>
+                    <ul>
+                        <li><strong>早めの申請</strong>：月末までに翌月分を申請</li>
+                        <li><strong>詳細なメモ</strong>：理由を明確に記載</li>
+                        <li><strong>複数日の連続休暇</strong>：まとめて申請すると管理が楽</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <!-- 5. 個人ページの使い方 -->
+            <div id="personal" class="section">
+                <h2>5. 👤 個人ページの使い方</h2>
+                <p>自分の予定確認と過去の勤務履歴を確認できるページです。</p>
+                
+                <h3>🌐 ページへの移動</h3>
+                <div class="steps">
+                    <ol>
+                        <li>出社状況ページの右上にある<span class="button-example" style="background: #3b82f6;">👤 個人ページ</span>をクリック</li>
+                        <li>個人ページが開きます</li>
+                    </ol>
+                </div>
+                
+                <div class="screenshot-placeholder">
+                    📸 個人ページ画面のスクリーンショット
+                    <br>（個人カレンダー、月切り替え、予定詳細表示）
+                </div>
+                
+                <h3>📅 表示の切り替え</h3>
+                <div class="steps">
+                    <ol>
+                        <li><strong>月表示</strong>：1ヶ月の予定を俯瞰</li>
+                        <li><strong>週表示</strong>：1週間の詳細スケジュール</li>
+                        <li><strong>月切り替え</strong>：前月・翌月の履歴確認</li>
+                    </ol>
+                </div>
+                
+                <h3>📊 確認できる情報</h3>
+                
+                <h4>承認済み予定</h4>
+                <ul>
+                    <li>月次プランナーで申請して承認された予定</li>
+                    <li>管理者が直接登録した予定</li>
+                    <li>基本契約時間（通常の勤務時間）</li>
+                </ul>
+                
+                <h4>勤務統計情報</h4>
+                <ul>
+                    <li>月の総勤務時間</li>
+                    <li>休暇取得日数</li>
+                    <li>出社・リモート割合</li>
+                </ul>
+                
+                <div class="tip">
+                    <div class="tip-title">💡 履歴活用法</div>
+                    <ul>
+                        <li><strong>勤務実績確認</strong>：月末の時間確認</li>
+                        <li><strong>休暇残日数把握</strong>：計画的な休暇取得</li>
+                        <li><strong>勤務パターン分析</strong>：自分の働き方の振り返り</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <!-- 6. 基本的な使い方の流れ -->
+            <div id="workflow" class="section">
+                <h2>6. 🔄 基本的な使い方の流れ</h2>
+                
+                <div class="flow-diagram">
+                    <div class="flow-step">
+                        <strong>1. 月次プランナー</strong><br>
+                        翌月の予定を申請
+                    </div>
+                    <div class="flow-arrow">→</div>
+                    <div class="flow-step">
+                        <strong>2. 管理者承認</strong><br>
+                        申請内容を確認・承認
+                    </div>
+                    <div class="flow-arrow">→</div>
+                    <div class="flow-step">
+                        <strong>3. 自動反映</strong><br>
+                        出社状況・個人ページに表示
+                    </div>
+                </div>
+                
+                <h3>📋 毎月のルーティン</h3>
+                
+                <h4>🗓️ 月末（25日頃）</h4>
+                <div class="steps">
+                    <ol>
+                        <li>月次プランナーで<strong>翌月の予定を入力</strong></li>
+                        <li>休暇、研修、出張などを申請</li>
+                        <li>申請内容を確認して<strong>送信</strong></li>
+                    </ol>
+                </div>
+                
+                <h4>📅 月初（1日〜3日）</h4>
+                <div class="steps">
+                    <ol>
+                        <li>承認結果を<strong>個人ページで確認</strong></li>
+                        <li>却下された項目があれば<strong>再申請</strong></li>
+                        <li>承認された予定が出社状況に<strong>反映されているか確認</strong></li>
+                    </ol>
+                </div>
+                
+                <h4>🔄 日常業務</h4>
+                <div class="steps">
+                    <ol>
+                        <li>毎朝<strong>出社状況ページ</strong>でチームの状況確認</li>
+                        <li>急な予定変更は<strong>当日に直接変更</strong></li>
+                        <li>重要な変更は<strong>上司・チームに連絡</strong></li>
+                    </ol>
+                </div>
+                
+                <div class="important">
+                    <div class="important-title">⚠️ 重要な注意点</div>
+                    <ul>
+                        <li><strong>当日の変更</strong>は出社状況ページで（緊急時のみ）</li>
+                        <li><strong>事前の予定</strong>は月次プランナーで申請</li>
+                        <li><strong>長期休暇</strong>は早めに申請（1ヶ月前推奨）</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <!-- 7. よくある質問 -->
+            <div id="faq" class="section">
+                <h2>7. ❓ よくある質問</h2>
+                
+                <div class="faq-item">
+                    <div class="faq-question">Q1. 申請した予定が承認されません。どうすればいいですか？</div>
+                    <div class="faq-answer">
+                        <strong>A1.</strong> 以下を確認してください：
+                        <ul>
+                            <li>申請内容に不備がないか（理由・時間など）</li>
+                            <li>他のメンバーと重複していないか</li>
+                            <li>会社の休暇規定に沿っているか</li>
+                        </ul>
+                        問題がない場合は、直接管理者に確認しましょう。
+                    </div>
+                </div>
+                
+                <div class="faq-item">
+                    <div class="faq-question">Q2. 予定を間違って入力しました。修正できますか？</div>
+                    <div class="faq-answer">
+                        <strong>A2.</strong> 状況によって異なります：
+                        <ul>
+                            <li><strong>申請前</strong>：月次プランナーで自由に修正可能</li>
+                            <li><strong>申請後・承認前</strong>：一度取り消して再申請</li>
+                            <li><strong>承認後</strong>：管理者に修正依頼、または当日に出社状況ページで変更</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <div class="faq-item">
+                    <div class="faq-question">Q3. 急に体調不良になりました。どこで休暇申請すればいいですか？</div>
+                    <div class="faq-answer">
+                        <strong>A3.</strong> 当日の急な変更の場合：
+                        <ol>
+                            <li><strong>出社状況ページ</strong>で当日の予定を「休暇」に変更</li>
+                            <li>メモ欄に「体調不良」など理由を記入</li>
+                            <li>上司・チームにも別途連絡</li>
+                        </ol>
+                    </div>
+                </div>
+                
+                <div class="faq-item">
+                    <div class="faq-question">Q4. パスワードを忘れてしまいました。</div>
+                    <div class="faq-answer">
+                        <strong>A4.</strong> ログイン画面で：
+                        <ol>
+                            <li>「パスワードを忘れた方はこちら」をクリック</li>
+                            <li>メールアドレスを入力</li>
+                            <li>送信されたメールの指示に従ってパスワード再設定</li>
+                        </ol>
+                        メールが届かない場合は、システム管理者に連絡してください。
+                    </div>
+                </div>
+                
+                <div class="faq-item">
+                    <div class="faq-question">Q5. 画面が正しく表示されません。</div>
+                    <div class="faq-answer">
+                        <strong>A5.</strong> 以下を試してください：
+                        <ol>
+                            <li><strong>ページ更新</strong>：F5キーまたはブラウザの更新ボタン</li>
+                            <li><strong>キャッシュクリア</strong>：Ctrl+Shift+Delete でキャッシュ削除</li>
+                            <li><strong>ブラウザ変更</strong>：Chrome または Edge を使用</li>
+                            <li><strong>再ログイン</strong>：一度ログアウトして再ログイン</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 8. トラブル対応 -->
+            <div id="troubleshooting" class="section">
+                <h2>8. 🔧 トラブル対応</h2>
+                
+                <h3>🌐 ブラウザ関連</h3>
+                
+                <h4>推奨ブラウザ</h4>
+                <ul>
+                    <li><strong>Google Chrome</strong>（最新版）</li>
+                    <li><strong>Microsoft Edge</strong>（最新版）</li>
+                    <li>Internet Explorer は<strong>非対応</strong></li>
+                </ul>
+                
+                <h4>よくある問題と解決法</h4>
+                
+                <div class="warning">
+                    <div class="warning-title">⚠️ 画面が崩れて表示される</div>
+                    <div class="steps">
+                        <ol>
+                            <li><strong>Ctrl + F5</strong> でページを強制更新</li>
+                            <li>ブラウザのズーム倍率を100%に設定</li>
+                            <li>広告ブロッカーを一時無効化</li>
+                        </ol>
+                    </div>
+                </div>
+                
+                <div class="warning">
+                    <div class="warning-title">⚠️ 操作が反応しない</div>
+                    <div class="steps">
+                        <ol>
+                            <li>他のタブやアプリを閉じてメモリを確保</li>
+                            <li>ブラウザを再起動</li>
+                            <li>PCを再起動</li>
+                        </ol>
+                    </div>
+                </div>
+                
+                <div class="warning">
+                    <div class="warning-title">⚠️ ログインできない</div>
+                    <div class="steps">
+                        <ol>
+                            <li>メールアドレス・パスワードの入力ミスを確認</li>
+                            <li>CapsLockが有効になっていないか確認</li>
+                            <li>「パスワードを忘れた方はこちら」でリセット</li>
+                            <li>それでも解決しない場合は管理者に連絡</li>
+                        </ol>
+                    </div>
+                </div>
+                
+                <h3>🆘 困ったときの連絡先</h3>
+                
+                <div class="important">
+                    <div class="important-title">📞 サポート連絡先</div>
+                    <ul>
+                        <li><strong>システム関連</strong>：ITサポート部門</li>
+                        <li><strong>利用方法</strong>：直属の上司または人事部</li>
+                        <li><strong>緊急時</strong>：総務部</li>
+                    </ul>
+                    <p>※ 具体的な連絡先は会社の規定に従ってください</p>
+                </div>
+                
+                <h3>🔍 セルフチェックリスト</h3>
+                
+                <div class="tip">
+                    <div class="tip-title">✅ 問い合わせ前にチェック</div>
+                    <ol>
+                        <li>推奨ブラウザを使用していますか？</li>
+                        <li>インターネット接続は正常ですか？</li>
+                        <li>他のサイトは正常に表示されますか？</li>
+                        <li>ページ更新（F5）を試しましたか？</li>
+                        <li>一度ログアウトして再ログインしましたか？</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+        
+        <!-- フッター -->
+        <div style="background: #f8f9fa; padding: 2rem; text-align: center; color: #6c757d; border-top: 1px solid #e9ecef;">
+            <p>📋 出社状況管理システム - 一般ユーザー操作マニュアル</p>
+            <p>最終更新: 2025年1月</p>
+            <p style="font-size: 0.9rem; margin-top: 1rem;">
+                このマニュアルについて質問や改善要望がある場合は、システム管理者までご連絡ください。
+            </p>
+        </div>
+    </div>
+</body>
+</html>

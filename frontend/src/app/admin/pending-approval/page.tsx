@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '../../components/AuthProvider';
 import AuthGuard from '../../components/AuthGuard';
-import { STATUS_COLORS, capitalizeStatus } from '../../components/timeline/TimelineUtils';
+import { STATUS_COLORS, capitalizeStatus, BUTTON_STYLES } from '../../components/timeline/TimelineUtils';
 
 // 型定義
 type PendingSchedule = {
@@ -207,25 +207,36 @@ export default function PendingApprovalPage() {
     <AuthGuard requiredRole={['ADMIN', 'SYSTEM_ADMIN']}>
       <div className="h-screen flex flex-col bg-gray-50">
       {/* ヘッダー */}
-      <div className="bg-white shadow-sm border-b">
+      <div className="bg-white rounded-lg shadow-sm mb-4">
         {/* タイトル行 */}
-        <div className="px-6 py-3 border-b border-gray-200">
+        <div className="bg-indigo-600 px-6 py-3 rounded-t-lg">
           <div className="flex items-center justify-between">
-            <h1 className="text-lg font-semibold text-gray-900">🔐 申請承認管理</h1>
+            <h1 className="text-lg font-semibold text-white">
+              <svg className="w-5 h-5 mr-2 inline" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" clipRule="evenodd" />
+              </svg>
+              申請承認管理
+            </h1>
             <div className="flex items-center space-x-4">
-              <span className="text-sm text-gray-600">
-                {user?.name || user?.email} ({user?.role === 'ADMIN' ? '管理者' : '一般ユーザー'})
+              <span className="text-sm text-indigo-100">
+                {user?.name || user?.email} ({user?.role === 'SYSTEM_ADMIN' ? 'システム管理者' : user?.role === 'ADMIN' ? '管理者' : '一般ユーザー'})
               </span>
               <a
                 href="/monthly-planner"
-                className="text-sm bg-purple-100 hover:bg-purple-200 text-purple-800 px-3 py-1 rounded border border-purple-300 transition-colors"
+                className={BUTTON_STYLES.headerPrimary}
               >
-                📅 月次プランナー
+                <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
+                </svg>
+                月次プランナー
               </a>
               <button
                 onClick={logout}
-                className="text-sm bg-gray-100 hover:bg-gray-200 px-3 py-1 rounded border"
+                className={BUTTON_STYLES.headerNeutral}
               >
+                <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clipRule="evenodd" />
+                </svg>
                 ログアウト
               </button>
             </div>
@@ -234,7 +245,49 @@ export default function PendingApprovalPage() {
         
         {/* 統計・操作行 */}
         <div className="px-6 py-3 flex items-center justify-between">
-          <div className="flex items-center space-x-4">
+          {/* 左：フィルター・統計 */}
+          <div className="flex items-center gap-6">
+            {/* フィルター - 1行表示 */}
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium text-gray-700">ステータス:</span>
+                <select
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value as FilterStatus)}
+                  className="px-2 py-1 text-xs border border-gray-300 rounded"
+                >
+                  <option value="all">すべて</option>
+                  <option value="pending">承認待ち</option>
+                  <option value="approved">承認済み</option>
+                  <option value="rejected">却下済み</option>
+                </select>
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium text-gray-700">日付:</span>
+                <input
+                  type="date"
+                  value={filterDate}
+                  onChange={(e) => setFilterDate(e.target.value)}
+                  className="px-2 py-1 text-xs border border-gray-300 rounded"
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium text-gray-700">部署:</span>
+                <select
+                  value={filterDepartment}
+                  onChange={(e) => setFilterDepartment(e.target.value)}
+                  className="px-2 py-1 text-xs border border-gray-300 rounded"
+                >
+                  <option value="all">すべて</option>
+                  {departments.map(dept => (
+                    <option key={dept} value={dept}>{dept}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            
             {/* 統計表示 */}
             <div className="flex items-center space-x-4 text-sm">
               <div className="bg-yellow-100 px-2 py-1 rounded">
@@ -249,7 +302,7 @@ export default function PendingApprovalPage() {
             </div>
           </div>
 
-          {/* 一括操作ボタン */}
+          {/* 右：操作ボタン */}
           <div className="flex items-center space-x-2">
             {selectedItems.size > 0 && (
               <>
@@ -274,47 +327,6 @@ export default function PendingApprovalPage() {
             >
               更新
             </button>
-          </div>
-        </div>
-
-        {/* フィルター */}
-        <div className="mt-4 flex flex-wrap gap-4">
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">ステータス</label>
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value as FilterStatus)}
-              className="px-2 py-1 text-xs border border-gray-300 rounded"
-            >
-              <option value="all">すべて</option>
-              <option value="pending">承認待ち</option>
-              <option value="approved">承認済み</option>
-              <option value="rejected">却下済み</option>
-            </select>
-          </div>
-          
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">日付</label>
-            <input
-              type="date"
-              value={filterDate}
-              onChange={(e) => setFilterDate(e.target.value)}
-              className="px-2 py-1 text-xs border border-gray-300 rounded"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">部署</label>
-            <select
-              value={filterDepartment}
-              onChange={(e) => setFilterDepartment(e.target.value)}
-              className="px-2 py-1 text-xs border border-gray-300 rounded"
-            >
-              <option value="all">すべて</option>
-              {departments.map(dept => (
-                <option key={dept} value={dept}>{dept}</option>
-              ))}
-            </select>
           </div>
         </div>
       </div>

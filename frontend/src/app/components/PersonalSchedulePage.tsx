@@ -15,7 +15,8 @@ import {
   TIMELINE_CONFIG,
   capitalizeStatus,
   getEffectiveStatusColor,
-  LIGHT_ANIMATIONS
+  LIGHT_ANIMATIONS,
+  BUTTON_STYLES
 } from './timeline/TimelineUtils';
 // 祝日関連のインポート
 import { Holiday } from './types/MainAppTypes';
@@ -1969,28 +1970,37 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
         {/* ヘッダー（メイン画面風） */}
         <div className="bg-white rounded-lg shadow-sm mb-4">
           {/* タイトル行 */}
-          <div className="px-6 py-3 border-b flex justify-between items-center">
-            <h1 className="text-lg font-semibold text-gray-900">個人ページ</h1>
+          <div className="bg-indigo-600 px-6 py-3 flex justify-between items-center rounded-t-lg">
+            <h1 className="text-lg font-semibold text-white">個人ページ</h1>
             <div className="flex items-center space-x-4">
-              <span className="text-sm text-gray-600">
+              <span className="text-sm text-indigo-100">
                 {user?.name || user?.email} ({user?.role === 'ADMIN' ? '管理者' : user?.role === 'SYSTEM_ADMIN' ? 'システム管理者' : '一般ユーザー'})
               </span>
               <a
                 href="/"
-                className="text-sm bg-green-100 hover:bg-green-200 text-green-800 px-3 py-1 rounded-md border border-green-300 transition-colors duration-150 h-7 flex items-center font-medium"
+                className={BUTTON_STYLES.headerSecondary}
               >
-                📊 出社状況
+                <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z" clipRule="evenodd" />
+                </svg>
+                出社状況
               </a>
               <a
                 href="/monthly-planner"
-                className="text-sm bg-purple-100 hover:bg-purple-200 text-purple-800 px-3 py-1 rounded-md border border-purple-300 transition-colors duration-150 h-7 flex items-center font-medium"
+                className={BUTTON_STYLES.headerSecondary}
               >
-                📅 月次プランナー
+                <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
+                </svg>
+                月次プランナー
               </a>
               <button
                 onClick={logout}
-                className="text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1 rounded-md border border-gray-300 transition-colors duration-150 h-7 flex items-center font-medium"
+                className={BUTTON_STYLES.headerNeutral}
               >
+                <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clipRule="evenodd" />
+                </svg>
                 ログアウト
               </button>
             </div>
@@ -2043,10 +2053,14 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
                 </span>
                 <button
                   onClick={handleCompactModeToggle}
-                  className={`toggle-switch ${isCompactMode ? 'active' : ''}`}
+                  className={`relative w-12 h-6 rounded-full transition-colors duration-200 ${
+                    isCompactMode ? 'bg-indigo-600' : 'bg-gray-300'
+                  }`}
                   type="button"
                 >
-                  <div className={`toggle-thumb ${isCompactMode ? 'active' : ''}`}></div>
+                  <div className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform duration-200 ${
+                    isCompactMode ? 'translate-x-6' : 'translate-x-0'
+                  }`}></div>
                 </button>
                 <span className={`text-xs ${isCompactMode ? 'text-gray-900 font-medium' : 'text-gray-500'}`}>
                   コンパクト
