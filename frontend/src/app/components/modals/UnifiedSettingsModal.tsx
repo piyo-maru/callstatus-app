@@ -9,7 +9,7 @@ import { usePresetSettings } from '../../hooks/usePresetSettings';
 import { UnifiedPreset, PresetCategory, PresetEditFormData } from '../types/PresetTypes';
 import { DepartmentGroupSetting, SnapshotHistory, ImportHistory, DisplaySettings } from '../types/MainAppTypes';
 import { statusColors } from '../constants/MainAppConstants';
-import { capitalizeStatus, STATUS_COLORS, STATUS_DISPLAY_NAMES, ALL_STATUSES, getEffectiveDisplayName } from '../timeline/TimelineUtils';
+import { capitalizeStatus, STATUS_COLORS, STATUS_DISPLAY_NAMES, ALL_STATUSES, getEffectiveDisplayName, formatDecimalTime, getDepartmentGroupStyle } from '../timeline/TimelineUtils';
 import { getApiUrl } from '../constants/MainAppConstants';
 import { PresetEditModal } from './PresetEditModal';
 import { useSettingsImportExport } from '../../hooks/useSettingsImportExport';
@@ -109,13 +109,13 @@ export function UnifiedSettingsModal({
   const [exportOptions, setExportOptions] = useState<ExportOptions>({
     includeDisplay: true,
     includePresets: true,
-    includeManagement: false,
+    includeManagement: true,
     includeMetadata: true
   });
   const [importOptions, setImportOptions] = useState<ImportOptions>({
     includeDisplay: true,
     includePresets: true,
-    includeManagement: false,
+    includeManagement: true,
     overwriteExisting: true,
     mergePresets: false
   });
@@ -130,10 +130,10 @@ export function UnifiedSettingsModal({
   // タブリスト（指定順序での並び）
   const tabs = useMemo(() => [
     { id: 'display' as TabType, name: '表示設定', icon: '🎨' },
+    { id: 'presets' as TabType, name: 'プリセット設定', icon: '⚡' },
     ...(canManage ? [
       { id: 'departments' as TabType, name: '部署・グループ設定', icon: '🏢' },
     ] : []),
-    { id: 'presets' as TabType, name: 'プリセット設定', icon: '⚡' },
     ...(canManage ? [
       { id: 'import' as TabType, name: 'インポート', icon: '📥' },
       { id: 'snapshots' as TabType, name: '過去表示設定', icon: '📜' },
@@ -163,56 +163,137 @@ export function UnifiedSettingsModal({
     onClose();
   }, [isDirty, saveSettings, onSettingsChange, viewMode, maskingEnabled, filteredPresets, onClose]);
 
-  // localStorage から設定を読み込み
+  // サーバーから設定を読み込み
   useEffect(() => {
-    const savedViewMode = localStorage.getItem('callstatus-viewMode') as 'normal' | 'compact' || 'normal';
-    const savedMaskingEnabled = localStorage.getItem('callstatus-maskingEnabled') === 'true';
-    const savedStatusColors = localStorage.getItem('callstatus-statusColors');
-    const savedStatusDisplayNames = localStorage.getItem('callstatus-statusDisplayNames');
-    
-    setViewMode(savedViewMode);
-    setMaskingEnabled(savedMaskingEnabled);
-    
-    if (savedStatusColors) {
+    const loadGlobalDisplaySettings = async () => {
       try {
-        const parsed = JSON.parse(savedStatusColors);
-        setCustomStatusColors(parsed);
+        const currentApiUrl = getApiUrl();
+        const fetchFunction = authenticatedFetch || fetch;
+        const response = await fetchFunction(`${currentApiUrl}/api/admin/global-display-settings`);
+        
+        if (response.ok) {
+          const settings = await response.json();
+          setViewMode(settings.viewMode || 'normal');
+          setMaskingEnabled(settings.maskingEnabled || false);
+          setTimeRange(settings.timeRange || 'standard');
+          setCustomStatusColors(settings.customStatusColors || {});
+          setCustomStatusDisplayNames(settings.customStatusDisplayNames || {});
+          setIsStatusColorsModified(Object.keys(settings.customStatusColors || {}).length > 0);
+          setIsStatusDisplayNamesModified(Object.keys(settings.customStatusDisplayNames || {}).length > 0);
+          console.log('サーバーからグローバル表示設定を読み込みました:', settings);
+        } else {
+          console.warn('グローバル表示設定の取得に失敗、ローカル設定を使用');
+          loadLocalStorageSettings();
+        }
       } catch (error) {
-        console.error('Failed to parse saved status colors:', error);
-        setCustomStatusColors({});
+        console.error('グローバル表示設定取得エラー、ローカル設定を使用:', error);
+        loadLocalStorageSettings();
       }
-    }
-    
-    if (savedStatusDisplayNames) {
-      try {
-        const parsed = JSON.parse(savedStatusDisplayNames);
-        setCustomStatusDisplayNames(parsed);
-        setIsStatusDisplayNamesModified(Object.keys(parsed).length > 0);
-      } catch (error) {
-        console.error('Failed to parse saved status display names:', error);
-        setCustomStatusDisplayNames({});
-      }
-    }
-  }, []);
+    };
 
-  // 設定変更時にlocalStorageに保存
-  const handleViewModeChange = useCallback((newViewMode: 'normal' | 'compact') => {
+    const loadLocalStorageSettings = () => {
+      const savedViewMode = localStorage.getItem('callstatus-viewMode') as 'normal' | 'compact' || 'normal';
+      const savedMaskingEnabled = localStorage.getItem('callstatus-maskingEnabled') === 'true';
+      const savedTimeRange = localStorage.getItem('callstatus-timeRange') as 'standard' | 'extended' || 'standard';
+      const savedStatusColors = localStorage.getItem('callstatus-statusColors');
+      const savedStatusDisplayNames = localStorage.getItem('callstatus-statusDisplayNames');
+      
+      setViewMode(savedViewMode);
+      setMaskingEnabled(savedMaskingEnabled);
+      setTimeRange(savedTimeRange);
+      
+      if (savedStatusColors) {
+        try {
+          const parsed = JSON.parse(savedStatusColors);
+          setCustomStatusColors(parsed);
+          setIsStatusColorsModified(Object.keys(parsed).length > 0);
+        } catch (error) {
+          console.error('Failed to parse saved status colors:', error);
+          setCustomStatusColors({});
+        }
+      }
+      
+      if (savedStatusDisplayNames) {
+        try {
+          const parsed = JSON.parse(savedStatusDisplayNames);
+          setCustomStatusDisplayNames(parsed);
+          setIsStatusDisplayNamesModified(Object.keys(parsed).length > 0);
+        } catch (error) {
+          console.error('Failed to parse saved status display names:', error);
+          setCustomStatusDisplayNames({});
+        }
+      }
+    };
+
+    loadGlobalDisplaySettings();
+  }, [authenticatedFetch]);
+
+  // サーバーに設定を保存する共通関数
+  const saveSettingsToServer = useCallback(async (updates: Partial<{
+    viewMode: string;
+    maskingEnabled: boolean;
+    timeRange: string;
+    customStatusColors: Record<string, string>;
+    customStatusDisplayNames: Record<string, string>;
+  }>) => {
+    try {
+      const currentApiUrl = getApiUrl();
+      const fetchFunction = authenticatedFetch || fetch;
+      const response = await fetchFunction(`${currentApiUrl}/api/admin/global-display-settings`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updates),
+      });
+
+      if (response.ok) {
+        const updatedSettings = await response.json();
+        console.log('グローバル表示設定を更新しました:', updatedSettings);
+        return true;
+      } else {
+        console.warn('グローバル表示設定の更新に失敗:', response.status);
+        return false;
+      }
+    } catch (error) {
+      console.error('グローバル表示設定更新エラー:', error);
+      return false;
+    }
+  }, [authenticatedFetch]);
+
+  // 設定変更時にサーバーに保存
+  const handleViewModeChange = useCallback(async (newViewMode: 'normal' | 'compact') => {
     setViewMode(newViewMode);
-    localStorage.setItem('callstatus-viewMode', newViewMode);
-  }, []);
+    
+    // サーバーに保存、失敗時はローカルストレージにフォールバック
+    const success = await saveSettingsToServer({ viewMode: newViewMode });
+    if (!success) {
+      localStorage.setItem('callstatus-viewMode', newViewMode);
+    }
+  }, [saveSettingsToServer]);
 
-  const handleMaskingToggle = useCallback(() => {
+  const handleMaskingToggle = useCallback(async () => {
     const newMaskingEnabled = !maskingEnabled;
     setMaskingEnabled(newMaskingEnabled);
-    localStorage.setItem('callstatus-maskingEnabled', newMaskingEnabled.toString());
-  }, [maskingEnabled]);
+    
+    // サーバーに保存、失敗時はローカルストレージにフォールバック
+    const success = await saveSettingsToServer({ maskingEnabled: newMaskingEnabled });
+    if (!success) {
+      localStorage.setItem('callstatus-maskingEnabled', newMaskingEnabled.toString());
+    }
+  }, [maskingEnabled, saveSettingsToServer]);
 
   // ステータス色変更ハンドラー
-  const handleStatusColorChange = useCallback((status: string, color: string) => {
+  const handleStatusColorChange = useCallback(async (status: string, color: string) => {
     const newColors = { ...customStatusColors, [status]: color };
     setCustomStatusColors(newColors);
     setIsStatusColorsModified(true);
-    localStorage.setItem('callstatus-statusColors', JSON.stringify(newColors));
+    
+    // サーバーに保存、失敗時はローカルストレージにフォールバック
+    const success = await saveSettingsToServer({ customStatusColors: newColors });
+    if (!success) {
+      localStorage.setItem('callstatus-statusColors', JSON.stringify(newColors));
+    }
     
     // 親コンポーネントに色変更を通知
     if (onSettingsChange) {
@@ -220,20 +301,25 @@ export function UnifiedSettingsModal({
         statusColors: newColors
       });
     }
-  }, [customStatusColors, onSettingsChange]);
+  }, [customStatusColors, onSettingsChange, saveSettingsToServer]);
 
   // ステータス色をデフォルトに戻す
-  const handleResetStatusColors = useCallback(() => {
+  const handleResetStatusColors = useCallback(async () => {
     setCustomStatusColors({});
     setIsStatusColorsModified(false);
-    localStorage.removeItem('callstatus-statusColors');
+    
+    // サーバーに保存、失敗時はローカルストレージにフォールバック
+    const success = await saveSettingsToServer({ customStatusColors: {} });
+    if (!success) {
+      localStorage.removeItem('callstatus-statusColors');
+    }
     
     if (onSettingsChange) {
       onSettingsChange({
         statusColors: {}
       });
     }
-  }, [onSettingsChange]);
+  }, [onSettingsChange, saveSettingsToServer]);
 
   // 現在有効な色を取得する関数
   const getEffectiveStatusColor = useCallback((status: string) => {
@@ -241,7 +327,7 @@ export function UnifiedSettingsModal({
   }, [customStatusColors]);
 
   // ステータス表示名変更ハンドラー
-  const handleStatusDisplayNameChange = useCallback((status: string, displayName: string) => {
+  const handleStatusDisplayNameChange = useCallback(async (status: string, displayName: string) => {
     const trimmedDisplayName = displayName.trim();
     
     // 空文字の場合は設定を削除（デフォルトに戻る）
@@ -252,10 +338,14 @@ export function UnifiedSettingsModal({
       setCustomStatusDisplayNames(newDisplayNames);
       setIsStatusDisplayNamesModified(Object.keys(newDisplayNames).length > 0);
       
-      if (Object.keys(newDisplayNames).length === 0) {
-        localStorage.removeItem('callstatus-statusDisplayNames');
-      } else {
-        localStorage.setItem('callstatus-statusDisplayNames', JSON.stringify(newDisplayNames));
+      // サーバーに保存、失敗時はローカルストレージにフォールバック
+      const success = await saveSettingsToServer({ customStatusDisplayNames: newDisplayNames });
+      if (!success) {
+        if (Object.keys(newDisplayNames).length === 0) {
+          localStorage.removeItem('callstatus-statusDisplayNames');
+        } else {
+          localStorage.setItem('callstatus-statusDisplayNames', JSON.stringify(newDisplayNames));
+        }
       }
       
       // 親コンポーネントに表示名変更を通知
@@ -284,7 +374,12 @@ export function UnifiedSettingsModal({
     const newDisplayNames = { ...customStatusDisplayNames, [status]: trimmedDisplayName };
     setCustomStatusDisplayNames(newDisplayNames);
     setIsStatusDisplayNamesModified(true);
-    localStorage.setItem('callstatus-statusDisplayNames', JSON.stringify(newDisplayNames));
+    
+    // サーバーに保存、失敗時はローカルストレージにフォールバック
+    const success = await saveSettingsToServer({ customStatusDisplayNames: newDisplayNames });
+    if (!success) {
+      localStorage.setItem('callstatus-statusDisplayNames', JSON.stringify(newDisplayNames));
+    }
     
     // 親コンポーネントに表示名変更を通知
     if (onSettingsChange) {
@@ -292,20 +387,25 @@ export function UnifiedSettingsModal({
         statusDisplayNames: newDisplayNames
       });
     }
-  }, [customStatusDisplayNames, onSettingsChange]);
+  }, [customStatusDisplayNames, onSettingsChange, saveSettingsToServer]);
 
   // ステータス表示名をデフォルトに戻す
-  const handleResetStatusDisplayNames = useCallback(() => {
+  const handleResetStatusDisplayNames = useCallback(async () => {
     setCustomStatusDisplayNames({});
     setIsStatusDisplayNamesModified(false);
-    localStorage.removeItem('callstatus-statusDisplayNames');
+    
+    // サーバーに保存、失敗時はローカルストレージにフォールバック
+    const success = await saveSettingsToServer({ customStatusDisplayNames: {} });
+    if (!success) {
+      localStorage.removeItem('callstatus-statusDisplayNames');
+    }
     
     if (onSettingsChange) {
       onSettingsChange({
         statusDisplayNames: {}
       });
     }
-  }, [onSettingsChange]);
+  }, [onSettingsChange, saveSettingsToServer]);
 
   // 現在有効な表示名を取得する関数
   const getEffectiveStatusDisplayName = useCallback((status: string) => {
@@ -612,23 +712,19 @@ export function UnifiedSettingsModal({
   useEffect(() => {
     if (activeTab === 'settings-management') {
       setBackupList(getBackupList());
-      // 管理者の場合は管理設定もエクスポート・インポート対象に
-      if (isAdmin) {
-        setExportOptions(prev => ({ ...prev, includeManagement: true }));
-        setImportOptions(prev => ({ ...prev, includeManagement: true }));
-      }
+      // エクスポート・インポートオプションをデフォルトに設定
     }
   }, [activeTab, getBackupList, isAdmin]);
 
   // 設定管理タブ用のイベントハンドラー
   const handleExport = useCallback(async () => {
     try {
-      await exportSettings(exportOptions);
+      await exportSettings(exportOptions, authenticatedFetch);
     } catch (error) {
       console.error('エクスポートエラー:', error);
       alert(`エクスポートに失敗しました: ${error instanceof Error ? error.message : 'unknown error'}`);
     }
-  }, [exportSettings, exportOptions]);
+  }, [exportSettings, exportOptions, authenticatedFetch]);
 
   const handleImport = useCallback(async () => {
     if (!selectedImportFile) {
@@ -637,10 +733,17 @@ export function UnifiedSettingsModal({
     }
 
     try {
-      const result = await importSettings(selectedImportFile, importOptions);
+      const result = await importSettings(selectedImportFile, importOptions, authenticatedFetch);
       if (result.success) {
         alert('設定のインポートが完了しました');
         setSelectedImportFile(null);
+        
+        // インポート成功後に部署・グループ設定を更新
+        if (importOptions.includeManagement && canManage) {
+          console.log('部署・グループ設定を再取得します');
+          await fetchDepartmentSettings();
+        }
+        
         // 設定が変更されたので画面をリロード
         window.location.reload();
       } else {
@@ -650,7 +753,7 @@ export function UnifiedSettingsModal({
       console.error('インポートエラー:', error);
       alert(`インポートに失敗しました: ${error instanceof Error ? error.message : 'unknown error'}`);
     }
-  }, [selectedImportFile, importSettings, importOptions]);
+  }, [selectedImportFile, importSettings, importOptions, authenticatedFetch, canManage, fetchDepartmentSettings]);
 
   const handleCreateBackup = useCallback(async () => {
     if (!backupName.trim()) {
@@ -659,7 +762,7 @@ export function UnifiedSettingsModal({
     }
 
     try {
-      await createBackup(backupName.trim());
+      await createBackup(backupName.trim(), false, authenticatedFetch);
       setBackupName('');
       setBackupList(getBackupList());
       alert('バックアップを作成しました');
@@ -667,7 +770,7 @@ export function UnifiedSettingsModal({
       console.error('バックアップ作成エラー:', error);
       alert(`バックアップの作成に失敗しました: ${error instanceof Error ? error.message : 'unknown error'}`);
     }
-  }, [backupName, createBackup, getBackupList]);
+  }, [backupName, createBackup, getBackupList, authenticatedFetch]);
 
   const handleLoadBackup = useCallback(async (backupId: string) => {
     if (!confirm('バックアップを読み込みますか？現在の設定は上書きされます。')) {
@@ -994,7 +1097,7 @@ export function UnifiedSettingsModal({
                               <div className="text-xs text-gray-500 mt-2">
                                 {preset.schedules.map((schedule, idx) => (
                                   <span key={idx} className="inline-block mr-2">
-                                    {schedule.startTime}:00-{schedule.endTime}:00 ({schedule.status})
+                                    {formatDecimalTime(schedule.startTime)}-{formatDecimalTime(schedule.endTime)} ({schedule.status})
                                   </span>
                                 ))}
                               </div>
@@ -1223,7 +1326,7 @@ export function UnifiedSettingsModal({
                     <button
                       onClick={() => {
                         const name = `自動バックアップ_${new Date().toLocaleDateString().replace(/\//g, '-')}`;
-                        createBackup(name, true);
+                        createBackup(name, true, authenticatedFetch);
                       }}
                       className="px-3 py-1 text-sm bg-purple-500 text-white rounded hover:bg-purple-600 transition-colors"
                     >
@@ -1255,17 +1358,15 @@ export function UnifiedSettingsModal({
                         />
                         プリセット設定
                       </label>
-                      {isAdmin && (
-                        <label className="flex items-center">
-                          <input
-                            type="checkbox"
-                            checked={exportOptions.includeManagement}
-                            onChange={(e) => setExportOptions(prev => ({ ...prev, includeManagement: e.target.checked }))}
-                            className="mr-2"
-                          />
-                          管理設定
-                        </label>
-                      )}
+                      <label className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={exportOptions.includeManagement}
+                          onChange={(e) => setExportOptions(prev => ({ ...prev, includeManagement: e.target.checked }))}
+                          className="mr-2"
+                        />
+                        部署・グループ設定
+                      </label>
                     </div>
                     <button
                       onClick={handleExport}
@@ -1358,17 +1459,15 @@ export function UnifiedSettingsModal({
                         />
                         プリセット設定
                       </label>
-                      {isAdmin && (
-                        <label className="flex items-center">
-                          <input
-                            type="checkbox"
-                            checked={importOptions.includeManagement}
-                            onChange={(e) => setImportOptions(prev => ({ ...prev, includeManagement: e.target.checked }))}
-                            className="mr-2"
-                          />
-                          管理設定
-                        </label>
-                      )}
+                      <label className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={importOptions.includeManagement}
+                          onChange={(e) => setImportOptions(prev => ({ ...prev, includeManagement: e.target.checked }))}
+                          className="mr-2"
+                        />
+                        部署・グループ設定
+                      </label>
                     </div>
 
                     <div className="flex items-center gap-4">
@@ -1654,9 +1753,7 @@ export function UnifiedSettingsModal({
                         <tbody>
                           {sortGroupsByDepartment([...groups]).map((group) => (
                             <tr key={group.id} className="border-t border-gray-200">
-                              <td className="px-3 py-2 text-xs" style={{
-                                backgroundColor: departments.find(d => d.name === (staffList?.find(staff => staff.group === group.name)?.department))?.backgroundColor || '#f9fafb'
-                              }}>
+                              <td className="px-3 py-2 text-xs" style={getDepartmentGroupStyle(departments.find(d => d.name === (staffList?.find(staff => staff.group === group.name)?.department))?.backgroundColor || '#f9fafb')}>
                                 {group.name}
                               </td>
                               <td className="px-3 py-2 text-xs">

@@ -22,7 +22,8 @@ import {
   positionPercentToTime, 
   capitalizeStatus,
   getEffectiveStatusColor,
-  getEffectiveDisplayName
+  getEffectiveDisplayName,
+  getDepartmentGroupStyle
 } from './timeline/TimelineUtils';
 // ★★★ 分離されたモジュールのインポート ★★★
 import { 
@@ -2767,10 +2768,10 @@ export default function FullMainApp() {
               {Object.keys(groupedStaffForGantt).length > 0 ? (
                 sortByDisplayOrder(Object.entries(groupedStaffForGantt), 'department').map(([department, groups]) => (
                   <div key={department} className="department-group">
-                    <h3 className="px-2 min-h-[33px] text-sm font-bold whitespace-nowrap flex items-center" style={{backgroundColor: getHoliday(displayDate, holidays) ? '#f5f5f5' : (dynamicDepartmentColors[department] || departmentColors[department] || '#f5f5f5')}}>{department}</h3>
+                    <h3 className="px-2 min-h-[33px] text-sm font-bold whitespace-nowrap flex items-center" style={getHoliday(displayDate, holidays) ? getDepartmentGroupStyle('#f5f5f5') : getDepartmentGroupStyle(dynamicDepartmentColors[department] || departmentColors[department] || '#f5f5f5')}>{department}</h3>
                     {sortByDisplayOrder(Object.entries(groups), 'group').map(([group, staffInGroup]) => (
                       <div key={group}>
-                        <h4 className="px-2 pl-6 min-h-[33px] text-xs font-semibold whitespace-nowrap flex items-center" style={{backgroundColor: getHoliday(displayDate, holidays) ? '#f5f5f5' : (dynamicTeamColors[group] || teamColors[group] || '#f5f5f5')}}>{group}</h4>
+                        <h4 className="px-2 pl-6 min-h-[33px] text-xs font-semibold whitespace-nowrap flex items-center" style={getHoliday(displayDate, holidays) ? getDepartmentGroupStyle('#f5f5f5') : getDepartmentGroupStyle(dynamicTeamColors[group] || teamColors[group] || '#f5f5f5')}>{group}</h4>
                         {staffInGroup.map((staff: any) => {
                           const supportBorderColor = getSupportBorderColor(staff);
                           return (
@@ -2882,10 +2883,10 @@ export default function FullMainApp() {
                   {Object.keys(groupedStaffForGantt).length > 0 ? (
                     sortByDisplayOrder(Object.entries(groupedStaffForGantt), 'department').map(([department, groups]) => (
                       <div key={department} className="department-group">
-                        <div className="min-h-[33px]" style={{backgroundColor: getHoliday(displayDate, holidays) ? '#f5f5f5' : (dynamicDepartmentColors[department] || departmentColors[department] || '#f5f5f5')}}></div>
+                        <div className="min-h-[33px]" style={getHoliday(displayDate, holidays) ? getDepartmentGroupStyle('#f5f5f5') : getDepartmentGroupStyle(dynamicDepartmentColors[department] || departmentColors[department] || '#f5f5f5')}></div>
                         {sortByDisplayOrder(Object.entries(groups), 'group').map(([group, staffInGroup]) => (
                           <div key={group}>
-                            <div className="min-h-[33px]" style={{backgroundColor: getHoliday(displayDate, holidays) ? '#f5f5f5' : (dynamicTeamColors[group] || teamColors[group] || '#f5f5f5')}}></div>
+                            <div className="min-h-[33px]" style={getHoliday(displayDate, holidays) ? getDepartmentGroupStyle('#f5f5f5') : getDepartmentGroupStyle(dynamicTeamColors[group] || teamColors[group] || '#f5f5f5')}></div>
                             {staffInGroup.map((staff: any) => {
                               const supportBorderColor = getSupportBorderColor(staff);
                               return (

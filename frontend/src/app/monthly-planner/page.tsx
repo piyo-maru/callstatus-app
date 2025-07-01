@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '../components/AuthProvider';
 import AuthGuard from '../components/AuthGuard';
 import { createPortal } from 'react-dom';
-import { STATUS_COLORS, capitalizeStatus, getEffectiveStatusColor } from '../components/timeline/TimelineUtils';
+import { STATUS_COLORS, capitalizeStatus, getEffectiveStatusColor, getDepartmentGroupStyle } from '../components/timeline/TimelineUtils';
 import { registerLocale } from 'react-datepicker';
 import { ja } from 'date-fns/locale/ja';
 import { format } from 'date-fns';
@@ -1709,7 +1709,7 @@ function MonthlyPlannerPageContent() {
                       <div key={department} className="department-group">
                         <h3 
                           className="px-2 min-h-[33px] text-sm font-bold whitespace-nowrap flex items-center" 
-                          style={{backgroundColor: departmentColors[department] || '#f5f5f5'}}
+                          style={getDepartmentGroupStyle(departmentColors[department] || '#f5f5f5')}
                         >
                           {department}
                         </h3>
@@ -1717,7 +1717,7 @@ function MonthlyPlannerPageContent() {
                           <div key={group}>
                             <h4 
                               className="px-2 pl-6 min-h-[33px] text-xs font-semibold whitespace-nowrap flex items-center" 
-                              style={{backgroundColor: teamColors[group] || '#f5f5f5'}}
+                              style={getDepartmentGroupStyle(teamColors[group] || '#f5f5f5')}
                             >
                               {group}
                             </h4>
@@ -1794,7 +1794,7 @@ function MonthlyPlannerPageContent() {
                           {/* 部署ヘッダー行 */}
                           <div className="flex h-[33px]">
                             {dateArray.map(day => (
-                              <div key={day} className="w-24 border-r border-b" style={{backgroundColor: departmentColors[department] || '#f5f5f5'}}></div>
+                              <div key={day} className="w-24 border-r border-b" style={getDepartmentGroupStyle(departmentColors[department] || '#f5f5f5')}></div>
                             ))}
                           </div>
                           
@@ -1803,7 +1803,7 @@ function MonthlyPlannerPageContent() {
                               {/* グループヘッダー行 */}
                               <div className="flex h-[33px]">
                                 {dateArray.map(day => (
-                                  <div key={day} className="w-24 border-r border-b" style={{backgroundColor: teamColors[group] || '#f5f5f5'}}></div>
+                                  <div key={day} className="w-24 border-r border-b" style={getDepartmentGroupStyle(teamColors[group] || '#f5f5f5')}></div>
                                 ))}
                               </div>
                               
