@@ -672,9 +672,9 @@ const StatusChart = ({ data, staffList, selectedDepartment, selectedGroup, showC
   }, [staffList, selectedDepartment, selectedGroup]);
 
   return (
-    <div className="mb-1 bg-white shadow rounded-lg">
+    <div className="bg-white shadow-sm rounded-xl border border-gray-100">
       {/* トグルボタンエリア */}
-      <div className="px-3 py-0.5 border-b border-gray-200 bg-gray-50">
+      <div className="px-4 py-1 border-b border-gray-200 bg-gray-50 rounded-t-xl">
         <button
           onClick={onToggleChart}
           className="flex items-center gap-1.5 text-xs text-gray-700 hover:text-gray-900 transition-colors py-0.5"
@@ -698,7 +698,7 @@ const StatusChart = ({ data, staffList, selectedDepartment, selectedGroup, showC
             <div className="px-2 py-1 flex gap-x-4">
               {/* 1列目 */}
               <div className="flex flex-col gap-y-1">
-                {['online', 'remote', 'night duty'].map(status => (
+                {['online', 'remote', 'night duty', 'break'].map(status => (
                   <div key={status} className="flex items-center text-xs">
                     <div 
                       className="w-2 h-2 rounded mr-1 flex-shrink-0" 
@@ -712,7 +712,7 @@ const StatusChart = ({ data, staffList, selectedDepartment, selectedGroup, showC
               </div>
               {/* 2列目 */}
               <div className="flex flex-col gap-y-1">
-                {['off', 'unplanned', 'break', 'meeting', 'training'].map(status => (
+                {['off', 'unplanned', 'meeting', 'training', 'trip'].map(status => (
                   <div key={status} className="flex items-center text-xs">
                     <div 
                       className="w-2 h-2 rounded mr-1 flex-shrink-0" 
@@ -747,7 +747,7 @@ const StatusChart = ({ data, staffList, selectedDepartment, selectedGroup, showC
                 />
                 {/* Legendを非表示にする */}
                 {/* 凡例と同じ順序で描画 */}
-                {['online', 'remote', 'night duty', 'off', 'unplanned', 'break', 'meeting', 'training'].map(status => (
+                {['online', 'remote', 'night duty', 'break', 'off', 'unplanned', 'meeting', 'training', 'trip'].map(status => (
                   <Line 
                     key={status} 
                     type="monotone" 
@@ -2543,7 +2543,7 @@ export default function FullMainApp() {
 
   // 認証ヘッダーコンポーネント
   const AuthHeader = () => (
-    <div className="bg-indigo-600 shadow-lg mb-4">
+    <div className="bg-indigo-600 shadow-lg mb-1.5">
       <div className="px-6 py-3 flex justify-between items-center">
         <h1 className="text-lg font-semibold text-white">
           出社状況
@@ -2644,13 +2644,13 @@ export default function FullMainApp() {
         }}
       />
       
-      <main className={`container mx-auto p-2 font-sans ${viewMode === 'compact' ? 'compact-mode' : ''}`}>
-        <header className="mb-2 flex justify-between items-center">
+      <main className={`p-4 font-sans ${viewMode === 'compact' ? 'compact-mode' : ''}`}>
+        <header className="mb-2 p-4 bg-white shadow-sm rounded-xl border border-gray-100 flex justify-between items-center">
             <div className="flex items-center space-x-3">
-                <div className="inline-flex rounded-md shadow-sm" role="group">
-                    <button type="button" onClick={() => handleDateChange(-1)} className="px-2 py-1 text-xs font-medium text-gray-900 bg-white border border-gray-200 rounded-l-lg hover:bg-gray-100 h-7">&lt;</button>
-                    <button type="button" onClick={goToToday} className="px-2 py-1 text-xs font-medium text-gray-900 bg-white border-t border-b border-gray-200 hover:bg-gray-100 h-7">今日</button>
-                    <button type="button" onClick={() => handleDateChange(1)} className="px-2 py-1 text-xs font-medium text-gray-900 bg-white border border-gray-200 rounded-r-lg hover:bg-gray-100 h-7">&gt;</button>
+                <div className="inline-flex rounded-lg shadow-sm border border-gray-200 overflow-hidden" role="group">
+                    <button type="button" onClick={() => handleDateChange(-1)} className="px-3 h-7 text-xs font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors duration-150 flex items-center">&lt;</button>
+                    <button type="button" onClick={goToToday} className="px-4 h-7 text-xs font-medium text-gray-700 bg-white hover:bg-gray-50 border-l border-r border-gray-200 transition-colors duration-150 flex items-center">今日</button>
+                    <button type="button" onClick={() => handleDateChange(1)} className="px-3 h-7 text-xs font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors duration-150 flex items-center">&gt;</button>
                 </div>
                 <DatePicker
                   selected={displayDate}
@@ -2669,7 +2669,7 @@ export default function FullMainApp() {
                 
                 {/* 履歴モード表示インジケーター */}
                 {isHistoricalMode && (
-                  <div className="flex items-center space-x-2 px-3 py-1 bg-amber-50 border border-amber-200 rounded-md">
+                  <div className="flex items-center space-x-2 px-4 py-1 bg-amber-50 border border-amber-200 rounded-lg shadow-sm h-7">
                     <span className="text-amber-600 text-xs">📊</span>
                     <div className="text-xs text-amber-700">
                       <div className="font-medium">履歴データ表示中</div>
@@ -2697,7 +2697,7 @@ export default function FullMainApp() {
                     }
                   }} 
                   disabled={isHistoricalMode}
-                  className={`px-3 py-1 text-xs font-medium border border-transparent rounded-md h-7 transition-colors duration-150 ${
+                  className={`px-4 h-7 text-xs font-medium border border-transparent rounded-lg shadow-sm transition-colors duration-150 flex items-center ${
                     isHistoricalMode 
                       ? 'text-gray-400 bg-gray-300 cursor-not-allowed' 
                       : 'text-white bg-indigo-600 hover:bg-indigo-700'
@@ -2710,7 +2710,7 @@ export default function FullMainApp() {
                   <button onClick={() => {
                     setSelectedSchedule(null);
                     setIsSettingsModalOpen(true);
-                  }} className="flex items-center px-4 py-1 text-xs font-medium text-white bg-gray-600 border border-transparent rounded-md hover:bg-gray-700 h-7 transition-colors duration-150 min-w-fit whitespace-nowrap">
+                  }} className="flex items-center px-4 h-7 text-xs font-medium text-white bg-gray-600 border border-transparent rounded-lg shadow-sm hover:bg-gray-700 transition-colors duration-150 min-w-fit whitespace-nowrap">
                       <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
         <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
       </svg>
@@ -2739,41 +2739,43 @@ export default function FullMainApp() {
             </div>
         </header>
 
-        <div className="mb-2 p-2 bg-gray-50 rounded-lg flex items-center justify-between">
+        <div className="mb-2 p-4 bg-white shadow-sm rounded-xl border border-gray-100 flex items-center justify-between">
             <div className="flex items-center space-x-3">
-                <select onChange={(e) => setSelectedDepartment(e.target.value)} value={selectedDepartment} className="rounded-md border-gray-300 shadow-sm text-xs h-7 px-2 font-medium text-gray-700 bg-white transition-colors duration-150 hover:border-gray-400 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"><option value="all">すべての部署</option>{sortedDepartmentsForFilter.map(dep => <option key={dep} value={dep}>{dep}</option>)}</select>
-                <select onChange={(e) => setSelectedGroup(e.target.value)} value={selectedGroup} className="rounded-md border-gray-300 shadow-sm text-xs h-7 px-2 font-medium text-gray-700 bg-white transition-colors duration-150 hover:border-gray-400 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"><option value="all">すべてのグループ</option>{sortedGroupsForFilter.map(grp => <option key={grp} value={grp}>{grp}</option>)}</select>
-                <div className="inline-flex rounded-md shadow-sm" role="group">
-                    <button type="button" onClick={() => setSelectedSettingFilter('all')} className={`${selectedSettingFilter === 'all' ? BUTTON_STYLES.primaryGroup.active : BUTTON_STYLES.primaryGroup.inactive} ${BUTTON_STYLES.primaryGroup.transition} rounded-l-md border h-7`}>すべて</button>
-                    <button type="button" onClick={() => setSelectedSettingFilter('responsibility')} className={`${selectedSettingFilter === 'responsibility' ? BUTTON_STYLES.primaryGroup.active : BUTTON_STYLES.primaryGroup.inactive} ${BUTTON_STYLES.primaryGroup.transition} border-t border-b border-r h-7`}>担当設定</button>
-                    <button type="button" onClick={() => setSelectedSettingFilter('support')} className={`${selectedSettingFilter === 'support' ? BUTTON_STYLES.primaryGroup.active : BUTTON_STYLES.primaryGroup.inactive} ${BUTTON_STYLES.primaryGroup.transition} rounded-r-md border h-7`}>支援設定</button>
+                <select onChange={(e) => setSelectedDepartment(e.target.value)} value={selectedDepartment} className="rounded-lg border-gray-200 shadow-sm text-xs px-3 h-7 font-medium text-gray-700 bg-white transition-colors duration-150 hover:border-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"><option value="all">すべての部署</option>{sortedDepartmentsForFilter.map(dep => <option key={dep} value={dep}>{dep}</option>)}</select>
+                <select onChange={(e) => setSelectedGroup(e.target.value)} value={selectedGroup} className="rounded-lg border-gray-200 shadow-sm text-xs px-3 h-7 font-medium text-gray-700 bg-white transition-colors duration-150 hover:border-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"><option value="all">すべてのグループ</option>{sortedGroupsForFilter.map(grp => <option key={grp} value={grp}>{grp}</option>)}</select>
+                <div className="inline-flex rounded-lg shadow-sm border border-gray-200 overflow-hidden" role="group">
+                    <button type="button" onClick={() => setSelectedSettingFilter('all')} className={`${selectedSettingFilter === 'all' ? BUTTON_STYLES.primaryGroup.active : BUTTON_STYLES.primaryGroup.inactive} ${BUTTON_STYLES.primaryGroup.transition} px-3 h-7 text-xs flex items-center`}>すべて</button>
+                    <button type="button" onClick={() => setSelectedSettingFilter('responsibility')} className={`${selectedSettingFilter === 'responsibility' ? BUTTON_STYLES.primaryGroup.active : BUTTON_STYLES.primaryGroup.inactive} ${BUTTON_STYLES.primaryGroup.transition} px-3 h-7 text-xs border-l border-gray-200 flex items-center`}>担当設定</button>
+                    <button type="button" onClick={() => setSelectedSettingFilter('support')} className={`${selectedSettingFilter === 'support' ? BUTTON_STYLES.primaryGroup.active : BUTTON_STYLES.primaryGroup.inactive} ${BUTTON_STYLES.primaryGroup.transition} px-3 h-7 text-xs border-l border-gray-200 flex items-center`}>支援設定</button>
                 </div>
                 {isToday && (
-                  <div className="inline-flex rounded-md shadow-sm" role="group">
-                      <button type="button" onClick={() => setSelectedStatus('all')} className={`${selectedStatus === 'all' ? BUTTON_STYLES.secondaryGroup.active : BUTTON_STYLES.secondaryGroup.inactive} ${BUTTON_STYLES.secondaryGroup.transition} rounded-l-md border h-7`}>すべて</button>
-                      <button type="button" onClick={() => setSelectedStatus('available')} className={`${selectedStatus === 'available' ? BUTTON_STYLES.secondaryGroup.active : BUTTON_STYLES.secondaryGroup.inactive} ${BUTTON_STYLES.secondaryGroup.transition} border-t border-b border-r h-7`}>対応可能</button>
-                      <button type="button" onClick={() => setSelectedStatus('unavailable')} className={`${selectedStatus === 'unavailable' ? BUTTON_STYLES.secondaryGroup.active : BUTTON_STYLES.secondaryGroup.inactive} ${BUTTON_STYLES.secondaryGroup.transition} rounded-r-md border h-7`}>対応不可</button>
+                  <div className="inline-flex rounded-lg shadow-sm border border-gray-200 overflow-hidden" role="group">
+                      <button type="button" onClick={() => setSelectedStatus('all')} className={`${selectedStatus === 'all' ? BUTTON_STYLES.secondaryGroup.active : BUTTON_STYLES.secondaryGroup.inactive} ${BUTTON_STYLES.secondaryGroup.transition} px-3 h-7 text-xs flex items-center`}>すべて</button>
+                      <button type="button" onClick={() => setSelectedStatus('available')} className={`${selectedStatus === 'available' ? BUTTON_STYLES.secondaryGroup.active : BUTTON_STYLES.secondaryGroup.inactive} ${BUTTON_STYLES.secondaryGroup.transition} px-3 h-7 text-xs border-l border-gray-200 flex items-center`}>対応可能</button>
+                      <button type="button" onClick={() => setSelectedStatus('unavailable')} className={`${selectedStatus === 'unavailable' ? BUTTON_STYLES.secondaryGroup.active : BUTTON_STYLES.secondaryGroup.inactive} ${BUTTON_STYLES.secondaryGroup.transition} px-3 h-7 text-xs border-l border-gray-200 flex items-center`}>対応不可</button>
                   </div>
                 )}
             </div>
             {isToday && (
-              <div className="text-right">
-                  <p className="text-xs text-gray-600">現在の対応可能人数</p>
-                  <p className="text-lg font-bold text-green-600">{availableStaffCount}人</p>
+              <div className="text-right bg-green-50 px-3 rounded-lg border border-green-200 h-7 flex items-center">
+                  <span className="text-xs text-green-700 font-medium mr-2">現在の対応可能人数:</span>
+                  <span className="text-base font-bold text-green-600">{availableStaffCount}人</span>
               </div>
             )}
         </div>
 
-        <StatusChart 
-          data={chartData} 
-          staffList={staffList} 
-          selectedDepartment={selectedDepartment} 
-          selectedGroup={selectedGroup}
-          showChart={showLineChart}
-          onToggleChart={() => setShowLineChart(!showLineChart)}
-        />
+        <div className="mb-2 p-4 bg-white shadow-sm rounded-xl border border-gray-100">
+          <StatusChart 
+            data={chartData} 
+            staffList={staffList} 
+            selectedDepartment={selectedDepartment} 
+            selectedGroup={selectedGroup}
+            showChart={showLineChart}
+            onToggleChart={() => setShowLineChart(!showLineChart)}
+          />
+        </div>
         
-        <div className="bg-white shadow rounded-lg relative">
+        <div className="bg-white shadow-lg rounded-xl border border-gray-100 relative overflow-hidden min-w-[1360px]">
           <div className="flex">
             <div className="min-w-fit max-w-[400px] sticky left-0 z-20 bg-white border-r border-gray-200">
               {/* 上部スクロールバー用のスペーサー */}
@@ -2829,7 +2831,7 @@ export default function FullMainApp() {
               </div>
               {/* ヘッダー行 */}
               <div className="sticky top-0 z-10 bg-gray-100 border-b overflow-hidden">
-                <div className="min-w-[1300px]">
+                <div className="min-w-[1120px]">
                   <div className="flex font-bold text-sm">
                     {Array.from({ length: 13 }).map((_, i) => {
                       const hour = 8 + i;
@@ -2850,7 +2852,7 @@ export default function FullMainApp() {
               </div>
               {/* メインコンテンツ */}
               <div className="flex-1 overflow-x-auto" ref={bottomScrollRef} onScroll={handleBottomScroll}>
-                <div className="min-w-[1300px] relative">
+                <div className="min-w-[1120px] relative">
                   {/* グリッド線はスタッフ行に個別配置（下記のスタッフループ内） */}
                   {currentTimePosition !== null && (
                     <div className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-30" 

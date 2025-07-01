@@ -560,17 +560,17 @@ const MonthlyPlannerPage: React.FC = () => {
       {/* プリセット選択モーダル */}
       {showPresetMenu && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
-          <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-md">
-            <h3 className="text-lg font-semibold mb-4">
+          <div className="bg-white rounded-lg shadow-lg p-4 w-full max-w-md">
+            <h3 className="text-lg font-semibold mb-3">
               予定の種類を選択 ({selectedCells.length}日間)
             </h3>
             
-            <div className="space-y-2 mb-6">
+            <div className="space-y-1 mb-4">
               {presetSchedules.map((preset) => (
                 <button
                   key={preset.id}
                   onClick={() => handlePresetSelection(preset)}
-                  className="w-full text-left p-3 border border-gray-200 rounded hover:bg-gray-50 transition-colors"
+                  className="w-full text-left p-2 border border-gray-200 rounded hover:bg-gray-50 transition-colors"
                 >
                   <div className="font-medium">{preset.displayName}</div>
                   <div className="text-sm text-gray-500">{preset.timeDisplay}</div>

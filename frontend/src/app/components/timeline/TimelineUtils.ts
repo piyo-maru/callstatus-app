@@ -63,6 +63,7 @@ export const STATUS_COLORS: { [key: string]: string } = {
   'off': '#ef4444', 
   'unplanned': '#dc2626',
   'night duty': '#4f46e5',
+  'trip': '#ec4899',
 };
 
 // === 時間変換ユーティリティ関数 ===
@@ -305,12 +306,13 @@ export const AVAILABLE_STATUSES = [
 export const ALL_STATUSES = [
   'online', 
   'remote', 
-  'meeting', 
-  'training', 
+  'night duty', 
   'break', 
   'off', 
   'unplanned', 
-  'night duty'
+  'meeting', 
+  'training',
+  'trip'
 ] as const;
 
 // === ステータス日本語表示名マッピング ===
@@ -322,7 +324,8 @@ export const STATUS_DISPLAY_NAMES: { [key: string]: string } = {
   'break': '休憩',
   'off': '休み',
   'unplanned': '急用',
-  'night duty': '夜間対応'
+  'night duty': '夜間対応',
+  'trip': '出張'
 };
 
 // === 時間軸の特別エリア定義 ===
