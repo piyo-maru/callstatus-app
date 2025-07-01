@@ -1901,6 +1901,9 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
     const isPastDate = scheduleDate < new Date(new Date().setHours(0, 0, 0, 0));
     if (isPastDate) return;
     
+    // 権限チェック
+    if (!canManage()) return;
+    
     const currentSelection = selectedSchedule;
     if (currentSelection && 
         currentSelection.schedule.id === schedule.id && 

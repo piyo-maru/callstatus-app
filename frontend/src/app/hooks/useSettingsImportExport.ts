@@ -3,6 +3,9 @@
 import { useState, useCallback, useRef } from 'react';
 import { useAuth } from '../components/AuthProvider';
 import { SettingsValidator } from '../utils/SettingsValidator';
+import { DEFAULT_PRESET_SETTINGS, DEFAULT_UNIFIED_PRESETS, PRESET_CATEGORIES } from '../components/constants/PresetSchedules';
+import { getApiUrl } from '../components/constants/MainAppConstants';
+import { ALL_STATUSES, STATUS_COLORS, STATUS_DISPLAY_NAMES } from '../components/timeline/TimelineUtils';
 import { 
   ExportedSettings, 
   ImportOptions, 
@@ -17,15 +20,15 @@ import { UserPresetSettings } from '../components/types/PresetTypes';
 
 interface UseSettingsImportExportReturn {
   // エクスポート機能
-  exportSettings: (options: ExportOptions) => Promise<void>;
+  exportSettings: (options: ExportOptions, authenticatedFetch?: (url: string, options?: RequestInit) => Promise<Response>) => Promise<void>;
   
   // インポート機能
-  importSettings: (file: File, options: ImportOptions) => Promise<ImportResult>;
+  importSettings: (file: File, options: ImportOptions, authenticatedFetch?: (url: string, options?: RequestInit) => Promise<Response>) => Promise<ImportResult>;
   validateImportFile: (file: File) => Promise<ValidationResult>;
   
   // バックアップ管理
-  createBackup: (name: string, isAutoBackup?: boolean) => Promise<void>;
-  loadBackup: (backupId: string) => Promise<ImportResult>;
+  createBackup: (name: string, isAutoBackup?: boolean, authenticatedFetch?: (url: string, options?: RequestInit) => Promise<Response>) => Promise<void>;
+  loadBackup: (backupId: string, authenticatedFetch?: (url: string, options?: RequestInit) => Promise<Response>) => Promise<ImportResult>;
   deleteBackup: (backupId: string) => void;
   getBackupList: () => SettingsBackup[];
   
@@ -51,68 +54,178 @@ export function useSettingsImportExport(): UseSettingsImportExportReturn {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   /**
+   * 部署・グループ設定をAPIから取得
+   */
+  const fetchDepartmentGroupSettings = useCallback(async (authenticatedFetch?: (url: string, options?: RequestInit) => Promise<Response>): Promise<ManagementSettings> => {
+    try {
+      const currentApiUrl = getApiUrl();
+      const apiUrl = `${currentApiUrl}/api/department-settings`;
+      console.log('部署・グループ設定を取得中:', apiUrl);
+      
+      // 認証付きfetchが利用可能な場合はそれを使用、そうでなければ通常のfetchを使用
+      const fetchFunction = authenticatedFetch || fetch;
+      const response = await fetchFunction(apiUrl);
+      console.log('API レスポンス:', response.status, response.ok);
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log('取得されたデータ:', data);
+        console.log('部署数:', data.departments?.length, 'グループ数:', data.groups?.length);
+        
+        // エクスポート用に不要なフィールドを除外
+        const cleanDepartments = (data.departments || []).map(dept => ({
+          id: dept.id,
+          type: dept.type,
+          name: dept.name,
+          shortName: dept.shortName,
+          backgroundColor: dept.backgroundColor,
+          displayOrder: dept.displayOrder
+        }));
+        
+        const cleanGroups = (data.groups || []).map(group => ({
+          id: group.id,
+          type: group.type,
+          name: group.name,
+          shortName: group.shortName,
+          backgroundColor: group.backgroundColor,
+          displayOrder: group.displayOrder
+        }));
+        
+        return {
+          departments: cleanDepartments,
+          groups: cleanGroups
+        };
+      } else {
+        console.warn('部署・グループ設定の取得に失敗:', response.status);
+        return { departments: [], groups: [] };
+      }
+    } catch (error) {
+      console.warn('部署・グループ設定のAPI呼び出しに失敗:', error);
+      return { departments: [], groups: [] };
+    }
+  }, []);
+
+  /**
    * 現在の設定を収集
    */
-  const collectCurrentSettings = useCallback((): {
+  const collectCurrentSettings = useCallback(async (authenticatedFetch?: (url: string, options?: RequestInit) => Promise<Response>): Promise<{
     display: DisplaySettings;
-    presets: UserPresetSettings | null;
-    management: ManagementSettings | null;
-  } => {
-    // 表示設定をLocalStorageから取得
+    presets: UserPresetSettings;
+    management: ManagementSettings;
+  }> => {
+    // 表示設定をLocalStorageから取得（全ステータスの完全なデータを含む）
+    const customStatusColors = JSON.parse(localStorage.getItem('callstatus-statusColors') || '{}');
+    const customStatusDisplayNames = JSON.parse(localStorage.getItem('callstatus-statusDisplayNames') || '{}');
+    
+    // 全ステータスに対してカラー設定を完全に取得（デフォルト値含む）
+    const completeStatusColors: { [key: string]: string } = {};
+    const completeStatusDisplayNames: { [key: string]: string } = {};
+    
+    ALL_STATUSES.forEach(status => {
+      // カスタム色があればそれを、なければデフォルト色を設定
+      completeStatusColors[status] = customStatusColors[status] || STATUS_COLORS[status] || '#6b7280';
+      // カスタム表示名があればそれを、なければデフォルト表示名を設定
+      completeStatusDisplayNames[status] = customStatusDisplayNames[status] || STATUS_DISPLAY_NAMES[status] || status;
+    });
+    
     const display: DisplaySettings = {
       viewMode: (localStorage.getItem('callstatus-viewMode') as 'normal' | 'compact') || 'normal',
       maskingEnabled: localStorage.getItem('callstatus-maskingEnabled') === 'true',
       timeRange: (localStorage.getItem('callstatus-timeRange') as 'standard' | 'extended') || 'standard',
-      customStatusColors: JSON.parse(localStorage.getItem('callstatus-statusColors') || '{}'),
-      customStatusDisplayNames: JSON.parse(localStorage.getItem('callstatus-statusDisplayNames') || '{}')
+      customStatusColors: completeStatusColors,
+      customStatusDisplayNames: completeStatusDisplayNames
     };
 
-    // プリセット設定を取得
-    let presets: UserPresetSettings | null = null;
+    // プリセット設定を取得（APIから最新データを取得）
+    let presets: UserPresetSettings;
     try {
-      const presetsJson = localStorage.getItem('callstatus-presets');
-      if (presetsJson) {
-        presets = JSON.parse(presetsJson);
+      if (authenticatedFetch) {
+        // APIから最新のプリセット設定を取得
+        try {
+          const apiUrl = getApiUrl();
+          const response = await authenticatedFetch(`${apiUrl}/api/preset-settings/staff/999`);
+          if (response.ok) {
+            const apiPresets = await response.json();
+            presets = {
+              presets: apiPresets.presets || DEFAULT_UNIFIED_PRESETS,
+              categories: PRESET_CATEGORIES,
+              pagePresetSettings: apiPresets.pagePresetSettings || DEFAULT_PRESET_SETTINGS.pagePresetSettings,
+              lastModified: apiPresets.lastModified || new Date().toISOString()
+            };
+            console.log('エクスポート用プリセット設定をAPIから取得:', {
+              presetsCount: presets.presets?.length,
+              hasPageSettings: !!presets.pagePresetSettings,
+              lastModified: presets.lastModified
+            });
+          } else {
+            throw new Error(`API request failed: ${response.status}`);
+          }
+        } catch (apiError) {
+          console.warn('API取得失敗、LocalStorageにフォールバック:', apiError);
+          throw apiError; // LocalStorageフォールバックに移行
+        }
+      } else {
+        throw new Error('authenticatedFetch not available');
       }
     } catch (error) {
-      console.warn('プリセット設定の読み込みに失敗:', error);
-    }
-
-    // 管理設定を取得（管理者のみ）
-    let management: ManagementSettings | null = null;
-    if (user?.role === 'ADMIN') {
+      // API取得失敗時はLocalStorageからフォールバック
       try {
-        const departmentsJson = localStorage.getItem('callstatus-departments');
-        const groupsJson = localStorage.getItem('callstatus-groups');
-        
-        if (departmentsJson || groupsJson) {
-          management = {
-            departments: departmentsJson ? JSON.parse(departmentsJson) : [],
-            groups: groupsJson ? JSON.parse(groupsJson) : []
+        const presetsJson = localStorage.getItem('userPresetSettings');
+        if (presetsJson) {
+          const savedPresets = JSON.parse(presetsJson);
+          presets = {
+            presets: savedPresets.presets || DEFAULT_UNIFIED_PRESETS,
+            categories: savedPresets.categories || PRESET_CATEGORIES,
+            pagePresetSettings: savedPresets.pagePresetSettings || DEFAULT_PRESET_SETTINGS.pagePresetSettings,
+            lastModified: savedPresets.lastModified || new Date().toISOString()
           };
+          console.log('エクスポート用プリセット設定をLocalStorageから取得:', {
+            presetsCount: presets.presets?.length,
+            hasPageSettings: !!presets.pagePresetSettings,
+            lastModified: presets.lastModified
+          });
+        } else {
+          // LocalStorageにも設定がない場合はデフォルト設定を構築
+          presets = {
+            presets: DEFAULT_UNIFIED_PRESETS,
+            categories: PRESET_CATEGORIES,
+            pagePresetSettings: DEFAULT_PRESET_SETTINGS.pagePresetSettings,
+            lastModified: new Date().toISOString()
+          };
+          console.log('エクスポート用デフォルトプリセット設定を構築しました');
         }
-      } catch (error) {
-        console.warn('管理設定の読み込みに失敗:', error);
+      } catch (localStorageError) {
+        console.error('LocalStorage取得エラー:', localStorageError);
+        // 最終フォールバック：デフォルト設定
+        presets = {
+          presets: DEFAULT_UNIFIED_PRESETS,
+          categories: PRESET_CATEGORIES,
+          pagePresetSettings: DEFAULT_PRESET_SETTINGS.pagePresetSettings,
+          lastModified: new Date().toISOString()
+        };
       }
     }
 
+    // 管理設定を取得（APIから実際のデータを取得）
+    const management: ManagementSettings = await fetchDepartmentGroupSettings(authenticatedFetch);
+
     return { display, presets, management };
-  }, [user]);
+  }, [fetchDepartmentGroupSettings]);
 
   /**
    * 設定をエクスポート
    */
-  const exportSettings = useCallback(async (options: ExportOptions) => {
+  const exportSettings = useCallback(async (options: ExportOptions, authenticatedFetch?: (url: string, options?: RequestInit) => Promise<Response>) => {
     setIsExporting(true);
     
     try {
-      const currentSettings = collectCurrentSettings();
+      const currentSettings = await collectCurrentSettings(authenticatedFetch);
       
       // エクスポート対象を選択
       const exportedSettings = SettingsValidator.createExportedSettings(
         options.includeDisplay ? currentSettings.display : undefined,
-        options.includePresets ? currentSettings.presets || undefined : undefined,
-        options.includeManagement ? currentSettings.management || undefined : undefined,
+        options.includePresets ? currentSettings.presets : undefined,
+        options.includeManagement ? currentSettings.management : undefined,
         user?.name || user?.email || 'Unknown User'
       );
 
@@ -174,13 +287,18 @@ export function useSettingsImportExport(): UseSettingsImportExportReturn {
   /**
    * 設定をインポート
    */
-  const importSettings = useCallback(async (file: File, options: ImportOptions): Promise<ImportResult> => {
+  const importSettings = useCallback(async (file: File, options: ImportOptions, authenticatedFetch?: (url: string, options?: RequestInit) => Promise<Response>): Promise<ImportResult> => {
+    console.log('=== インポート開始 ===', { fileName: file.name, fileSize: file.size, options });
     setIsImporting(true);
     
     try {
       // バリデーション実行
+      console.log('バリデーション実行中...');
       const validation = await validateImportFile(file);
+      console.log('バリデーション結果:', validation);
+      
       if (!validation.isValid || !validation.parsedSettings) {
+        console.error('バリデーション失敗:', validation.errors);
         const result: ImportResult = {
           success: false,
           message: '設定ファイルが無効です',
@@ -197,6 +315,7 @@ export function useSettingsImportExport(): UseSettingsImportExportReturn {
       }
 
       const settings = validation.parsedSettings;
+      console.log('パース済み設定:', settings);
       let displayImported = false;
       let presetsImported = 0;
       let managementImported = false;
@@ -205,6 +324,7 @@ export function useSettingsImportExport(): UseSettingsImportExportReturn {
 
       // 表示設定のインポート
       if (options.includeDisplay && settings.settings.display) {
+        console.log('表示設定インポート開始:', settings.settings.display);
         try {
           const display = settings.settings.display;
           localStorage.setItem('callstatus-viewMode', display.viewMode);
@@ -220,19 +340,23 @@ export function useSettingsImportExport(): UseSettingsImportExportReturn {
           }
           
           displayImported = true;
+          console.log('表示設定インポート完了');
         } catch (error) {
+          console.error('表示設定インポートエラー:', error);
           errors.push(`表示設定のインポートに失敗: ${error instanceof Error ? error.message : 'unknown error'}`);
         }
       }
 
       // プリセット設定のインポート
       if (options.includePresets && settings.settings.presets) {
+        console.log('プリセット設定インポート開始:', settings.settings.presets);
         try {
           const presets = settings.settings.presets;
           
           if (options.mergePresets) {
+            console.log('マージモードでプリセット設定をインポート');
             // 既存設定とマージ
-            const existingPresets = localStorage.getItem('callstatus-presets');
+            const existingPresets = localStorage.getItem('userPresetSettings');
             if (existingPresets) {
               const existing = JSON.parse(existingPresets);
               // マージロジック（IDベースで重複除去）
@@ -249,29 +373,61 @@ export function useSettingsImportExport(): UseSettingsImportExportReturn {
             }
           }
           
-          localStorage.setItem('callstatus-presets', JSON.stringify(presets));
+          localStorage.setItem('userPresetSettings', JSON.stringify(presets));
           presetsImported = presets.presets?.length || 0;
+          console.log('プリセット設定インポート完了:', presetsImported, '件');
         } catch (error) {
+          console.error('プリセット設定インポートエラー:', error);
           errors.push(`プリセット設定のインポートに失敗: ${error instanceof Error ? error.message : 'unknown error'}`);
         }
       }
 
       // 管理設定のインポート（管理者のみ）
       if (options.includeManagement && settings.settings.management && user?.role === 'ADMIN') {
+        console.log('管理設定インポート開始:', settings.settings.management);
+        
         try {
           const management = settings.settings.management;
+          const currentApiUrl = getApiUrl();
           
-          if (management.departments) {
-            localStorage.setItem('callstatus-departments', JSON.stringify(management.departments));
+          // 部署・グループ設定を統合して送信
+          const allSettings = [
+            ...(management.departments || []).map(dept => ({
+              type: 'department' as const,
+              name: dept.name,
+              shortName: dept.shortName,
+              backgroundColor: dept.backgroundColor,
+              displayOrder: dept.displayOrder || 0
+            })),
+            ...(management.groups || []).map(group => ({
+              type: 'group' as const,
+              name: group.name,
+              shortName: group.shortName,
+              backgroundColor: group.backgroundColor,
+              displayOrder: group.displayOrder || 0
+            }))
+          ];
+          
+          console.log('部署・グループ設定をAPIに送信:', allSettings);
+          
+          // 認証付きfetchが利用可能な場合はそれを使用、そうでなければ通常のfetchを使用
+          const fetchFunction = authenticatedFetch || fetch;
+          const response = await fetchFunction(`${currentApiUrl}/api/department-settings`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(allSettings)
+          });
+          
+          if (response.ok) {
+            managementImported = true;
+            console.log('部署・グループ設定インポート完了');
+          } else {
+            console.error('部署・グループ設定API失敗:', response.status);
+            errors.push(`部署・グループ設定のインポートに失敗: API応答 ${response.status}`);
           }
-          
-          if (management.groups) {
-            localStorage.setItem('callstatus-groups', JSON.stringify(management.groups));
-          }
-          
-          managementImported = true;
         } catch (error) {
-          errors.push(`管理設定のインポートに失敗: ${error instanceof Error ? error.message : 'unknown error'}`);
+          console.error('部署・グループ設定インポートエラー:', error);
+          errors.push(`部署・グループ設定のインポートに失敗: ${error instanceof Error ? error.message : 'unknown error'}`);
         }
       }
 
@@ -287,10 +443,12 @@ export function useSettingsImportExport(): UseSettingsImportExportReturn {
         }
       };
 
+      console.log('インポート結果:', result);
       setLastImportResult(result);
       return result;
       
     } catch (error) {
+      console.error('インポート処理で予期しないエラー:', error);
       const result: ImportResult = {
         success: false,
         message: `インポートエラー: ${error instanceof Error ? error.message : 'unknown error'}`,
@@ -302,6 +460,7 @@ export function useSettingsImportExport(): UseSettingsImportExportReturn {
           warnings: []
         }
       };
+      console.log('エラー結果:', result);
       setLastImportResult(result);
       return result;
     } finally {
@@ -312,13 +471,13 @@ export function useSettingsImportExport(): UseSettingsImportExportReturn {
   /**
    * バックアップ作成
    */
-  const createBackup = useCallback(async (name: string, isAutoBackup = false) => {
+  const createBackup = useCallback(async (name: string, isAutoBackup = false, authenticatedFetch?: (url: string, options?: RequestInit) => Promise<Response>) => {
     try {
-      const currentSettings = collectCurrentSettings();
+      const currentSettings = await collectCurrentSettings(authenticatedFetch);
       const exportedSettings = SettingsValidator.createExportedSettings(
         currentSettings.display,
-        currentSettings.presets || undefined,
-        currentSettings.management || undefined,
+        currentSettings.presets,
+        currentSettings.management,
         user?.name || user?.email || 'Unknown User'
       );
 
@@ -354,7 +513,7 @@ export function useSettingsImportExport(): UseSettingsImportExportReturn {
   /**
    * バックアップからロード
    */
-  const loadBackup = useCallback(async (backupId: string): Promise<ImportResult> => {
+  const loadBackup = useCallback(async (backupId: string, authenticatedFetch?: (url: string, options?: RequestInit) => Promise<Response>): Promise<ImportResult> => {
     try {
       const backups = getBackupList();
       const backup = backups.find(b => b.id === backupId);
@@ -371,14 +530,14 @@ export function useSettingsImportExport(): UseSettingsImportExportReturn {
       const blob = new Blob([jsonString], { type: 'application/json' });
       const file = new File([blob], `backup-${backup.name}.json`, { type: 'application/json' });
 
-      // 全設定をインポート
+      // 全設定をインポート（authenticatedFetchを渡す）
       return await importSettings(file, {
         includeDisplay: true,
         includePresets: true,
         includeManagement: user?.role === 'ADMIN',
         overwriteExisting: true,
         mergePresets: false
-      });
+      }, authenticatedFetch);
 
     } catch (error) {
       return {

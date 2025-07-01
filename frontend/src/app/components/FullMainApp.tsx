@@ -832,7 +832,7 @@ export default function FullMainApp() {
 
   // UI表示制御ヘルパー
   const canEdit = useCallback((targetStaffId?: number) => {
-    return hasPermission(['STAFF', 'ADMIN'], targetStaffId);
+    return hasPermission(['STAFF', 'ADMIN', 'SYSTEM_ADMIN'], targetStaffId);
   }, [hasPermission]);
 
   const canManage = useCallback(() => {
@@ -2864,16 +2864,6 @@ export default function FullMainApp() {
                     }
                     return markers;
                   })()}
-                  {/* 早朝エリア（8:00-9:00）の背景強調 */}
-                  <div className="absolute top-0 bottom-0 bg-blue-50 opacity-30 z-0" 
-                       style={{ left: `0%`, width: `${((9-8)*4)/52*100}%` }} 
-                       title="早朝時間帯（8:00-9:00）">
-                  </div>
-                  {/* 夜間エリア（18:00-21:00）の背景強調 */}
-                  <div className="absolute top-0 bottom-0 bg-blue-50 opacity-30 z-0" 
-                       style={{ left: `${((18-8)*4)/52*100}%`, width: `${((21-18)*4)/52*100}%` }} 
-                       title="夜間時間帯（18:00-21:00）">
-                  </div>
                   {currentTimePosition !== null && (
                     <div className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-30" 
                          style={{ left: `${currentTimePosition}%` }} 
@@ -2943,6 +2933,16 @@ export default function FullMainApp() {
                                        }
                                      }
                                    }}>
+                                {/* 早朝エリア（8:00-9:00）の背景強調 */}
+                                <div className="absolute top-0 bottom-0 bg-blue-50 opacity-50 pointer-events-none" 
+                                     style={{ left: `0%`, width: `${((9-8)*4)/52*100}%` }} 
+                                     title="早朝時間帯（8:00-9:00）">
+                                </div>
+                                {/* 夜間エリア（18:00-21:00）の背景強調 */}
+                                <div className="absolute top-0 bottom-0 bg-blue-50 opacity-50 pointer-events-none" 
+                                     style={{ left: `${((18-8)*4)/52*100}%`, width: `${((21-18)*4)/52*100}%` }} 
+                                     title="夜間時間帯（18:00-21:00）">
+                                </div>
                                 {schedules.filter(s => {
                                   if (s.staffId !== staff.id) return false;
                                   
