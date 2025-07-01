@@ -328,13 +328,15 @@ export class PresetSettingsService {
    * デフォルトプリセット設定を作成
    */
   private async createDefaultPresetSettings(staffId: number) {
-    // スタッフの存在確認
-    const staff = await this.prisma.staff.findUnique({
-      where: { id: staffId }
-    });
+    // 管理者用固定ID（999）の場合はスタッフチェックをスキップ
+    if (staffId !== 999) {
+      const staff = await this.prisma.staff.findUnique({
+        where: { id: staffId }
+      });
 
-    if (!staff) {
-      throw new Error(`Staff with ID ${staffId} not found`);
+      if (!staff) {
+        throw new Error(`Staff with ID ${staffId} not found`);
+      }
     }
 
     // デフォルトのページ別プリセット設定
@@ -443,14 +445,16 @@ export class PresetSettingsService {
 
   /**
    * スケジュール情報を含むデフォルトプリセット定義を取得
+   * フロントエンドのPresetSchedules.tsと同期
    */
   private getDefaultPresetsWithSchedules() {
     return [
+      // 一般勤務カテゴリ
       {
-        presetId: 'standard-work',
-        name: 'standard-work',
-        displayName: '標準勤務',
-        description: '一般的な勤務時間（9:00-18:00）',
+        presetId: 'full-time-employee',
+        name: 'full-time-employee',
+        displayName: '正社員',
+        description: '9:00-12:00 + 昼休み + 13:00-18:00の正社員勤務',
         category: 'general',
         isActive: true,
         customizable: true,
@@ -458,81 +462,276 @@ export class PresetSettingsService {
         schedules: [
           {
             status: 'online',
-            startTime: 9.0,   // 9:00
-            endTime: 18.0,    // 18:00
-            memo: '標準勤務時間'
+            startTime: 9.0,
+            endTime: 12.0,
+            memo: ''
+          },
+          {
+            status: 'break',
+            startTime: 12.0,
+            endTime: 13.0,
+            memo: ''
+          },
+          {
+            status: 'online',
+            startTime: 13.0,
+            endTime: 18.0,
+            memo: ''
           }
         ]
       },
       {
-        presetId: 'remote-work',
-        name: 'remote-work',
-        displayName: 'リモート勤務',
-        description: 'リモートワーク（9:00-18:00）',
+        presetId: 'part-time-employee',
+        name: 'part-time-employee',
+        displayName: 'パートタイマー',
+        description: '9:00-12:00 + 昼休み + 13:00-16:00のパートタイム勤務',
         category: 'general',
         isActive: true,
         customizable: true,
-        isDefault: false,
+        isDefault: true,
+        schedules: [
+          {
+            status: 'online',
+            startTime: 9.0,
+            endTime: 12.0,
+            memo: ''
+          },
+          {
+            status: 'break',
+            startTime: 12.0,
+            endTime: 13.0,
+            memo: ''
+          },
+          {
+            status: 'online',
+            startTime: 13.0,
+            endTime: 16.0,
+            memo: ''
+          }
+        ]
+      },
+      {
+        presetId: 'remote-full-time',
+        name: 'remote-full-time',
+        displayName: '在宅勤務（正社員）',
+        description: '9:00-12:00 + 昼休み + 13:00-18:00の在宅正社員勤務',
+        category: 'general',
+        isActive: true,
+        customizable: true,
+        isDefault: true,
         schedules: [
           {
             status: 'remote',
-            startTime: 9.0,   // 9:00
-            endTime: 18.0,    // 18:00
-            memo: 'リモート勤務'
+            startTime: 9.0,
+            endTime: 12.0,
+            memo: ''
+          },
+          {
+            status: 'break',
+            startTime: 12.0,
+            endTime: 13.0,
+            memo: ''
+          },
+          {
+            status: 'remote',
+            startTime: 13.0,
+            endTime: 18.0,
+            memo: ''
           }
         ]
       },
       {
-        presetId: 'morning-only',
-        name: 'morning-only',
-        displayName: '午前のみ',
-        description: '午前中のみ勤務（9:00-12:00）',
+        presetId: 'remote-part-time',
+        name: 'remote-part-time',
+        displayName: '在宅勤務（パートタイマー）',
+        description: '9:00-12:00 + 昼休み + 13:00-16:00の在宅パートタイム勤務',
         category: 'general',
         isActive: true,
         customizable: true,
-        isDefault: false,
+        isDefault: true,
         schedules: [
           {
-            status: 'online',
-            startTime: 9.0,   // 9:00
-            endTime: 12.0,    // 12:00
-            memo: '午前のみ勤務'
+            status: 'remote',
+            startTime: 9.0,
+            endTime: 12.0,
+            memo: ''
+          },
+          {
+            status: 'break',
+            startTime: 12.0,
+            endTime: 13.0,
+            memo: ''
+          },
+          {
+            status: 'remote',
+            startTime: 13.0,
+            endTime: 16.0,
+            memo: ''
           }
         ]
       },
+      // 休暇カテゴリ
       {
-        presetId: 'afternoon-only',
-        name: 'afternoon-only',
-        displayName: '午後のみ',
-        description: '午後のみ勤務（13:00-18:00）',
-        category: 'general',
-        isActive: true,
-        customizable: true,
-        isDefault: false,
-        schedules: [
-          {
-            status: 'online',
-            startTime: 13.0,  // 13:00
-            endTime: 18.0,    // 18:00
-            memo: '午後のみ勤務'
-          }
-        ]
-      },
-      {
-        presetId: 'off',
-        name: 'off',
-        displayName: '休み',
-        description: '休暇・休日',
+        presetId: 'full-day-off',
+        name: 'full-day-off',
+        displayName: '終日休み',
+        description: '一日中休暇',
         category: 'time-off',
         isActive: true,
         customizable: false,
-        isDefault: false,
+        isDefault: true,
         schedules: [
           {
             status: 'off',
-            startTime: 0.0,
-            endTime: 0.0,
-            memo: '休暇・休日'
+            startTime: 9.0,
+            endTime: 18.0,
+            memo: '終日休暇'
+          }
+        ]
+      },
+      {
+        presetId: 'sudden-off',
+        name: 'sudden-off',
+        displayName: '突発休',
+        description: '突発的な休暇',
+        category: 'time-off',
+        isActive: true,
+        customizable: false,
+        isDefault: true,
+        schedules: [
+          {
+            status: 'off',
+            startTime: 9.0,
+            endTime: 18.0,
+            memo: '突発休'
+          }
+        ]
+      },
+      {
+        presetId: 'morning-off',
+        name: 'morning-off',
+        displayName: '午前休',
+        description: '午前中休暇',
+        category: 'time-off',
+        isActive: true,
+        customizable: false,
+        isDefault: true,
+        schedules: [
+          {
+            status: 'off',
+            startTime: 9.0,
+            endTime: 13.0,
+            memo: '午前休'
+          }
+        ]
+      },
+      {
+        presetId: 'afternoon-off',
+        name: 'afternoon-off',
+        displayName: '午後休',
+        description: '午後休暇',
+        category: 'time-off',
+        isActive: true,
+        customizable: false,
+        isDefault: true,
+        schedules: [
+          {
+            status: 'off',
+            startTime: 13.0,
+            endTime: 18.0,
+            memo: '午後休'
+          }
+        ]
+      },
+      {
+        presetId: 'lunch-break',
+        name: 'lunch-break',
+        displayName: '昼休み',
+        description: '12:00-13:00の昼休憩',
+        category: 'time-off',
+        isActive: true,
+        customizable: false,
+        isDefault: true,
+        schedules: [
+          {
+            status: 'break',
+            startTime: 12.0,
+            endTime: 13.0,
+            memo: '昼休憩'
+          }
+        ]
+      },
+      // 夜間担当カテゴリ
+      {
+        presetId: 'night-duty',
+        name: 'night-duty',
+        displayName: '夜間担当',
+        description: '18:00-21:00の夜間担当',
+        category: 'night-duty',
+        isActive: true,
+        customizable: true,
+        isDefault: true,
+        schedules: [
+          {
+            status: 'night duty',
+            startTime: 18.0,
+            endTime: 21.0,
+            memo: '夜間担当'
+          }
+        ]
+      },
+      {
+        presetId: 'night-duty-extended',
+        name: 'night-duty-extended',
+        displayName: '夜間担当(延長)',
+        description: '17:00-21:00の夜間担当(延長)',
+        category: 'night-duty',
+        isActive: true,
+        customizable: true,
+        isDefault: true,
+        schedules: [
+          {
+            status: 'night duty',
+            startTime: 17.0,
+            endTime: 21.0,
+            memo: '夜間担当(延長)'
+          }
+        ]
+      },
+      // その他カテゴリ
+      {
+        presetId: 'meeting-block',
+        name: 'meeting-block',
+        displayName: '会議ブロック',
+        description: '14:00-15:00の会議時間',
+        category: 'special',
+        isActive: true,
+        customizable: true,
+        isDefault: true,
+        schedules: [
+          {
+            status: 'meeting',
+            startTime: 14.0,
+            endTime: 15.0,
+            memo: '定例会議'
+          }
+        ]
+      },
+      {
+        presetId: 'training',
+        name: 'training',
+        displayName: '研修・トレーニング',
+        description: '10:00-16:00の研修時間',
+        category: 'special',
+        isActive: true,
+        customizable: true,
+        isDefault: true,
+        schedules: [
+          {
+            status: 'training',
+            startTime: 10.0,
+            endTime: 16.0,
+            memo: '研修・トレーニング'
           }
         ]
       }

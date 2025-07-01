@@ -15,9 +15,176 @@ import { Holiday } from '../components/types/MainAppTypes';
 import { usePresetSettings } from '../hooks/usePresetSettings';
 import { convertToLegacyFormat } from '../components/constants/PresetSchedules';
 import { UnifiedSettingsModal } from '../components/modals/UnifiedSettingsModal';
+import { JsonUploadModal } from '../components/modals/JsonUploadModal';
+import { CsvUploadModal } from '../components/modals/CsvUploadModal';
 import { getApiUrl } from '../components/constants/MainAppConstants';
+import { checkSupportedCharacters } from '../components/utils/MainAppUtils';
+import { ImportHistory } from '../components/types/MainAppTypes';
 
 registerLocale('ja', ja);
+
+// --- インポート履歴モーダルコンポーネント ---
+const ImportHistoryModal = ({ isOpen, onClose, onRollback, authenticatedFetch }: {
+  isOpen: boolean;
+  onClose: () => void;
+  onRollback: (batchId: string) => void;
+  authenticatedFetch: (url: string, options?: RequestInit) => Promise<Response>;
+}) => {
+  const [importHistory, setImportHistory] = useState<ImportHistory[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchHistory = useCallback(async () => {
+    if (!isOpen) return;
+    
+    setLoading(true);
+    setError(null);
+    try {
+      const currentApiUrl = getApiUrl();
+      const response = await authenticatedFetch(`${currentApiUrl}/api/csv-import/history`);
+      if (!response.ok) {
+        throw new Error('履歴の取得に失敗しました');
+      }
+      const data = await response.json();
+      setImportHistory(data);
+    } catch (error) {
+      console.error('インポート履歴の取得に失敗しました:', error);
+      setError(error instanceof Error ? error.message : '履歴の取得に失敗しました');
+    } finally {
+      setLoading(false);
+    }
+  }, [isOpen, authenticatedFetch]);
+
+  useEffect(() => {
+    fetchHistory();
+  }, [fetchHistory]);
+
+  const handleRollback = async (batchId: string, recordCount: number) => {
+    const confirmed = window.confirm(
+      `バッチID: ${batchId}\n` +
+      `対象レコード: ${recordCount}件\n\n` +
+      'このインポートをロールバック（取り消し）しますか？\n' +
+      '※ この操作は元に戻せません'
+    );
+    
+    if (!confirmed) return;
+    
+    try {
+      onRollback(batchId);
+      await fetchHistory(); // 履歴を再読み込み
+    } catch (error) {
+      console.error('ロールバック後の履歴更新に失敗:', error);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return createPortal(
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4">
+      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[80vh] overflow-hidden">
+        <div className="flex justify-between items-center p-6 border-b border-gray-200">
+          <h2 className="text-xl font-bold text-gray-800">CSVインポート履歴</h2>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 text-2xl font-bold"
+          >
+            ×
+          </button>
+        </div>
+        
+        <div className="p-6 overflow-y-auto max-h-[60vh]">
+          {loading && (
+            <div className="text-center py-8">
+              <div className="text-gray-600">履歴を読み込み中...</div>
+            </div>
+          )}
+          
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-md p-4 mb-4">
+              <div className="text-red-800 font-medium">エラー</div>
+              <div className="text-red-700 text-sm mt-1">{error}</div>
+            </div>
+          )}
+          
+          {!loading && !error && importHistory.length === 0 && (
+            <div className="text-center py-8 text-gray-500">
+              インポート履歴がありません
+            </div>
+          )}
+          
+          {!loading && !error && importHistory.length > 0 && (
+            <div className="space-y-4">
+              {importHistory.map((history) => (
+                <div key={history.batchId} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                  <div className="flex justify-between items-start mb-3">
+                    <div className="flex-1">
+                      <div className="font-medium text-gray-800 mb-1">
+                        バッチID: {history.batchId}
+                      </div>
+                      <div className="text-sm text-gray-600 mb-2">
+                        インポート日時: {new Date(history.importedAt).toLocaleString('ja-JP')}
+                      </div>
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <span className="font-medium text-gray-700">投入レコード数:</span>
+                          <span className="ml-2 text-blue-600 font-medium">{history.recordCount}件</span>
+                        </div>
+                        <div>
+                          <span className="font-medium text-gray-700">対象スタッフ数:</span>
+                          <span className="ml-2 text-green-600 font-medium">{history.staffCount}名</span>
+                        </div>
+                      </div>
+                      <div className="text-sm mt-2">
+                        <span className="font-medium text-gray-700">対象日付範囲:</span>
+                        <span className="ml-2">{history.dateRange}</span>
+                      </div>
+                      <div className="text-sm mt-2">
+                        <span className="font-medium text-gray-700">対象スタッフ:</span>
+                        <span className="ml-2 text-gray-600">
+                          {history.staffList ? history.staffList.slice(0, 5).join(', ') : '情報なし'}
+                          {history.staffList && history.staffList.length > 5 && ` 他${history.staffList.length - 5}名`}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="ml-4">
+                      {history.canRollback ? (
+                        <button
+                          onClick={() => handleRollback(history.batchId, history.recordCount)}
+                          className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm font-medium"
+                        >
+                          ロールバック
+                        </button>
+                      ) : (
+                        <div className="px-4 py-2 bg-gray-300 text-gray-500 rounded-md text-sm font-medium cursor-not-allowed">
+                          期限切れ
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        
+        <div className="border-t border-gray-200 px-6 py-4 bg-gray-50">
+          <div className="flex justify-between items-center">
+            <div className="text-sm text-gray-600">
+              ※ ロールバックは投入から24時間以内のみ可能です
+            </div>
+            <button
+              onClick={onClose}
+              className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 text-sm font-medium"
+            >
+              閉じる
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+};
 
 // 型定義
 type Staff = {
@@ -405,6 +572,12 @@ function MonthlyPlannerPageContent() {
   // モーダル状態
   const [showModal, setShowModal] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  
+  // インポートモーダル関連の状態
+  const [isCsvUploadModalOpen, setIsCsvUploadModalOpen] = useState(false);
+  const [isJsonUploadModalOpen, setIsJsonUploadModalOpen] = useState(false);
+  const [isImportHistoryModalOpen, setIsImportHistoryModalOpen] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
   const [selectedCell, setSelectedCell] = useState<{
     staffId: number;
     staffName: string;
@@ -1560,6 +1733,193 @@ function MonthlyPlannerPageContent() {
     }
   }, [currentMonth, staffList, fetchPendingSchedules, fetchResponsibilityData, fetchDisplayCache]);
 
+  // インポート関連の処理関数
+  const handleJsonUpload = async (file: File) => {
+    setIsImporting(true);
+    try {
+      // まずファイル内容を読み取って文字チェックを実行
+      const fileContent = await file.text();
+      const jsonData = JSON.parse(fileContent);
+      
+      if (!jsonData.employeeData || !Array.isArray(jsonData.employeeData)) {
+        throw new Error('JSONファイルの形式が正しくありません。employeeDataプロパティが必要です。');
+      }
+      
+      // 文字チェックを実行
+      const characterCheck = checkSupportedCharacters(jsonData.employeeData);
+      
+      if (!characterCheck.isValid) {
+        const errorMessage = characterCheck.errors.map(error => {
+          const fieldName = error.field === 'name' ? '名前' : error.field === 'dept' ? '部署' : 'グループ';
+          return `${error.position}行目の${fieldName}「${error.value}」に使用できない文字が含まれています: ${error.invalidChars.join(', ')}`;
+        }).join('\n');
+        
+        alert(`文字チェックエラー:\n\n${errorMessage}\n\n使用可能な文字: ひらがな、カタカナ、漢字（JIS第1-2水準）、英数字、基本記号、全角英数字、反復記号「々」`);
+        return;
+      }
+      
+      // 文字チェックが通った場合のみAPIに送信
+      const currentApiUrl = getApiUrl();
+      
+      const response = await authenticatedFetch(`${currentApiUrl}/api/staff/sync-from-json-body`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(jsonData)
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        
+        // バックエンドからの文字チェックエラーを処理
+        if (errorData.message === '文字チェックエラー' && errorData.details) {
+          const errorMessage = errorData.details.join('\n');
+          alert(`サーバー側文字チェックエラー:\n\n${errorMessage}\n\n${errorData.supportedChars}`);
+          return;
+        }
+        
+        throw new Error(errorData.message || 'JSONファイルの同期に失敗しました');
+      }
+      
+      const result = await response.json();
+      
+      const message = `同期完了:\n追加: ${result.added}名\n更新: ${result.updated}名\n削除: ${result.deleted}名`;
+      alert(message);
+      
+      // データを再取得してUIを更新
+      await fetchStaffData();
+      await fetchDepartmentSettings();
+      if (staffList.length > 0) {
+        await fetchPendingSchedules();
+        await fetchResponsibilityData();
+        const year = currentMonth.getFullYear();
+        const month = currentMonth.getMonth() + 1;
+        await fetchDisplayCache(year, month);
+      }
+      setIsJsonUploadModalOpen(false);
+    } catch (error) {
+      console.error('JSONファイルの同期に失敗しました:', error);
+      alert('JSONファイルの同期に失敗しました: ' + (error instanceof Error ? error.message : String(error)));
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  const handleCsvUpload = async (file: File) => {
+    setIsImporting(true);
+    try {
+      // CSVファイルを読み込み
+      const csvText = await file.text();
+      const lines = csvText.trim().split('\n');
+      
+      if (lines.length < 2) {
+        throw new Error('CSVファイルが空または不正です');
+      }
+      
+      // ヘッダー行を確認（オプション）
+      const hasHeader = lines[0].toLowerCase().includes('empno') || lines[0].toLowerCase().includes('date');
+      const dataLines = hasHeader ? lines.slice(1) : lines;
+      
+      // データを解析
+      const schedules = dataLines.map((line, index) => {
+        const columns = line.split(',');
+        if (columns.length < 5) {
+          throw new Error(`${index + (hasHeader ? 2 : 1)}行目: 必要な列が不足しています`);
+        }
+        
+        // フォーマット: date,empNo,name,status,time,memo,assignmentType,customLabel
+        return {
+          date: columns[0]?.trim(),
+          empNo: columns[1]?.trim(),
+          name: columns[2]?.trim(),
+          status: columns[3]?.trim(),
+          time: columns[4]?.trim(),
+          memo: columns[5]?.trim() || undefined,
+          assignmentType: columns[6]?.trim() || undefined,
+          customLabel: columns[7]?.trim() || undefined
+        };
+      }).filter(s => s.empNo && s.date && (
+        // スケジュール情報または担当設定のいずれかがあればOK
+        (s.status && s.time) || s.assignmentType
+      ));
+      
+      const currentApiUrl = getApiUrl();
+
+      const response = await authenticatedFetch(`${currentApiUrl}/api/csv-import/schedules`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ schedules })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'CSVファイルのインポートに失敗しました');
+      }
+      
+      const result = await response.json();
+      
+      const message = `インポート完了:\n投入: ${result.imported}件\n競合: ${result.conflicts?.length || 0}件\n\n${result.batchId ? `バッチID: ${result.batchId}\n※ 問題があればインポート履歴から取り消し可能です` : ''}`;
+      alert(message);
+      
+      // データを再取得してUIを更新
+      await fetchStaffData();
+      if (staffList.length > 0) {
+        await fetchPendingSchedules();
+        await fetchResponsibilityData();
+        const year = currentMonth.getFullYear();
+        const month = currentMonth.getMonth() + 1;
+        await fetchDisplayCache(year, month);
+      }
+      setIsCsvUploadModalOpen(false);
+    } catch (error) {
+      console.error('CSVファイルのインポートに失敗しました:', error);
+      alert('CSVファイルのインポートに失敗しました: ' + (error instanceof Error ? error.message : String(error)));
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  // ロールバック実行
+  const handleRollback = async (batchId: string) => {
+    try {
+      const currentApiUrl = getApiUrl();
+      const response = await authenticatedFetch(`${currentApiUrl}/api/csv-import/rollback`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ batchId })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'ロールバックに失敗しました');
+      }
+      
+      const result = await response.json();
+      
+      const message = `ロールバック完了:\n削除: ${result.deletedCount}件\n\n削除されたデータ:\n${result.details.map((d: any) => `・${d.staff} ${d.date} ${d.status} ${d.time}`).join('\n')}`;
+      alert(message);
+      
+      // データを再取得してUIを更新
+      await fetchStaffData();
+      if (staffList.length > 0) {
+        await fetchPendingSchedules();
+        await fetchResponsibilityData();
+        const year = currentMonth.getFullYear();
+        const month = currentMonth.getMonth() + 1;
+        await fetchDisplayCache(year, month);
+      }
+      setIsImportHistoryModalOpen(false);
+    } catch (error) {
+      console.error('ロールバックに失敗しました:', error);
+      alert('ロールバックに失敗しました: ' + (error instanceof Error ? error.message : String(error)));
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 p-4">
       {/* ヘッダー - 個人ページと同じレイアウト */}
@@ -1570,7 +1930,7 @@ function MonthlyPlannerPageContent() {
             <h1 className="text-lg font-semibold text-gray-900">月次プランナー</h1>
             <div className="flex items-center space-x-4">  
               <span className="text-sm text-gray-600">
-                {user?.name || user?.email} ({user?.role === 'ADMIN' ? '管理者' : '一般ユーザー'})
+                {user?.name || user?.email} ({user?.role === 'ADMIN' ? '管理者' : user?.role === 'SYSTEM_ADMIN' ? 'システム管理者' : '一般ユーザー'})
               </span>
               <a
                 href="/"
@@ -1584,7 +1944,7 @@ function MonthlyPlannerPageContent() {
               >
                 👤 個人ページ
               </a>
-              {user?.role === 'ADMIN' && (
+              {(user?.role === 'ADMIN' || user?.role === 'SYSTEM_ADMIN') && (
                 <a
                   href="/admin/pending-approval"
                   className="text-sm bg-orange-100 hover:bg-orange-200 text-orange-800 px-3 py-1 rounded-md border border-orange-300 transition-colors duration-150 h-7 flex items-center font-medium"
@@ -2294,9 +2654,40 @@ function MonthlyPlannerPageContent() {
       <UnifiedSettingsModal
         isOpen={isSettingsModalOpen}
         onClose={() => setIsSettingsModalOpen(false)}
+        setIsCsvUploadModalOpen={setIsCsvUploadModalOpen}
+        setIsJsonUploadModalOpen={setIsJsonUploadModalOpen}
+        setIsImportHistoryModalOpen={setIsImportHistoryModalOpen}
         authenticatedFetch={authenticatedFetch}
         staffList={staffList}
       />
+
+      {/* インポート関連モーダル */}
+      <JsonUploadModal 
+        isOpen={isJsonUploadModalOpen} 
+        onClose={() => setIsJsonUploadModalOpen(false)} 
+        onUpload={handleJsonUpload} 
+      />
+      <CsvUploadModal 
+        isOpen={isCsvUploadModalOpen} 
+        onClose={() => setIsCsvUploadModalOpen(false)} 
+        onUpload={handleCsvUpload} 
+      />
+      <ImportHistoryModal 
+        isOpen={isImportHistoryModalOpen}
+        onClose={() => setIsImportHistoryModalOpen(false)}
+        onRollback={handleRollback}
+        authenticatedFetch={authenticatedFetch}
+      />
+
+      {/* インポート中ローディング表示 */}
+      {isImporting && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[10001]">
+          <div className="bg-white p-6 rounded-lg flex items-center space-x-3 shadow-xl border-2 border-blue-200">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <span className="text-lg font-medium text-gray-700">インポート中...</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

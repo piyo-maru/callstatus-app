@@ -836,7 +836,7 @@ export default function FullMainApp() {
   }, [hasPermission]);
 
   const canManage = useCallback(() => {
-    return hasPermission('ADMIN');
+    return hasPermission('ADMIN') || hasPermission('SYSTEM_ADMIN');
   }, [hasPermission]);
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
@@ -2554,9 +2554,9 @@ export default function FullMainApp() {
         </h1>
         <div className="flex items-center space-x-4">
           <span className="text-sm text-gray-600">
-            {user?.name || user?.email} ({user?.role === 'ADMIN' ? '管理者' : '一般ユーザー'})
+            {user?.name || user?.email} ({user?.role === 'ADMIN' ? '管理者' : user?.role === 'SYSTEM_ADMIN' ? 'システム管理者' : '一般ユーザー'})
           </span>
-          {user?.role === 'ADMIN' && (
+          {user?.role === 'SYSTEM_ADMIN' && (
             <a
               href="/admin/staff-management"
               className="text-sm bg-orange-100 hover:bg-orange-200 text-orange-800 px-3 py-1 rounded-md border border-orange-300 transition-colors duration-150 h-7 flex items-center font-medium"
@@ -2768,10 +2768,10 @@ export default function FullMainApp() {
               {Object.keys(groupedStaffForGantt).length > 0 ? (
                 sortByDisplayOrder(Object.entries(groupedStaffForGantt), 'department').map(([department, groups]) => (
                   <div key={department} className="department-group">
-                    <h3 className="px-2 min-h-[33px] text-sm font-bold whitespace-nowrap flex items-center" style={getHoliday(displayDate, holidays) ? getDepartmentGroupStyle('#f5f5f5') : getDepartmentGroupStyle(dynamicDepartmentColors[department] || departmentColors[department] || '#f5f5f5')}>{department}</h3>
+                    <h3 className="px-2 min-h-[33px] text-sm font-bold whitespace-nowrap flex items-center" style={getDepartmentGroupStyle(dynamicDepartmentColors[department] || departmentColors[department] || '#f5f5f5')}>{department}</h3>
                     {sortByDisplayOrder(Object.entries(groups), 'group').map(([group, staffInGroup]) => (
                       <div key={group}>
-                        <h4 className="px-2 pl-6 min-h-[33px] text-xs font-semibold whitespace-nowrap flex items-center" style={getHoliday(displayDate, holidays) ? getDepartmentGroupStyle('#f5f5f5') : getDepartmentGroupStyle(dynamicTeamColors[group] || teamColors[group] || '#f5f5f5')}>{group}</h4>
+                        <h4 className="px-2 pl-6 min-h-[33px] text-xs font-semibold whitespace-nowrap flex items-center" style={getDepartmentGroupStyle(dynamicTeamColors[group] || teamColors[group] || '#f5f5f5')}>{group}</h4>
                         {staffInGroup.map((staff: any) => {
                           const supportBorderColor = getSupportBorderColor(staff);
                           return (
@@ -2883,10 +2883,10 @@ export default function FullMainApp() {
                   {Object.keys(groupedStaffForGantt).length > 0 ? (
                     sortByDisplayOrder(Object.entries(groupedStaffForGantt), 'department').map(([department, groups]) => (
                       <div key={department} className="department-group">
-                        <div className="min-h-[33px]" style={getHoliday(displayDate, holidays) ? getDepartmentGroupStyle('#f5f5f5') : getDepartmentGroupStyle(dynamicDepartmentColors[department] || departmentColors[department] || '#f5f5f5')}></div>
+                        <div className="min-h-[33px]" style={getDepartmentGroupStyle(dynamicDepartmentColors[department] || departmentColors[department] || '#f5f5f5')}></div>
                         {sortByDisplayOrder(Object.entries(groups), 'group').map(([group, staffInGroup]) => (
                           <div key={group}>
-                            <div className="min-h-[33px]" style={getHoliday(displayDate, holidays) ? getDepartmentGroupStyle('#f5f5f5') : getDepartmentGroupStyle(dynamicTeamColors[group] || teamColors[group] || '#f5f5f5')}></div>
+                            <div className="min-h-[33px]" style={getDepartmentGroupStyle(dynamicTeamColors[group] || teamColors[group] || '#f5f5f5')}></div>
                             {staffInGroup.map((staff: any) => {
                               const supportBorderColor = getSupportBorderColor(staff);
                               return (

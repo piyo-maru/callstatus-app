@@ -81,7 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           id: 'auto-test-user-id',
           email: 'auto@test.com',
           name: 'テストユーザー（自動ログイン）',
-          role: 'ADMIN',
+          role: 'SYSTEM_ADMIN',
           staffId: 1,
           isActive: true
         };

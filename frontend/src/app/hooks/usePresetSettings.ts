@@ -36,6 +36,7 @@ interface ApiPresetDto {
     memo?: string;
     sortOrder?: number;
   }>;
+  representativeScheduleIndex?: number;  // 代表色として使用するスケジュールのインデックス
   isActive: boolean;
   customizable: boolean;
   isDefault: boolean;
@@ -85,6 +86,7 @@ class PresetSettingsApiClient {
         memo: schedule.memo,
         sortOrder: index
       })),
+      representativeScheduleIndex: preset.representativeScheduleIndex,
       isActive: preset.isActive,
       customizable: preset.customizable,
       isDefault: preset.isDefault
@@ -105,6 +107,7 @@ class PresetSettingsApiClient {
         endTime: schedule.endTime,
         memo: schedule.memo
       })),
+      representativeScheduleIndex: apiPreset.representativeScheduleIndex,
       isActive: apiPreset.isActive,
       customizable: apiPreset.customizable,
       isDefault: apiPreset.isDefault,
@@ -194,6 +197,7 @@ class PresetSettingsApiClient {
         description: apiDto.description,
         category: apiDto.category,
         schedules: apiDto.schedules,
+        representativeScheduleIndex: apiDto.representativeScheduleIndex,
         isActive: apiDto.isActive,
         customizable: apiDto.customizable,
         isDefault: apiDto.isDefault
@@ -237,6 +241,7 @@ class PresetSettingsApiClient {
         description: apiDto.description,
         category: apiDto.category,
         schedules: apiDto.schedules,
+        representativeScheduleIndex: apiDto.representativeScheduleIndex,
         isActive: apiDto.isActive,
         customizable: apiDto.customizable,
         isDefault: apiDto.isDefault
@@ -339,15 +344,16 @@ export const usePresetSettings = (): UsePresetSettingsReturn => {
   const { user } = useAuth();
   const [apiClient] = useState(() => new PresetSettingsApiClient());
   
-  // staffIdが利用可能になったらAPI連携を初期化
+  // API連携を固定ID（999）で初期化（シンプル権限管理）
   useEffect(() => {
-    if (user?.staffId) {
-      apiClient.setStaffId(user.staffId);
-      if (API_INTEGRATION_CONFIG.enableDebugLogging) {
-        console.log('[PresetSettings] API連携を初期化:', user.staffId);
-      }
+    // 設定を開けるなら全部設定できる、開けないなら全部使えない
+    // 細かい権限設定は後で実装予定
+    const ADMIN_STAFF_ID = 999;
+    apiClient.setStaffId(ADMIN_STAFF_ID);
+    if (API_INTEGRATION_CONFIG.enableDebugLogging) {
+      console.log('[PresetSettings] API連携を固定IDで初期化:', ADMIN_STAFF_ID);
     }
-  }, [user?.staffId, apiClient]);
+  }, [apiClient]);
   
   // ページ別プリセット設定（デフォルト値を明示的に設定）
   const [pagePresetSettings, setPagePresetSettings] = useState({
@@ -404,7 +410,7 @@ export const usePresetSettings = (): UsePresetSettingsReturn => {
     setIsDirty(true);
     
     // API連携が有効な場合、APIにも送信
-    if (API_INTEGRATION_CONFIG.enabled && user?.staffId) {
+    if (API_INTEGRATION_CONFIG.enabled) {
       try {
         const apiCreateSuccessful = await apiClient.createPreset(newPreset);
         if (apiCreateSuccessful) {
@@ -414,7 +420,7 @@ export const usePresetSettings = (): UsePresetSettingsReturn => {
         console.warn('[PresetSettings] API プリセット作成失敗（ローカル状態は更新済み）:', apiError);
       }
     }
-  }, [apiClient, user?.staffId]);
+  }, [apiClient]);
 
   // プリセット更新（API連携対応）
   const updatePreset = useCallback(async (id: string, updates: Partial<UnifiedPreset>) => {
@@ -442,7 +448,7 @@ export const usePresetSettings = (): UsePresetSettingsReturn => {
         console.warn('[PresetSettings] API プリセット更新失敗（ローカル状態は更新済み）:', apiError);
       }
     }
-  }, [apiClient, user?.staffId]);
+  }, [apiClient]);
 
   // プリセット削除（API連携対応）
   const deletePreset = useCallback(async (id: string) => {
@@ -457,7 +463,7 @@ export const usePresetSettings = (): UsePresetSettingsReturn => {
     setIsDirty(true);
     
     // API連携が有効な場合、APIからも削除
-    if (API_INTEGRATION_CONFIG.enabled && user?.staffId) {
+    if (API_INTEGRATION_CONFIG.enabled) {
       try {
         const apiDeleteSuccessful = await apiClient.deletePreset(id);
         if (apiDeleteSuccessful) {
@@ -504,19 +510,16 @@ export const usePresetSettings = (): UsePresetSettingsReturn => {
       defaultPresetId: defaultId || enabledIds[0] || 'standard-work'
     };
     
-    let updatedPagePresetSettings: typeof pagePresetSettings;
+    let updatedPagePresetSettings: typeof pagePresetSettings = {
+      ...pagePresetSettings,
+      [page]: newPageSettings
+    };
     
-    setPagePresetSettings(prev => {
-      updatedPagePresetSettings = {
-        ...prev,
-        [page]: newPageSettings
-      };
-      return updatedPagePresetSettings;
-    });
+    setPagePresetSettings(updatedPagePresetSettings);
     setIsDirty(true);
     
     // API連携が有効な場合、APIにも送信
-    if (API_INTEGRATION_CONFIG.enabled && user?.staffId) {
+    if (API_INTEGRATION_CONFIG.enabled) {
       try {
         // 更新された全体のページ別設定をAPIに送信
         const apiUpdateSuccessful = await apiClient.updatePagePresetSettings(updatedPagePresetSettings);
@@ -527,7 +530,7 @@ export const usePresetSettings = (): UsePresetSettingsReturn => {
         console.warn('[PresetSettings] API ページ別プリセット設定更新失敗（ローカル状態は更新済み）:', apiError);
       }
     }
-  }, [apiClient, user?.staffId, pagePresetSettings]);
+  }, [apiClient, pagePresetSettings]);
 
   // ページ別プリセット設定取得
   const getPagePresetSettings = useCallback((page: 'monthlyPlanner' | 'personalPage') => {
@@ -547,8 +550,8 @@ export const usePresetSettings = (): UsePresetSettingsReturn => {
 
       let apiSaveSuccessful = false;
       
-      // API連携が有効でstaffIdが利用可能な場合、APIに保存を試行
-      if (API_INTEGRATION_CONFIG.enabled && user?.staffId) {
+      // API連携が有効な場合、APIに保存を試行
+      if (API_INTEGRATION_CONFIG.enabled) {
         try {
           // ページ別プリセット設定をAPIに保存
           const pageSettingsSaved = await apiClient.updatePagePresetSettings(pagePresetSettings);
@@ -581,7 +584,7 @@ export const usePresetSettings = (): UsePresetSettingsReturn => {
     } finally {
       setIsLoading(false);
     }
-  }, [presets, categories, pagePresetSettings, apiClient, user?.staffId]);
+  }, [presets, categories, pagePresetSettings, apiClient]);
 
   // 設定読み込み（API連携対応）
   const loadSettings = useCallback(async () => {
@@ -589,8 +592,8 @@ export const usePresetSettings = (): UsePresetSettingsReturn => {
     try {
       let settingsLoaded = false;
       
-      // API連携が有効でstaffIdが利用可能な場合、APIから読み込みを試行
-      if (API_INTEGRATION_CONFIG.enabled && user?.staffId) {
+      // API連携が有効な場合、APIから読み込みを試行
+      if (API_INTEGRATION_CONFIG.enabled) {
         try {
           const apiSettings = await apiClient.getUserPresetSettings();
           if (apiSettings) {
@@ -660,7 +663,7 @@ export const usePresetSettings = (): UsePresetSettingsReturn => {
     } finally {
       setIsLoading(false);
     }
-  }, [apiClient, user?.staffId]);
+  }, [apiClient]);
 
   // デフォルトに戻す
   const resetToDefaults = useCallback(() => {

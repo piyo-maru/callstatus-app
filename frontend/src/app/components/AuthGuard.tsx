@@ -55,8 +55,17 @@ export default function AuthGuard({ children, requiredRole, fallback }: AuthGuar
     const userRole = user.role;
     const allowedRoles = Array.isArray(requiredRole) ? requiredRole : [requiredRole];
     
+    console.log('AuthGuard権限チェック:', {
+      userRole,
+      requiredRole,
+      allowedRoles,
+      userEmail: user.email
+    });
+    
     // ADMIN は常にアクセス可能
     const hasPermission = userRole === 'ADMIN' || allowedRoles.includes(userRole);
+    
+    console.log('権限チェック結果:', { hasPermission });
     
     if (!hasPermission) {
       return (
