@@ -222,6 +222,24 @@ export default function PendingApprovalPage() {
                 {user?.name || user?.email} ({user?.role === 'SYSTEM_ADMIN' ? 'システム管理者' : user?.role === 'ADMIN' ? '管理者' : '一般ユーザー'})
               </span>
               <a
+                href="/"
+                className={BUTTON_STYLES.headerSecondary}
+              >
+                <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z" clipRule="evenodd" />
+                </svg>
+                出社状況
+              </a>
+              <a
+                href="/personal"
+                className={BUTTON_STYLES.headerSecondary}
+              >
+                <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                </svg>
+                個人ページ
+              </a>
+              <a
                 href="/monthly-planner"
                 className={BUTTON_STYLES.headerPrimary}
               >
