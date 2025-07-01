@@ -45,6 +45,17 @@ frontend/.next/
 # Production build
 frontend/out/
 
+# TypeScript build cache
+frontend/tsconfig.tsbuildinfo
+
+# Development artifacts
+artifacts/
+*.js.map
+
+# Backend temporary scripts
+backend/*.js
+backend/*.sql
+
 #----------------------------------------------------------------
 # Backend (NestJS & Prisma)
 #----------------------------------------------------------------
