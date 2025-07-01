@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Staff, Schedule } from '../types/MainAppTypes';
-import { generateTimeOptions, capitalizeStatus, AVAILABLE_STATUSES } from '../timeline/TimelineUtils';
+import { generateTimeOptions, capitalizeStatus, ALL_STATUSES } from '../timeline/TimelineUtils';
 
 interface ScheduleModalProps {
   isOpen: boolean;
@@ -17,7 +17,7 @@ interface ScheduleModalProps {
 export const ScheduleModal = ({ isOpen, onClose, staffList, onSave, scheduleToEdit, initialData }: ScheduleModalProps) => {
   const isEditMode = !!scheduleToEdit;
   const [staffId, setStaffId] = useState('');
-  const [status, setStatus] = useState('Online');
+  const [status, setStatus] = useState('online');
   const [startTime, setStartTime] = useState('8');
   const [endTime, setEndTime] = useState('8.25');
   const [memo, setMemo] = useState('');
@@ -35,12 +35,12 @@ export const ScheduleModal = ({ isOpen, onClose, staffList, onSave, scheduleToEd
     const data = scheduleToEdit || initialData;
     if (isOpen && data) {
         setStaffId(data.staffId?.toString() || '');
-        setStatus(data.status || 'Online');
+        setStatus(data.status || 'online');
         setStartTime(data.start?.toString() || '8');
         setEndTime(data.end?.toString() || '8.25');
         setMemo(data.memo || '');
     } else if (!isOpen) {
-        setStaffId(''); setStatus('Online'); setStartTime('8'); setEndTime('8.25'); setMemo('');
+        setStaffId(''); setStatus('online'); setStartTime('8'); setEndTime('8.25'); setMemo('');
     }
   }, [scheduleToEdit, initialData, isOpen]);
 
@@ -98,7 +98,7 @@ export const ScheduleModal = ({ isOpen, onClose, staffList, onSave, scheduleToEd
           <div>
             <label htmlFor="status" className="block text-sm font-medium text-gray-700">ステータス</label>
             <select id="status" value={status} onChange={e => setStatus(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
-              {AVAILABLE_STATUSES.map(s => <option key={s} value={s}>{capitalizeStatus(s)}</option>)}
+              {ALL_STATUSES.map(s => <option key={s} value={s}>{capitalizeStatus(s)}</option>)}
             </select>
           </div>
           <div className="grid grid-cols-2 gap-4">

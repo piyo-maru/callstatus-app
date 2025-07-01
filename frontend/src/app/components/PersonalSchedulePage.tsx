@@ -5,6 +5,7 @@ import { format, addDays, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay
 import { ja } from 'date-fns/locale';
 import { createPortal } from 'react-dom';
 import { useAuth } from './AuthProvider';
+import { useGlobalDisplaySettings } from '../hooks/useGlobalDisplaySettings';
 // TimelineUtilsをインポート
 import {
   timeToPositionPercent,
@@ -314,6 +315,9 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
     return response;
   }, [logout]);
 
+  // グローバル表示設定の取得
+  const { settings: globalDisplaySettings, isLoading: isSettingsLoading } = useGlobalDisplaySettings(authenticatedFetch);
+
   // 権限チェック関数
   const canManage = useCallback(() => {
     return user?.role === 'ADMIN';
@@ -361,7 +365,6 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
           if (isDebugMode) console.log('担当設定保存後のデータ更新:', updatedData);
           updatedData.forEach((assignment: any) => {
             const key = `${assignment.staffId}-${date}`;
-            console.log(`責任データマップ更新: ${key}`, assignment);
             
             if (!responsibilityMap[key]) {
               // 部署に応じて初期化
@@ -379,14 +382,11 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
             if (assignment.assignmentType === 'custom') responsibilityMap[key].custom = assignment.customLabel || '';
           });
           
-          console.log('保存後のresponsibilityMap:', responsibilityMap);
           setResponsibilityData(prev => {
             const newData = { ...prev, ...responsibilityMap };
-            console.log('responsibilityData ステート更新:', newData);
             return newData;
           });
         } else {
-          console.log('担当設定の更新データが配列ではありません:', updatedData);
         }
         return true;
       }
@@ -405,8 +405,6 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
 
     try {
       if (isDev) {
-        console.log('API URL:', getApiUrl());
-        console.log('ユーザーメール:', user.email);
       }
       
       const response = await authenticatedFetch(`${getApiUrl()}/api/staff`);
@@ -715,7 +713,7 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
     }
 
     if (isDev) {
-      console.log('スケジュール取得開始:', {
+      if (isDebugMode) console.log('スケジュール取得開始:', {
         currentStaff: currentStaff.name,
         staffId: currentStaff.id,
         monthDays: monthDays.length
@@ -789,7 +787,7 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
     if (!currentStaff) return;
     
     if (isDev) {
-      console.log('担当設定データ読み込み開始（メイン画面方式）:', {
+      if (isDebugMode) console.log('担当設定データ読み込み開始（メイン画面方式）:', {
         staffId: currentStaff.id,
         staffName: currentStaff.name,
         monthDaysCount: monthDays.length
@@ -828,7 +826,7 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
       }
     }
     
-    console.log('担当設定データ読み込み完了（メイン画面方式）:', {
+    if (isDebugMode) console.log('担当設定データ読み込み完了（メイン画面方式）:', {
       mapKeys: Object.keys(responsibilityMap),
       mapData: responsibilityMap
     });
@@ -847,7 +845,7 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
   // スケジュール更新関数（移動用）
   const handleUpdateSchedule = useCallback(async (scheduleId: number | string, updateData: any) => {
     try {
-      console.log('スケジュール更新開始:', { scheduleId, updateData });
+      if (isDebugMode) console.log('スケジュール更新開始:', { scheduleId, updateData });
       
       const response = await authenticatedFetch(`${getApiUrl()}/api/schedules/${scheduleId}`, {
         method: 'PATCH',
@@ -855,7 +853,6 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
       });
       
       if (response.ok) {
-        console.log('スケジュール更新成功');
         // データを再取得して更新
         await fetchSchedules();
         // スクロール位置を復元
@@ -953,7 +950,201 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
     return badges;
   }, [currentStaff, responsibilityData]);
 
-  // プリセット予定を追加（複数スケジュール対応）
+  // 特定日の既存スケジュールを取得（重複チェック用）
+  const fetchExistingSchedulesForDate = useCallback(async (targetDate: Date, staffId: number): Promise<Schedule[]> => {
+    const dateStr = format(targetDate, 'yyyy-MM-dd');
+    
+    try {
+      const response = await authenticatedFetch(`${getApiUrl()}/api/schedules/unified?staffId=${staffId}&date=${dateStr}`);
+      if (response.ok) {
+        const data = await response.json();
+        
+        // データが配列でない場合（オブジェクトの可能性）
+        if (!Array.isArray(data)) {
+          console.warn('[既存スケジュール取得] レスポンスが配列ではありません:', data);
+          // データが空のオブジェクトまたは単一オブジェクトの場合
+          if (typeof data === 'object' && data !== null) {
+            // オブジェクトに配列が含まれているかチェック
+            if (data.schedules && Array.isArray(data.schedules)) {
+              const mappedSchedules = data.schedules.map((item: any) => ({
+                id: item.id,
+                status: item.status,
+                start: item.start,
+                end: item.end,
+                memo: item.memo || '',
+                layer: item.layer,
+                staffId: item.staffId,
+                staffName: item.staffName,
+                staffDepartment: item.staffDepartment,
+                staffGroup: item.staffGroup,
+                empNo: item.empNo,
+                date: dateStr
+              }));
+              return mappedSchedules;
+            }
+            
+            // 単一スケジュールオブジェクトの場合
+            if (data.id && data.status) {
+              return [{
+                id: data.id,
+                status: data.status,
+                start: data.start,
+                end: data.end,
+                memo: data.memo || '',
+                layer: data.layer,
+                staffId: data.staffId,
+                staffName: data.staffName,
+                staffDepartment: data.staffDepartment,
+                staffGroup: data.staffGroup,
+                empNo: data.empNo,
+                date: dateStr
+              }];
+            }
+          }
+          
+          // 空または無効なデータの場合
+          return [];
+        }
+        
+        // 配列の場合の正常処理
+        console.log('[既存スケジュール取得] 配列レスポンスを処理:', data.length, '件');
+        return data.map((item: any) => ({
+          id: item.id,
+          status: item.status,
+          start: item.start,
+          end: item.end,
+          memo: item.memo || '',
+          layer: item.layer,
+          staffId: item.staffId,
+          staffName: item.staffName,
+          staffDepartment: item.staffDepartment,
+          staffGroup: item.staffGroup,
+          empNo: item.empNo,
+          date: dateStr
+        }));
+      } else {
+        console.warn(`既存スケジュール取得失敗 (${dateStr}):`, response.status);
+        return [];
+      }
+    } catch (error) {
+      console.error(`既存スケジュール取得エラー (${dateStr}):`, error);
+      return [];
+    }
+  }, [authenticatedFetch, getApiUrl]);
+
+  // プリセットスケジュールと既存スケジュールの完全一致チェック
+  const isScheduleExactMatch = useCallback((presetSchedule: any, existingSchedule: Schedule): boolean => {
+    // CLAUDE.md時刻処理ルール：内部では完全UTC処理、APIでは数値（時間）として扱う
+    const isTimeMatch = presetSchedule.startTime === existingSchedule.start && 
+                       presetSchedule.endTime === existingSchedule.end;
+    const isStatusMatch = presetSchedule.status === existingSchedule.status;
+    const isMemoMatch = (presetSchedule.memo || '') === (existingSchedule.memo || '');
+    
+    const isExactMatch = isTimeMatch && isStatusMatch && isMemoMatch;
+    
+    // 詳細デバッグログ（常に出力）
+    if (isDev) {
+      console.log('[完全一致チェック]', {
+        preset: {
+          status: presetSchedule.status,
+          start: presetSchedule.startTime,
+          end: presetSchedule.endTime,
+          memo: presetSchedule.memo || ''
+        },
+        existing: {
+          status: existingSchedule.status,
+          start: existingSchedule.start,
+          end: existingSchedule.end,
+          memo: existingSchedule.memo || '',
+          layer: existingSchedule.layer
+        },
+        checks: {
+          timeMatch: isTimeMatch,
+          statusMatch: isStatusMatch,
+          memoMatch: isMemoMatch
+        },
+        result: isExactMatch
+      });
+    }
+    
+    return isExactMatch;
+  }, [isDev]);
+
+  // 重複を除外してプリセットスケジュールをフィルタリング
+  const filterNonDuplicateSchedules = useCallback((presetSchedules: any[], existingSchedules: Schedule[]) => {
+    console.log('[重複フィルタリング開始]', {
+      presetCount: presetSchedules.length,
+      existingCount: existingSchedules.length,
+      presetSchedules: presetSchedules.map(p => ({ status: p.status, start: p.startTime, end: p.endTime, memo: p.memo })),
+      existingSchedules: existingSchedules.map(e => ({ status: e.status, start: e.start, end: e.end, memo: e.memo, layer: e.layer }))
+    });
+    
+    return presetSchedules.filter((presetSchedule, index) => {
+      console.log(`[プリセット${index + 1}/${presetSchedules.length}検査]`, {
+        status: presetSchedule.status,
+        start: presetSchedule.startTime,
+        end: presetSchedule.endTime,
+        memo: presetSchedule.memo || ''
+      });
+      
+      // レイヤー優先度：adjustment > contract
+      // 最上位（優先度最高）の既存スケジュールを取得
+      const overlappingSchedules = existingSchedules.filter(existing => {
+        // 時間重複チェック
+        const isOverlapping = presetSchedule.startTime < existing.end && presetSchedule.endTime > existing.start;
+        if (isDev) {
+          console.log(`  既存スケジュールとの重複チェック:`, {
+            preset: { start: presetSchedule.startTime, end: presetSchedule.endTime },
+            existing: { status: existing.status, start: existing.start, end: existing.end, layer: existing.layer },
+            comparison: {
+              presetStart_lt_existingEnd: presetSchedule.startTime < existing.end,
+              presetEnd_gt_existingStart: presetSchedule.endTime > existing.start,
+              formula: `${presetSchedule.startTime} < ${existing.end} && ${presetSchedule.endTime} > ${existing.start}`
+            },
+            isOverlapping
+          });
+        }
+        return isOverlapping;
+      });
+      
+      console.log(`  重複スケジュール数: ${overlappingSchedules.length}`);
+      
+      if (overlappingSchedules.length === 0) {
+        console.log('  → 重複なし：追加対象');
+        return true;
+      }
+      
+      // 最上位レイヤーを特定（adjustment > contract）
+      const topLayerSchedule = overlappingSchedules.reduce((top, current) => {
+        if (current.layer === 'adjustment' && top.layer === 'contract') {
+          return current;
+        }
+        if (current.layer === 'contract' && top.layer === 'adjustment') {
+          return top;
+        }
+        // 同レイヤーの場合は最初のものを維持
+        return top;
+      });
+      
+      console.log('  最上位レイヤースケジュール:', {
+        status: topLayerSchedule.status,
+        start: topLayerSchedule.start,
+        end: topLayerSchedule.end,
+        memo: topLayerSchedule.memo,
+        layer: topLayerSchedule.layer
+      });
+      
+      // 最上位スケジュールと完全一致チェック
+      const isExactMatch = isScheduleExactMatch(presetSchedule, topLayerSchedule);
+      
+      const willAdd = !isExactMatch;
+      console.log(`  → 判定結果: ${willAdd ? '追加' : 'スキップ'} (完全一致: ${isExactMatch})`);
+      
+      return willAdd;
+    });
+  }, [isScheduleExactMatch, isDev]);
+
+  // プリセット予定を追加（スマート重複回避機能付き）
   const addPresetSchedule = useCallback(async (preset: PresetSchedule, targetDate: Date) => {
     if (!currentStaff) {
       console.error('社員情報が設定されていません');
@@ -963,7 +1154,7 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
 
     const dateStr = format(targetDate, 'yyyy-MM-dd');
     if (isDev) {
-      console.log('プリセット予定追加:', {
+      console.log('プリセット予定追加（重複回避機能付き）:', {
         preset: preset.name,
         targetDate: dateStr,
         currentStaff: currentStaff.name,
@@ -972,10 +1163,36 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
     }
     
     try {
+      // 1. 既存スケジュールを取得
+      const existingSchedules = await fetchExistingSchedulesForDate(targetDate, currentStaff.id);
+      if (isDev) {
+        console.log('既存スケジュール取得完了:', {
+          count: existingSchedules.length,
+          schedules: existingSchedules.map(s => ({
+            status: s.status,
+            start: s.start,
+            end: s.end,
+            memo: s.memo,
+            layer: s.layer
+          }))
+        });
+      }
+      
+      // 2. 重複していないスケジュールのみをフィルタリング
+      const schedulesToAdd = filterNonDuplicateSchedules(preset.schedules, existingSchedules);
+      
+      if (isDev) {
+        console.log('重複チェック結果:', {
+          original: preset.schedules.length,
+          filtered: schedulesToAdd.length,
+          skipped: preset.schedules.length - schedulesToAdd.length
+        });
+      }
+      
+      // 3. フィルタリングされたスケジュールを追加
       const url = `${getApiUrl()}/api/schedules`;
       
-      // 複数のスケジュールを順次作成
-      for (const schedule of preset.schedules) {
+      for (const schedule of schedulesToAdd) {
         const newSchedule = {
           staffId: currentStaff.id,
           status: schedule.status,
@@ -1003,20 +1220,24 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
         if (isDev) console.log('追加成功:', result);
       }
       
-      // 全スケジュール追加後にデータを再取得
+      // 4. 全スケジュール追加後にデータを再取得
       await fetchSchedules();
       // スクロール位置を復元
       restoreScrollPosition();
       
-      // 成功メッセージ
+      // 5. 成功メッセージ（透明処理）
       setError(null);
-      if (isDev) console.log(`${preset.name}を追加しました（${preset.schedules.length}件）`);
+      if (isDev) {
+        const addedCount = schedulesToAdd.length;
+        const skippedCount = preset.schedules.length - addedCount;
+        console.log(`${preset.name}処理完了 - 追加:${addedCount}件, スキップ:${skippedCount}件`);
+      }
       
     } catch (err) {
       console.error('スケジュール追加エラー:', err); // エラーログは保持
       setError(`${preset.name}の追加に失敗しました`);
     }
-  }, [currentStaff, getApiUrl, authenticatedFetch, fetchSchedules, restoreScrollPosition]);
+  }, [currentStaff, getApiUrl, authenticatedFetch, fetchSchedules, restoreScrollPosition, fetchExistingSchedulesForDate, filterNonDuplicateSchedules]);
 
   // スケジュール保存ハンドラー（メイン画面と同じ）
   const handleSaveSchedule = useCallback(async (scheduleData: Schedule & { id?: number | string; date?: string }) => {
@@ -1421,19 +1642,19 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
               </span>
               <a
                 href="/"
-                className="text-sm bg-green-100 hover:bg-green-200 text-green-800 px-3 py-1 rounded border border-green-300 transition-colors"
+                className="text-sm bg-green-100 hover:bg-green-200 text-green-800 px-3 py-1 rounded-md border border-green-300 transition-colors duration-150 h-7 flex items-center font-medium"
               >
                 📊 出社状況
               </a>
               <a
                 href="/monthly-planner"
-                className="text-sm bg-purple-100 hover:bg-purple-200 text-purple-800 px-3 py-1 rounded border border-purple-300 transition-colors"
+                className="text-sm bg-purple-100 hover:bg-purple-200 text-purple-800 px-3 py-1 rounded-md border border-purple-300 transition-colors duration-150 h-7 flex items-center font-medium"
               >
                 📅 月次プランナー
               </a>
               <button
                 onClick={logout}
-                className="text-sm bg-gray-100 hover:bg-gray-200 px-3 py-1 rounded border"
+                className="text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1 rounded-md border border-gray-300 transition-colors duration-150 h-7 flex items-center font-medium"
               >
                 ログアウト
               </button>
@@ -1447,21 +1668,21 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
                 <button 
                   type="button" 
                   onClick={() => handleMonthChange('prev')} 
-                  className="px-2 py-1 text-xs font-medium text-gray-900 bg-white border border-gray-200 rounded-l-lg hover:bg-gray-100 h-7"
+                  className="px-2 py-1 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-l-md hover:bg-gray-50 h-7 transition-colors duration-150"
                 >
                   &lt;
                 </button>
                 <button 
                   type="button" 
                   onClick={() => setSelectedDate(new Date())} 
-                  className="px-2 py-1 text-xs font-medium text-gray-900 bg-white border-t border-b border-gray-200 hover:bg-gray-100 h-7"
+                  className="px-2 py-1 text-xs font-medium text-gray-700 bg-white border-t border-b border-r border-gray-300 hover:bg-gray-50 h-7 transition-colors duration-150"
                 >
                   今月
                 </button>
                 <button 
                   type="button" 
                   onClick={() => handleMonthChange('next')} 
-                  className="px-2 py-1 text-xs font-medium text-gray-900 bg-white border border-gray-200 rounded-r-lg hover:bg-gray-100 h-7"
+                  className="px-2 py-1 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-r-md hover:bg-gray-50 h-7 transition-colors duration-150"
                 >
                   &gt;
                 </button>
@@ -1476,7 +1697,7 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
               {canManage() && (
                 <button
                   onClick={() => setIsUnifiedSettingsOpen(true)}
-                  className="px-3 py-1 text-xs font-medium text-white bg-gray-600 border border-transparent rounded-md hover:bg-gray-700 h-7"
+                  className="px-3 py-1 text-xs font-medium text-white bg-gray-600 border border-transparent rounded-md hover:bg-gray-700 h-7 transition-colors duration-150"
                 >
                   ⚙️ 設定
                 </button>
@@ -1984,7 +2205,7 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
         <div className="mt-6 text-center">
           <a
             href="/"
-            className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+            className="inline-flex items-center px-3 py-1 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 h-7 transition-colors duration-150"
           >
             メイン画面に戻る
           </a>

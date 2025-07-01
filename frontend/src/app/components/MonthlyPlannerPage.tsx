@@ -9,7 +9,8 @@ import { useAuth } from './AuthProvider';
 // 既存のタイプとユーティリティを再利用
 import {
   STATUS_COLORS,
-  capitalizeStatus
+  capitalizeStatus,
+  getEffectiveStatusColor
 } from './timeline/TimelineUtils';
 import { getApiUrl } from './constants/MainAppConstants';
 
@@ -163,7 +164,7 @@ const MonthlyPlannerPage: React.FC = () => {
         
         if (userStaff) {
           setCurrentStaff(userStaff);
-          console.log('Current staff loaded:', userStaff);
+          if (process.env.NODE_ENV === 'development') console.log('Current staff loaded:', userStaff);
         } else {
           setError('対応する社員情報が見つかりません');
         }
@@ -315,7 +316,7 @@ const MonthlyPlannerPage: React.FC = () => {
       // データを再取得して表示を更新
       await fetchExistingSchedules();
       
-      console.log(`${preset.name}を${selectedCells.length}日に適用完了`);
+      if (process.env.NODE_ENV === 'development') console.log(`${preset.name}を${selectedCells.length}日に適用完了`);
     } catch (error) {
       console.error('プリセット適用エラー:', error);
       setError('予定の設定に失敗しました');
@@ -504,7 +505,7 @@ const MonthlyPlannerPage: React.FC = () => {
                         className={`text-xs px-2 py-1 rounded text-white truncate ${
                           schedule.layer === 'contract' ? 'opacity-60' : ''
                         }`}
-                        style={{ backgroundColor: STATUS_COLORS[schedule.status] || '#9ca3af' }}
+                        style={{ backgroundColor: getEffectiveStatusColor(schedule.status) }}
                         title={`${capitalizeStatus(schedule.status)} ${schedule.memo ? `- ${schedule.memo}` : ''}`}
                       >
                         {capitalizeStatus(schedule.status)}

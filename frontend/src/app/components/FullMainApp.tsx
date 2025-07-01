@@ -1,7 +1,14 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback, Fragment, useRef, forwardRef } from 'react';
+
+// デバッグログ制御（デフォルトOFF）
+const isDebugEnabled = () => typeof window !== 'undefined' && 
+  process.env.NODE_ENV === 'development' && 
+  window.localStorage?.getItem('app-debug') === 'true';
 import { useAuth, UserRole } from './AuthProvider';
+import { useGlobalDisplaySettings } from '../hooks/useGlobalDisplaySettings';
+import { initializeCacheFromLocalStorage } from '../utils/globalDisplaySettingsCache';
 import { createPortal } from 'react-dom';
 import { io, Socket } from 'socket.io-client';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
@@ -14,7 +21,8 @@ import {
   timeToPositionPercent, 
   positionPercentToTime, 
   capitalizeStatus,
-  getEffectiveStatusColor
+  getEffectiveStatusColor,
+  getEffectiveDisplayName
 } from './timeline/TimelineUtils';
 // ★★★ 分離されたモジュールのインポート ★★★
 import { 
@@ -26,7 +34,7 @@ import {
   statusColors, departmentColors, teamColors, 
   getApiUrl 
 } from './constants/MainAppConstants';
-import { AVAILABLE_STATUSES } from './timeline/TimelineUtils';
+import { AVAILABLE_STATUSES, ALL_STATUSES } from './timeline/TimelineUtils';
 import { 
   fetchHolidays, getHoliday, getDateColor, 
   formatDateWithHoliday, checkSupportedCharacters, 
@@ -174,7 +182,7 @@ declare global {
   if (!isOpen || !isClient) return null;
 
   const handleSave = () => {
-    console.log('=== ScheduleModal handleSave ===', { staffId, startTime, endTime, status, memo });
+    // console.log('=== ScheduleModal handleSave ===', { staffId, startTime, endTime, status, memo });
     if (!staffId || parseFloat(startTime) >= parseFloat(endTime)) { 
       console.error("入力内容が正しくありません。"); 
       alert("入力内容が正しくありません。スタッフを選択し、開始時刻が終了時刻より前になるように設定してください。");
@@ -187,7 +195,7 @@ declare global {
       end: parseFloat(endTime),
       memo: (status === 'meeting' || status === 'training') ? memo : undefined
     };
-    console.log('Schedule data prepared:', scheduleData);
+    // console.log('Schedule data prepared:', scheduleData);
     onSave(isEditMode ? { ...scheduleData, id: scheduleToEdit.id } : scheduleData);
     onClose();
   };
@@ -791,6 +799,19 @@ export default function FullMainApp() {
     return response;
   }, [token, logout]);
 
+  // グローバル表示設定の取得
+  const { settings: globalDisplaySettings, isLoading: isSettingsLoading, refreshSettings } = useGlobalDisplaySettings(authenticatedFetch);
+  
+  // 設定変更後の強制再レンダリング用
+  const [settingsUpdateTrigger, setSettingsUpdateTrigger] = useState(0);
+
+  // 初期化時にキャッシュを確実に更新
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      initializeCacheFromLocalStorage();
+    }
+  }, []);
+
   // 権限チェックヘルパー
   const hasPermission = useCallback((requiredRole: UserRole | UserRole[], targetStaffId?: number) => {
     if (!user) return false;
@@ -884,11 +905,35 @@ export default function FullMainApp() {
     return map;
   }, [departmentSettings.departments]);
 
-  // パフォーマンス最適化：部署別グループソート
+  // 動的部署色設定（月次プランナーと同じロジック）
+  const dynamicDepartmentColors = useMemo(() => {
+    const colors: { [key: string]: string } = {};
+    departmentSettings.departments.forEach(dept => {
+      if (dept.backgroundColor) {
+        colors[dept.name] = dept.backgroundColor;
+      }
+    });
+    // 動的部署色設定を生成 (ログ削除でパフォーマンス改善)
+    return colors;
+  }, [departmentSettings.departments]);
+
+  // 動的グループ色設定（月次プランナーと同じロジック）
+  const dynamicTeamColors = useMemo(() => {
+    const colors: { [key: string]: string } = {};
+    departmentSettings.groups.forEach(group => {
+      if (group.backgroundColor) {
+        colors[group.name] = group.backgroundColor;
+      }
+    });
+    // 動的グループ色設定を生成 (ログ削除でパフォーマンス改善)
+    return colors;
+  }, [departmentSettings.groups]);
+
+  // パフォーマンス最適化：部署別グループソート（設定モーダルの表示順に対応）
   const sortGroupsByDepartment = useCallback((groups: string[]) => {
     const perfStart = performance.now();
     
-    // O(1)でのグループ→部署情報取得
+    // O(1)でのグループ→部署情報取得 + グループ自体の表示順も考慮
     const result = groups.sort((a, b) => {
       const staffA = groupToStaffMap.get(a);
       const staffB = groupToStaffMap.get(b);
@@ -898,12 +943,26 @@ export default function FullMainApp() {
       const deptA = departmentMap.get(staffA.department);
       const deptB = departmentMap.get(staffB.department);
       
-      const orderA = deptA?.displayOrder ?? 999;
-      const orderB = deptB?.displayOrder ?? 999;
+      const deptOrderA = deptA?.displayOrder ?? 999;
+      const deptOrderB = deptB?.displayOrder ?? 999;
       
-      if (orderA !== orderB) {
-        return orderA - orderB;
+      // 1. 部署の表示順で比較
+      if (deptOrderA !== deptOrderB) {
+        return deptOrderA - deptOrderB;
       }
+      
+      // 2. 同じ部署内では、グループの表示順で比較
+      const groupSettingA = departmentSettings.groups.find(g => g.name === a);
+      const groupSettingB = departmentSettings.groups.find(g => g.name === b);
+      
+      const groupOrderA = groupSettingA?.displayOrder ?? 999;
+      const groupOrderB = groupSettingB?.displayOrder ?? 999;
+      
+      if (groupOrderA !== groupOrderB) {
+        return groupOrderA - groupOrderB;
+      }
+      
+      // 3. 表示順が同じ場合は名前順
       return a.localeCompare(b, 'ja', { numeric: true });
     });
     
@@ -913,15 +972,19 @@ export default function FullMainApp() {
     }
     
     return result;
-  }, [groupToStaffMap, departmentMap]);
+  }, [groupToStaffMap, departmentMap, departmentSettings.groups]);
 
-  // viewMode設定をlocalStorageで永続化
-  const [viewMode, setViewMode] = useState<'normal' | 'compact'>(() => {
+  // viewMode設定（ユーザー優先: ローカル > グローバル）
+  const [localViewMode, setLocalViewMode] = useState<'normal' | 'compact' | null>(() => {
     if (typeof window !== 'undefined') {
-      return (localStorage.getItem('callstatus-viewMode') as 'normal' | 'compact') || 'normal';
+      const saved = localStorage.getItem('callstatus-user-viewMode');
+      return saved as 'normal' | 'compact' | null;
     }
-    return 'normal';
+    return null;
   });
+
+  // 実際に使用されるviewMode（ローカル設定優先、なければグローバル設定）
+  const viewMode = localViewMode || globalDisplaySettings.viewMode;
 
   // 履歴データ関連のstate
   const [isHistoricalMode, setIsHistoricalMode] = useState(false);
@@ -931,41 +994,15 @@ export default function FullMainApp() {
     message?: string;
   }>({});
 
-  // マスキング機能関連のstate
-  const [maskingEnabled, setMaskingEnabled] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('callstatus-maskingEnabled') === 'true';
-    }
-    return true; // デフォルトはマスキング有効
-  });
+  // グローバル設定からmaskingEnabledを取得（こちらは管理者のみ変更可能）
+  const maskingEnabled = globalDisplaySettings.maskingEnabled;
 
-  // viewMode変更時にlocalStorageに保存
+  // viewMode切り替え（ユーザーが右上のトグルで操作）
   const toggleViewMode = () => {
     const newMode = viewMode === 'normal' ? 'compact' : 'normal';
-    setViewMode(newMode);
+    setLocalViewMode(newMode);
     if (typeof window !== 'undefined') {
-      localStorage.setItem('callstatus-viewMode', newMode);
-    }
-  };
-
-  // マスキング設定のトグル
-  const toggleMasking = () => {
-    const newMaskingEnabled = !maskingEnabled;
-    setMaskingEnabled(newMaskingEnabled);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('callstatus-maskingEnabled', newMaskingEnabled.toString());
-    }
-    // 履歴モードの場合は即座にデータを再取得
-    if (isHistoricalMode) {
-      fetchData(displayDate);
-    }
-  };
-
-  // 設定モーダル用のviewMode変更関数（localStorage保存付き）
-  const updateViewMode = (mode: 'normal' | 'compact') => {
-    setViewMode(mode);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('callstatus-viewMode', mode);
+      localStorage.setItem('callstatus-user-viewMode', newMode);
     }
   };
   
@@ -1049,18 +1086,20 @@ export default function FullMainApp() {
     const dateString = `${year}-${month}-${day}`;
     const currentApiUrl = getApiUrl();
     try {
-      console.log('=== fetchData START ===');
-      console.log('fetchData引数のDateオブジェクト:', date);
-      console.log('fetchData引数のISO文字列:', date.toISOString());
-      console.log('Fetching data for date:', dateString);
-      console.log('API URL:', currentApiUrl);
+      if (isDebugEnabled()) {
+        // console.log('=== fetchData START ===');
+        // console.log('fetchData引数のDateオブジェクト:', date);
+        // console.log('fetchData引数のISO文字列:', date.toISOString());
+        // console.log('Fetching data for date:', dateString);
+        // console.log('API URL:', currentApiUrl);
+      }
       
       // スタッフとスケジュールデータを統合API（履歴対応）で取得
       // マスキング設定も含めて送信
       const maskingParam = maskingEnabled ? 'true' : 'false';
       const scheduleRes = await fetch(`${currentApiUrl}/api/schedules/unified?date=${dateString}&includeMasking=${maskingParam}`);
       
-      console.log('Unified API response status:', scheduleRes.status);
+      // console.log('Unified API response status:', scheduleRes.status);
       
       if (!scheduleRes.ok) throw new Error(`Unified API response was not ok`);
       
@@ -1073,20 +1112,20 @@ export default function FullMainApp() {
         message?: string
       } = await scheduleRes.json();
       
-      console.log('Unified API data:', {
-        isHistorical: scheduleData.isHistorical,
-        snapshotDate: scheduleData.snapshotDate,
-        recordCount: scheduleData.recordCount,
-        schedulesCount: scheduleData.schedules?.length || 0,
-        staffCount: scheduleData.staff?.length || 0
-      });
+      // console.log('Unified API data:', {
+      //   isHistorical: scheduleData.isHistorical,
+      //   snapshotDate: scheduleData.snapshotDate,
+      //   recordCount: scheduleData.recordCount,
+      //   schedulesCount: scheduleData.schedules?.length || 0,
+      //   staffCount: scheduleData.staff?.length || 0
+      // });
       // 支援データを取得
       let supportData = { assignments: [] };
       try {
         const supportRes = await fetch(`${currentApiUrl}/api/daily-assignments?date=${dateString}`);
         if (supportRes.ok) {
           supportData = await supportRes.json();
-          console.log('Support (daily-assignments) data fetched:', supportData);
+          // console.log('Support (daily-assignments) data fetched:', supportData);
         } else {
           console.warn('Support API failed:', supportRes.status);
         }
@@ -1100,7 +1139,7 @@ export default function FullMainApp() {
         const responsibilityRes = await fetch(`${currentApiUrl}/api/responsibilities?date=${dateString}`);
         if (responsibilityRes.ok) {
           responsibilityData = await responsibilityRes.json();
-          console.log('Responsibility data fetched:', responsibilityData);
+          // console.log('Responsibility data fetched:', responsibilityData);
         } else {
           console.warn('Responsibility API failed:', responsibilityRes.status);
         }
@@ -1114,7 +1153,7 @@ export default function FullMainApp() {
         if (departmentRes.ok) {
           const deptData = await departmentRes.json();
           setDepartmentSettings(deptData);
-          console.log('Department settings data fetched:', deptData);
+          // console.log('Department settings data fetched:', deptData);
         } else {
           console.warn('Department settings API failed:', departmentRes.status);
         }
@@ -1122,9 +1161,9 @@ export default function FullMainApp() {
         console.warn('Failed to fetch department settings data:', error);
       }
       
-      console.log('Schedule data received:', scheduleData);
-      console.log('Support data received:', supportData);
-      console.log('Responsibility data received:', responsibilityData);
+      // console.log('Schedule data received:', scheduleData);
+      // console.log('Support data received:', supportData);
+      // console.log('Responsibility data received:', responsibilityData);
       
       // O(1)アクセス用のMapを作成
       const supportAssignmentMap = new Map<number, any>();
@@ -1199,7 +1238,7 @@ export default function FullMainApp() {
       });
 
       // バックエンドからJST小数点時刻で返されるスケジュールをそのまま使用
-      console.log('Raw schedules from backend:', scheduleData.schedules);
+      // console.log('Raw schedules from backend:', scheduleData.schedules);
       const convertedSchedules: Schedule[] = scheduleData.schedules.map(s => ({
         id: s.id,
         staffId: s.staffId,
@@ -1210,9 +1249,9 @@ export default function FullMainApp() {
         layer: s.layer,  // layer情報を保持
         isHistorical: !!scheduleData.isHistorical  // 履歴フラグを設定
       }));
-      console.log('Converted schedules:', convertedSchedules);
+      // console.log('Converted schedules:', convertedSchedules);
       setSchedules(convertedSchedules);
-      console.log('=== fetchData SUCCESS ===');
+      // console.log('=== fetchData SUCCESS ===');
     } catch (error) { 
       console.error('=== fetchData ERROR ===');
       console.error('データの取得に失敗しました', error); 
@@ -1231,22 +1270,22 @@ export default function FullMainApp() {
                                window.location.hostname !== 'localhost';
     
     if (!isWebSocketEnabled) {
-      console.log('WebSocket接続が無効化されています');
+      // console.log('WebSocket接続が無効化されています');
       return;
     }
     
-    console.log('🔌 WebSocket接続を開始します:', getApiUrl());
+    // console.log('🔌 WebSocket接続を開始します:', getApiUrl());
     
     const currentApiUrl = getApiUrl();
     const socket: Socket = io(currentApiUrl);
     
     // WebSocket接続イベントのログ
     socket.on('connect', () => {
-      console.log('✅ WebSocket接続成功:', currentApiUrl);
+      // console.log('✅ WebSocket接続成功:', currentApiUrl);
     });
     
     socket.on('disconnect', (reason) => {
-      console.log('❌ WebSocket接続切断:', reason);
+      // console.log('❌ WebSocket接続切断:', reason);
     });
     
     socket.on('connect_error', (error) => {
@@ -1254,18 +1293,18 @@ export default function FullMainApp() {
     });
     
     const handleNewSchedule = (newSchedule: ScheduleFromDB) => {
-        console.log('=== WebSocket: New Schedule ===');
-        console.log('New schedule received:', newSchedule);
+        // console.log('=== WebSocket: New Schedule ===');
+        // console.log('New schedule received:', newSchedule);
         const scheduleDate = new Date(newSchedule.start);
         const scheduleDateStr = `${scheduleDate.getFullYear()}-${String(scheduleDate.getMonth() + 1).padStart(2, '0')}-${String(scheduleDate.getDate()).padStart(2, '0')}`;
         const displayDateStr = `${displayDate.getFullYear()}-${String(displayDate.getMonth() + 1).padStart(2, '0')}-${String(displayDate.getDate()).padStart(2, '0')}`;
-        console.log('Schedule date:', scheduleDateStr);
-        console.log('Display date:', displayDateStr);
+        // console.log('Schedule date:', scheduleDateStr);
+        // console.log('Display date:', displayDateStr);
         if(scheduleDateStr === displayDateStr) {
-            console.log('Fetching updated data due to new schedule...');
+            // console.log('Fetching updated data due to new schedule...');
             fetchData(displayDate);
         } else {
-            console.log('Schedule not for current display date, ignoring');
+            // console.log('Schedule not for current display date, ignoring');
         }
     };
     const handleUpdatedSchedule = (updatedSchedule: ScheduleFromDB) => {
@@ -1331,15 +1370,15 @@ export default function FullMainApp() {
   };
 
   const handleOpenModal = (schedule: Schedule | null = null, initialData: Partial<Schedule> | null = null, isDragCreated: boolean = false) => {
-    console.log('=== handleOpenModal ===', { schedule, initialData, isDragCreated });
+    // console.log('=== handleOpenModal ===', { schedule, initialData, isDragCreated });
     
     // モーダル開く前にスクロール位置をキャプチャ（縦・横両対応）
     const horizontalScroll = bottomScrollRef.current?.scrollLeft || 0;
     const verticalScroll = window.scrollY || document.documentElement.scrollTop || 0;
     
-    console.log('モーダルオープン時のスクロール位置キャプチャ:');
-    console.log('- 横スクロール:', horizontalScroll);
-    console.log('- 縦スクロール:', verticalScroll);
+    // console.log('モーダルオープン時のスクロール位置キャプチャ:');
+    // console.log('- 横スクロール:', horizontalScroll);
+    // console.log('- 縦スクロール:', verticalScroll);
     
     setSavedScrollPosition({ x: horizontalScroll, y: verticalScroll });
     
@@ -1356,12 +1395,12 @@ export default function FullMainApp() {
       // ユーザーロールに関係なく、自分のスタッフIDを初期値として自動設定
       if (user?.staffId) {
         finalInitialData.staffId = user.staffId;
-        console.log(`${user.role}ユーザー用に自分のstaffId自動設定:`, user.staffId);
+        // console.log(`${user.role}ユーザー用に自分のstaffId自動設定:`, user.staffId);
       } else if (user?.role === 'ADMIN') {
-        console.log('管理者がスタッフデータに未登録のため、手動選択が必要です');
+        // console.log('管理者がスタッフデータに未登録のため、手動選択が必要です');
       }
       
-      console.log('自動時刻設定:', { startTime, endTime });
+      // console.log('自動時刻設定:', { startTime, endTime });
     }
     
     // ドラッグ作成フラグを追加（モーダル内で自動調整を無効にするため）
@@ -1372,7 +1411,7 @@ export default function FullMainApp() {
     setEditingSchedule(schedule);
     setDraggedSchedule(finalInitialData);
     setIsModalOpen(true);
-    console.log('Modal opened, isModalOpen set to true');
+    // console.log('Modal opened, isModalOpen set to true');
   };
   
   // メイン画面では全て /api/schedules を使用（バックエンドで複合ID処理済み）
@@ -1393,12 +1432,12 @@ export default function FullMainApp() {
     const today = `${todayYear}-${todayMonth}-${todayDay}`;
     
     // デバッグ用ログ追加
-    console.log('=== handleSaveSchedule 詳細デバッグ ===');
-    console.log('displayDate オブジェクト:', displayDate);
-    console.log('displayDate ISO文字列:', displayDate.toISOString());
-    console.log('生成された date 文字列:', date);
-    console.log('現在の実際の日付:', today);
-    console.log('==============================');
+    // console.log('=== handleSaveSchedule 詳細デバッグ ===');
+    // console.log('displayDate オブジェクト:', displayDate);
+    // console.log('displayDate ISO文字列:', displayDate.toISOString());
+    // console.log('生成された date 文字列:', date);
+    // console.log('現在の実際の日付:', today);
+    // console.log('==============================');
     
     // 案1 + 案4のハイブリッド: 当日作成のOffを自動でUnplannedに変換
     let processedScheduleData = { ...scheduleData };
@@ -1406,35 +1445,35 @@ export default function FullMainApp() {
     // 新規作成 かつ 当日 かつ Offステータスの場合、自動でUnplannedに変換
     if (!scheduleData.id && date === today && scheduleData.status === 'off') {
       processedScheduleData.status = 'unplanned';
-      console.log('当日作成のOffをUnplannedに自動変換しました');
+      // console.log('当日作成のOffをUnplannedに自動変換しました');
     }
     
     const payload = { ...processedScheduleData, date };
     const currentApiUrl = getApiUrl();
     try {
-      console.log('=== handleSaveSchedule START ===');
-      console.log('Original scheduleData:', scheduleData);
-      console.log('Display date:', date);
-      console.log('Final payload:', payload);
-      console.log('API URL:', currentApiUrl);
+      // console.log('=== handleSaveSchedule START ===');
+      // console.log('Original scheduleData:', scheduleData);
+      // console.log('Display date:', date);
+      // console.log('Final payload:', payload);
+      // console.log('API URL:', currentApiUrl);
       
       let response;
       if (scheduleData.id) {
-        console.log('PATCH request to:', `${currentApiUrl}/api/schedules/${scheduleData.id}`);
+        // console.log('PATCH request to:', `${currentApiUrl}/api/schedules/${scheduleData.id}`);
         response = await authenticatedFetch(`${currentApiUrl}/api/schedules/${scheduleData.id}`, { 
           method: 'PATCH',
           body: JSON.stringify(payload) 
         });
       } else {
-        console.log('POST request to:', `${currentApiUrl}/api/schedules`);
+        // console.log('POST request to:', `${currentApiUrl}/api/schedules`);
         response = await authenticatedFetch(`${currentApiUrl}/api/schedules`, { 
           method: 'POST',
           body: JSON.stringify(payload) 
         });
       }
       
-      console.log('Response status:', response.status);
-      console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+      // console.log('Response status:', response.status);
+      // console.log('Response headers:', Object.fromEntries(response.headers.entries()));
       
       if (!response.ok) {
         const errorText = await response.text();
@@ -1443,17 +1482,17 @@ export default function FullMainApp() {
       }
       
       const result = await response.json();
-      console.log('Schedule saved successfully:', result);
-      console.log('=== handleSaveSchedule SUCCESS ===');
+      // console.log('Schedule saved successfully:', result);
+      // console.log('=== handleSaveSchedule SUCCESS ===');
       
       // データを再取得してUIを更新
-      console.log('Fetching updated data...');
-      console.log('復元予定のスクロール位置:', savedScrollPosition);
+      // console.log('Fetching updated data...');
+      // console.log('復元予定のスクロール位置:', savedScrollPosition);
       await fetchData(displayDate);
       // fetchData完了後、保存した位置に復元 - 縦・横両対応
       const restoreScroll = () => {
         if (topScrollRef.current && bottomScrollRef.current) {
-          console.log('スクロール復元実行:', savedScrollPosition, 'current横:', topScrollRef.current.scrollLeft, 'current縦:', window.scrollY);
+          // console.log('スクロール復元実行:', savedScrollPosition, 'current横:', topScrollRef.current.scrollLeft, 'current縦:', window.scrollY);
           
           // 横スクロール復元
           // 横スクロール復元
@@ -1472,7 +1511,7 @@ export default function FullMainApp() {
             window.scrollTo(savedScrollPosition.x || 0, savedScrollPosition.y);
           }
         } else {
-          console.log('スクロール要素が見つかりません');
+          // console.log('スクロール要素が見つかりません');
         }
       };
       // 複数回復元を試行（DOM更新タイミングの違いに対応）
@@ -1492,7 +1531,7 @@ export default function FullMainApp() {
   const handleDeleteSchedule = async (id: number | string) => {
     const currentApiUrl = getApiUrl();
     try {
-      console.log('DELETE request to:', `${currentApiUrl}/api/schedules/${id}`);
+      // console.log('DELETE request to:', `${currentApiUrl}/api/schedules/${id}`);
       const response = await authenticatedFetch(`${currentApiUrl}/api/schedules/${id}`, { method: 'DELETE' });
       
       if (!response.ok) {
@@ -1502,21 +1541,21 @@ export default function FullMainApp() {
       
       const responseData = await response.json().catch(() => null);
       if (responseData?.message) {
-        console.log('Schedule deletion result:', responseData.message);
+        // console.log('Schedule deletion result:', responseData.message);
         alert(responseData.message); // 既に削除済みなどのメッセージを表示
       } else {
-        console.log('Schedule deleted successfully, fetching updated data...');
+        // console.log('Schedule deleted successfully, fetching updated data...');
       }
       
       // データを再取得してUIを更新
-      console.log('復元予定のスクロール位置:', savedScrollPosition);
+      // console.log('復元予定のスクロール位置:', savedScrollPosition);
       await fetchData(displayDate);
       // データ更新完了後、保存した位置に復元 - 段階的試行
       const restoreScroll = (attempt = 1) => {
         if (topScrollRef.current && bottomScrollRef.current) {
           const currentPosX = topScrollRef.current.scrollLeft;
           const currentPosY = window.scrollY;
-          console.log(`スクロール復元試行${attempt}:`, savedScrollPosition, 'current横:', currentPosX, 'current縦:', currentPosY);
+          // console.log(`スクロール復元試行${attempt}:`, savedScrollPosition, 'current横:', currentPosX, 'current縦:', currentPosY);
           if (savedScrollPosition.x > 0) {
             topScrollRef.current.scrollLeft = savedScrollPosition.x;
             bottomScrollRef.current.scrollLeft = savedScrollPosition.x;
@@ -1528,15 +1567,15 @@ export default function FullMainApp() {
               const yDiff = Math.abs(newPosY - (savedScrollPosition.y || 0));
               
               if ((xDiff > 10 || yDiff > 10) && attempt < 5) {
-                console.log(`復元失敗、再試行${attempt + 1}:`, { newPosX, newPosY }, 'target:', savedScrollPosition);
+                // console.log(`復元失敗、再試行${attempt + 1}:`, { newPosX, newPosY }, 'target:', savedScrollPosition);
                 restoreScroll(attempt + 1);
               } else {
-                console.log('スクロール復元完了:', { x: newPosX, y: newPosY });
+                // console.log('スクロール復元完了:', { x: newPosX, y: newPosY });
               }
             }, 50);
           }
         } else {
-          console.log('スクロール要素未準備、再試行:', attempt);
+          // console.log('スクロール要素未準備、再試行:', attempt);
           if (attempt < 5) {
             setTimeout(() => restoreScroll(attempt + 1), 100);
           }
@@ -1560,9 +1599,9 @@ export default function FullMainApp() {
     const horizontalScroll = bottomScrollRef.current?.scrollLeft || 0;
     const verticalScroll = window.scrollY || document.documentElement.scrollTop || 0;
     
-    console.log('支援設定モーダルオープン時のスクロール位置キャプチャ:');
-    console.log('- 横スクロール:', horizontalScroll);
-    console.log('- 縦スクロール:', verticalScroll);
+    // console.log('支援設定モーダルオープン時のスクロール位置キャプチャ:');
+    // console.log('- 横スクロール:', horizontalScroll);
+    // console.log('- 縦スクロール:', verticalScroll);
     
     setSavedScrollPosition({ x: horizontalScroll, y: verticalScroll });
     setSelectedStaffForAssignment(staff);
@@ -1579,8 +1618,8 @@ export default function FullMainApp() {
     const currentApiUrl = getApiUrl();
     try {
       // 送信前のデータをログ出力
-      console.log('=== 支援設定データ送信 ===');
-      console.log('原データ:', data);
+      // console.log('=== 支援設定データ送信 ===');
+      // console.log('原データ:', data);
       
       // バックエンドが期待するフィールド名に変換
       const backendData = {
@@ -1591,8 +1630,8 @@ export default function FullMainApp() {
         tempGroup: data.group        // group → tempGroup
       };
       
-      console.log('送信データ:', backendData);
-      console.log('API URL:', `${currentApiUrl}/api/daily-assignments`);
+      // console.log('送信データ:', backendData);
+      // console.log('API URL:', `${currentApiUrl}/api/daily-assignments`);
       
       const response = await authenticatedFetch(`${currentApiUrl}/api/daily-assignments`, {
         method: 'POST',
@@ -1600,8 +1639,8 @@ export default function FullMainApp() {
         body: JSON.stringify(backendData)
       });
 
-      console.log('レスポンス status:', response.status);
-      console.log('レスポンス ok:', response.ok);
+      // console.log('レスポンス status:', response.status);
+      // console.log('レスポンス ok:', response.ok);
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -1625,18 +1664,18 @@ export default function FullMainApp() {
       }
 
       const result = await response.json();
-      console.log('=== 支援設定成功 ===');
-      console.log('結果:', result);
+      // console.log('=== 支援設定成功 ===');
+      // console.log('結果:', result);
       
       // データを再取得してUIを更新
-      console.log('復元予定のスクロール位置:', savedScrollPosition);
+      // console.log('復元予定のスクロール位置:', savedScrollPosition);
       await fetchData(displayDate);
       // データ更新完了後、保存した位置に復元 - 段階的試行
       const restoreScroll = (attempt = 1) => {
         if (topScrollRef.current && bottomScrollRef.current) {
           const currentPosX = topScrollRef.current.scrollLeft;
           const currentPosY = window.scrollY;
-          console.log(`スクロール復元試行${attempt}:`, savedScrollPosition, 'current横:', currentPosX, 'current縦:', currentPosY);
+          // console.log(`スクロール復元試行${attempt}:`, savedScrollPosition, 'current横:', currentPosX, 'current縦:', currentPosY);
           if (savedScrollPosition.x > 0) {
             topScrollRef.current.scrollLeft = savedScrollPosition.x;
             bottomScrollRef.current.scrollLeft = savedScrollPosition.x;
@@ -1648,15 +1687,15 @@ export default function FullMainApp() {
               const yDiff = Math.abs(newPosY - (savedScrollPosition.y || 0));
               
               if ((xDiff > 10 || yDiff > 10) && attempt < 5) {
-                console.log(`復元失敗、再試行${attempt + 1}:`, { newPosX, newPosY }, 'target:', savedScrollPosition);
+                // console.log(`復元失敗、再試行${attempt + 1}:`, { newPosX, newPosY }, 'target:', savedScrollPosition);
                 restoreScroll(attempt + 1);
               } else {
-                console.log('スクロール復元完了:', { x: newPosX, y: newPosY });
+                // console.log('スクロール復元完了:', { x: newPosX, y: newPosY });
               }
             }, 50);
           }
         } else {
-          console.log('スクロール要素未準備、再試行:', attempt);
+          // console.log('スクロール要素未準備、再試行:', attempt);
           if (attempt < 5) {
             setTimeout(() => restoreScroll(attempt + 1), 100);
           }
@@ -1675,17 +1714,17 @@ export default function FullMainApp() {
   const handleDeleteAssignment = async (staffId: number) => {
     const currentApiUrl = getApiUrl();
     try {
-      console.log('=== 支援設定削除処理開始 ===');
-      console.log('削除対象スタッフID:', staffId);
-      console.log('API URL:', `${currentApiUrl}/api/daily-assignments/staff/${staffId}/current`);
+      // console.log('=== 支援設定削除処理開始 ===');
+      // console.log('削除対象スタッフID:', staffId);
+      // console.log('API URL:', `${currentApiUrl}/api/daily-assignments/staff/${staffId}/current`);
       
       const response = await authenticatedFetch(`${currentApiUrl}/api/daily-assignments/staff/${staffId}/current`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' }
       });
 
-      console.log('削除レスポンス status:', response.status);
-      console.log('削除レスポンス ok:', response.ok);
+      // console.log('削除レスポンス status:', response.status);
+      // console.log('削除レスポンス ok:', response.ok);
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -1707,18 +1746,18 @@ export default function FullMainApp() {
       }
 
       const result = await response.json();
-      console.log('=== 支援設定削除成功 ===');
-      console.log('結果:', result);
+      // console.log('=== 支援設定削除成功 ===');
+      // console.log('結果:', result);
       
       // データを再取得してUIを更新
-      console.log('復元予定のスクロール位置:', savedScrollPosition);
+      // console.log('復元予定のスクロール位置:', savedScrollPosition);
       await fetchData(displayDate);
       // データ更新完了後、保存した位置に復元 - 段階的試行
       const restoreScroll = (attempt = 1) => {
         if (topScrollRef.current && bottomScrollRef.current) {
           const currentPosX = topScrollRef.current.scrollLeft;
           const currentPosY = window.scrollY;
-          console.log(`スクロール復元試行${attempt}:`, savedScrollPosition, 'current横:', currentPosX, 'current縦:', currentPosY);
+          // console.log(`スクロール復元試行${attempt}:`, savedScrollPosition, 'current横:', currentPosX, 'current縦:', currentPosY);
           if (savedScrollPosition.x > 0) {
             topScrollRef.current.scrollLeft = savedScrollPosition.x;
             bottomScrollRef.current.scrollLeft = savedScrollPosition.x;
@@ -1730,15 +1769,15 @@ export default function FullMainApp() {
               const yDiff = Math.abs(newPosY - (savedScrollPosition.y || 0));
               
               if ((xDiff > 10 || yDiff > 10) && attempt < 5) {
-                console.log(`復元失敗、再試行${attempt + 1}:`, { newPosX, newPosY }, 'target:', savedScrollPosition);
+                // console.log(`復元失敗、再試行${attempt + 1}:`, { newPosX, newPosY }, 'target:', savedScrollPosition);
                 restoreScroll(attempt + 1);
               } else {
-                console.log('スクロール復元完了:', { x: newPosX, y: newPosY });
+                // console.log('スクロール復元完了:', { x: newPosX, y: newPosY });
               }
             }, 50);
           }
         } else {
-          console.log('スクロール要素未準備、再試行:', attempt);
+          // console.log('スクロール要素未準備、再試行:', attempt);
           if (attempt < 5) {
             setTimeout(() => restoreScroll(attempt + 1), 100);
           }
@@ -1764,9 +1803,9 @@ export default function FullMainApp() {
     const horizontalScroll = bottomScrollRef.current?.scrollLeft || 0;
     const verticalScroll = window.scrollY || document.documentElement.scrollTop || 0;
     
-    console.log('担当設定モーダルオープン時のスクロール位置キャプチャ:');
-    console.log('- 横スクロール:', horizontalScroll);
-    console.log('- 縦スクロール:', verticalScroll);
+    // console.log('担当設定モーダルオープン時のスクロール位置キャプチャ:');
+    // console.log('- 横スクロール:', horizontalScroll);
+    // console.log('- 縦スクロール:', verticalScroll);
     
     setSavedScrollPosition({ x: horizontalScroll, y: verticalScroll });
     setSelectedStaffForResponsibility(staff);
@@ -1803,7 +1842,7 @@ export default function FullMainApp() {
   }) => {
     const currentApiUrl = getApiUrl();
     try {
-      console.log('責任設定を保存中:', data);
+      // console.log('責任設定を保存中:', data);
       
       const response = await authenticatedFetch(`${currentApiUrl}/api/responsibilities`, {
         method: 'POST',
@@ -1820,17 +1859,17 @@ export default function FullMainApp() {
       }
 
       const result = await response.json();
-      console.log('責任設定保存完了:', result);
+      // console.log('責任設定保存完了:', result);
       
       // データを再取得してUIを更新
-      console.log('復元予定のスクロール位置:', savedScrollPosition);
+      // console.log('復元予定のスクロール位置:', savedScrollPosition);
       await fetchData(displayDate);
       // データ更新完了後、保存した位置に復元 - 段階的試行
       const restoreScroll = (attempt = 1) => {
         if (topScrollRef.current && bottomScrollRef.current) {
           const currentPosX = topScrollRef.current.scrollLeft;
           const currentPosY = window.scrollY;
-          console.log(`スクロール復元試行${attempt}:`, savedScrollPosition, 'current横:', currentPosX, 'current縦:', currentPosY);
+          // console.log(`スクロール復元試行${attempt}:`, savedScrollPosition, 'current横:', currentPosX, 'current縦:', currentPosY);
           if (savedScrollPosition.x > 0) {
             topScrollRef.current.scrollLeft = savedScrollPosition.x;
             bottomScrollRef.current.scrollLeft = savedScrollPosition.x;
@@ -1842,15 +1881,15 @@ export default function FullMainApp() {
               const yDiff = Math.abs(newPosY - (savedScrollPosition.y || 0));
               
               if ((xDiff > 10 || yDiff > 10) && attempt < 5) {
-                console.log(`復元失敗、再試行${attempt + 1}:`, { newPosX, newPosY }, 'target:', savedScrollPosition);
+                // console.log(`復元失敗、再試行${attempt + 1}:`, { newPosX, newPosY }, 'target:', savedScrollPosition);
                 restoreScroll(attempt + 1);
               } else {
-                console.log('スクロール復元完了:', { x: newPosX, y: newPosY });
+                // console.log('スクロール復元完了:', { x: newPosX, y: newPosY });
               }
             }, 50);
           }
         } else {
-          console.log('スクロール要素未準備、再試行:', attempt);
+          // console.log('スクロール要素未準備、再試行:', attempt);
           if (attempt < 5) {
             setTimeout(() => restoreScroll(attempt + 1), 100);
           }
@@ -1894,7 +1933,7 @@ export default function FullMainApp() {
       // 文字チェックが通った場合のみAPIに送信
       const currentApiUrl = getApiUrl();
       
-      console.log(`JSONファイルサイズ: ${fileContent.length} 文字, 社員数: ${jsonData.employeeData?.length || 0}名`);
+      // console.log(`JSONファイルサイズ: ${fileContent.length} 文字, 社員数: ${jsonData.employeeData?.length || 0}名`);
       
       const response = await authenticatedFetch(`${currentApiUrl}/api/staff/sync-from-json-body`, {
         method: 'POST',
@@ -1918,7 +1957,7 @@ export default function FullMainApp() {
       }
       
       const result = await response.json();
-      console.log('同期結果:', result);
+      // console.log('同期結果:', result);
       
       const message = `同期完了:\n追加: ${result.added}名\n更新: ${result.updated}名\n削除: ${result.deleted}名`;
       alert(message);
@@ -1972,7 +2011,7 @@ export default function FullMainApp() {
         (s.status && s.time) || s.assignmentType
       ));
       
-      console.log('Parsed CSV schedules:', schedules);
+      // console.log('Parsed CSV schedules:', schedules);
       const currentApiUrl = getApiUrl();
 
       const response = await authenticatedFetch(`${currentApiUrl}/api/csv-import/schedules`, {
@@ -1989,7 +2028,7 @@ export default function FullMainApp() {
       }
       
       const result = await response.json();
-      console.log('CSVインポート結果:', result);
+      // console.log('CSVインポート結果:', result);
       
       const message = `インポート完了:\n投入: ${result.imported}件\n競合: ${result.conflicts?.length || 0}件\n\n${result.batchId ? `バッチID: ${result.batchId}\n※ 問題があればインポート履歴から取り消し可能です` : ''}`;
       alert(message);
@@ -2040,20 +2079,20 @@ export default function FullMainApp() {
       }
       
       const result = await response.json();
-      console.log('ロールバック結果:', result);
+      // console.log('ロールバック結果:', result);
       
       const message = `ロールバック完了:\n削除: ${result.deletedCount}件\n\n削除されたデータ:\n${result.details.map((d: any) => `・${d.staff} ${d.date} ${d.status} ${d.time}`).join('\n')}`;
       alert(message);
       
       // データを再取得してUIを更新
-      console.log('復元予定のスクロール位置:', savedScrollPosition);
+      // console.log('復元予定のスクロール位置:', savedScrollPosition);
       await fetchData(displayDate);
       // データ更新完了後、保存した位置に復元 - 段階的試行
       const restoreScroll = (attempt = 1) => {
         if (topScrollRef.current && bottomScrollRef.current) {
           const currentPosX = topScrollRef.current.scrollLeft;
           const currentPosY = window.scrollY;
-          console.log(`スクロール復元試行${attempt}:`, savedScrollPosition, 'current横:', currentPosX, 'current縦:', currentPosY);
+          // console.log(`スクロール復元試行${attempt}:`, savedScrollPosition, 'current横:', currentPosX, 'current縦:', currentPosY);
           if (savedScrollPosition.x > 0) {
             topScrollRef.current.scrollLeft = savedScrollPosition.x;
             bottomScrollRef.current.scrollLeft = savedScrollPosition.x;
@@ -2065,15 +2104,15 @@ export default function FullMainApp() {
               const yDiff = Math.abs(newPosY - (savedScrollPosition.y || 0));
               
               if ((xDiff > 10 || yDiff > 10) && attempt < 5) {
-                console.log(`復元失敗、再試行${attempt + 1}:`, { newPosX, newPosY }, 'target:', savedScrollPosition);
+                // console.log(`復元失敗、再試行${attempt + 1}:`, { newPosX, newPosY }, 'target:', savedScrollPosition);
                 restoreScroll(attempt + 1);
               } else {
-                console.log('スクロール復元完了:', { x: newPosX, y: newPosY });
+                // console.log('スクロール復元完了:', { x: newPosX, y: newPosY });
               }
             }, 50);
           }
         } else {
-          console.log('スクロール要素未準備、再試行:', attempt);
+          // console.log('スクロール要素未準備、再試行:', attempt);
           if (attempt < 5) {
             setTimeout(() => restoreScroll(attempt + 1), 100);
           }
@@ -2102,7 +2141,7 @@ export default function FullMainApp() {
     const date = `${year}-${month}-${day}`;
     
     try {
-      console.log('MOVE PATCH request to:', `${currentApiUrl}/api/schedules/${scheduleId}`);
+      // console.log('MOVE PATCH request to:', `${currentApiUrl}/api/schedules/${scheduleId}`);
       const response = await authenticatedFetch(`${currentApiUrl}/api/schedules/${scheduleId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -2119,14 +2158,14 @@ export default function FullMainApp() {
       }
       
       // データを再取得してUIを更新
-      console.log('ドラッグ移動後の復元予定スクロール位置:', savedScrollPosition);
+      // console.log('ドラッグ移動後の復元予定スクロール位置:', savedScrollPosition);
       await fetchData(displayDate);
       // ドラッグ移動完了後、保存した位置に復元
       const restoreScroll = (attempt = 1) => {
         if (topScrollRef.current && bottomScrollRef.current) {
           const currentPosX = topScrollRef.current.scrollLeft;
           const currentPosY = window.scrollY;
-          console.log(`ドラッグ移動後スクロール復元試行${attempt}:`, savedScrollPosition, 'current横:', currentPosX, 'current縦:', currentPosY);
+          // console.log(`ドラッグ移動後スクロール復元試行${attempt}:`, savedScrollPosition, 'current横:', currentPosX, 'current縦:', currentPosY);
           
           // 横スクロール復元
           if (savedScrollPosition.x > 0) {
@@ -2147,14 +2186,14 @@ export default function FullMainApp() {
             const yDiff = Math.abs(newPosY - (savedScrollPosition.y || 0));
             
             if ((xDiff > 10 || yDiff > 10) && attempt < 5) {
-              console.log(`ドラッグ移動復元失敗、再試行${attempt + 1}:`, { newPosX, newPosY }, 'target:', savedScrollPosition);
+              // console.log(`ドラッグ移動復元失敗、再試行${attempt + 1}:`, { newPosX, newPosY }, 'target:', savedScrollPosition);
               restoreScroll(attempt + 1);
             } else {
-              console.log('ドラッグ移動スクロール復元完了:', { x: newPosX, y: newPosY });
+              // console.log('ドラッグ移動スクロール復元完了:', { x: newPosX, y: newPosY });
             }
           }, 50);
         } else {
-          console.log('ドラッグ移動スクロール要素未準備、再試行:', attempt);
+          // console.log('ドラッグ移動スクロール要素未準備、再試行:', attempt);
           if (attempt < 5) {
             setTimeout(() => restoreScroll(attempt + 1), 100);
           }
@@ -2345,9 +2384,9 @@ export default function FullMainApp() {
         return departmentMatch && groupMatch;
     });
     let statusesToDisplay: string[];
-    if (selectedStatus === 'all') { statusesToDisplay = [...AVAILABLE_STATUSES]; } 
+    if (selectedStatus === 'all') { statusesToDisplay = [...ALL_STATUSES]; } 
     else if (selectedStatus === 'available') { statusesToDisplay = [...AVAILABLE_STATUSES]; } 
-    else { statusesToDisplay = AVAILABLE_STATUSES.filter(s => !AVAILABLE_STATUSES.includes(s)); }
+    else { statusesToDisplay = ALL_STATUSES.filter(s => !AVAILABLE_STATUSES.includes(s)); }
     
     // 15分単位でのデータポイント生成（8:00開始）
     const timePoints = [];
@@ -2468,13 +2507,13 @@ export default function FullMainApp() {
     setDisplayDate(current => { 
       const newDate = new Date(current); 
       newDate.setDate(newDate.getDate() + days); 
-      console.log(`handleDateChange(${days}): ${current.toISOString()} -> ${newDate.toISOString()}`);
+      // console.log(`handleDateChange(${days}): ${current.toISOString()} -> ${newDate.toISOString()}`);
       return newDate; 
     }); 
   };
   const goToToday = () => {
     const today = new Date();
-    console.log('goToToday: 今日の日付 =', today.toISOString());
+    // console.log('goToToday: 今日の日付 =', today.toISOString());
     setDisplayDate(today);
   };
 
@@ -2519,26 +2558,26 @@ export default function FullMainApp() {
           {user?.role === 'ADMIN' && (
             <a
               href="/admin/staff-management"
-              className="text-sm bg-orange-100 hover:bg-orange-200 text-orange-800 px-3 py-1 rounded border border-orange-300 transition-colors"
+              className="text-sm bg-orange-100 hover:bg-orange-200 text-orange-800 px-3 py-1 rounded-md border border-orange-300 transition-colors duration-150 h-7 flex items-center font-medium"
             >
               ⚙️ 管理者設定
             </a>
           )}
           <a
             href="/personal"
-            className="text-sm bg-blue-100 hover:bg-blue-200 text-blue-800 px-3 py-1 rounded border border-blue-300 transition-colors"
+            className="text-sm bg-blue-100 hover:bg-blue-200 text-blue-800 px-3 py-1 rounded-md border border-blue-300 transition-colors duration-150 h-7 flex items-center font-medium"
           >
             👤 個人ページ
           </a>
           <a
             href="/monthly-planner"
-            className="text-sm bg-purple-100 hover:bg-purple-200 text-purple-800 px-3 py-1 rounded border border-purple-300 transition-colors"
+            className="text-sm bg-purple-100 hover:bg-purple-200 text-purple-800 px-3 py-1 rounded-md border border-purple-300 transition-colors duration-150 h-7 flex items-center font-medium"
           >
             📅 月次プランナー
           </a>
           <button
             onClick={logout}
-            className="text-sm bg-gray-100 hover:bg-gray-200 px-3 py-1 rounded border"
+            className="text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1 rounded-md border border-gray-300 transition-colors duration-150 h-7 flex items-center font-medium"
           >
             ログアウト
           </button>
@@ -2589,12 +2628,10 @@ export default function FullMainApp() {
         authenticatedFetch={authenticatedFetch}
         staffList={staffList}
         onSettingsChange={(settings) => {
-          if (settings.displaySettings) {
-            updateViewMode(settings.displaySettings.viewMode);
-            if (settings.displaySettings.maskingEnabled !== maskingEnabled) {
-              toggleMasking();
-            }
-          }
+          // グローバル設定を強制リフレッシュして即座反映
+          refreshSettings();
+          // 強制再レンダリングトリガー
+          setSettingsUpdateTrigger(prev => prev + 1);
         }}
       />
       
@@ -2610,7 +2647,7 @@ export default function FullMainApp() {
                   selected={displayDate}
                   onChange={(date: Date | null) => {
                     if (date) {
-                      console.log('DatePicker変更: 新しい日付 =', date.toISOString());
+                      // console.log('DatePicker変更: 新しい日付 =', date.toISOString());
                       setDisplayDate(date);
                     }
                   }}
@@ -2651,7 +2688,7 @@ export default function FullMainApp() {
                     }
                   }} 
                   disabled={isHistoricalMode}
-                  className={`px-3 py-1 text-xs font-medium border border-transparent rounded-md h-7 ${
+                  className={`px-3 py-1 text-xs font-medium border border-transparent rounded-md h-7 transition-colors duration-150 ${
                     isHistoricalMode 
                       ? 'text-gray-400 bg-gray-300 cursor-not-allowed' 
                       : 'text-white bg-indigo-600 hover:bg-indigo-700'
@@ -2664,7 +2701,7 @@ export default function FullMainApp() {
                   <button onClick={() => {
                     setSelectedSchedule(null);
                     setIsSettingsModalOpen(true);
-                  }} className="px-3 py-1 text-xs font-medium text-white bg-gray-600 border border-transparent rounded-md hover:bg-gray-700 h-7">
+                  }} className="px-3 py-1 text-xs font-medium text-white bg-gray-600 border border-transparent rounded-md hover:bg-gray-700 h-7 transition-colors duration-150">
                       ⚙️ 設定
                   </button>
                 )}
@@ -2688,18 +2725,18 @@ export default function FullMainApp() {
 
         <div className="mb-2 p-2 bg-gray-50 rounded-lg flex items-center justify-between">
             <div className="flex items-center space-x-3">
-                <select onChange={(e) => setSelectedDepartment(e.target.value)} value={selectedDepartment} className="rounded-md border-gray-300 shadow-sm text-xs h-6"><option value="all">すべての部署</option>{sortedDepartmentsForFilter.map(dep => <option key={dep} value={dep}>{dep}</option>)}</select>
-                <select onChange={(e) => setSelectedGroup(e.target.value)} value={selectedGroup} className="rounded-md border-gray-300 shadow-sm text-xs h-6"><option value="all">すべてのグループ</option>{sortedGroupsForFilter.map(grp => <option key={grp} value={grp}>{grp}</option>)}</select>
+                <select onChange={(e) => setSelectedDepartment(e.target.value)} value={selectedDepartment} className="rounded-md border-gray-300 shadow-sm text-xs h-7 px-2 font-medium text-gray-700 bg-white transition-colors duration-150 hover:border-gray-400 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"><option value="all">すべての部署</option>{sortedDepartmentsForFilter.map(dep => <option key={dep} value={dep}>{dep}</option>)}</select>
+                <select onChange={(e) => setSelectedGroup(e.target.value)} value={selectedGroup} className="rounded-md border-gray-300 shadow-sm text-xs h-7 px-2 font-medium text-gray-700 bg-white transition-colors duration-150 hover:border-gray-400 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"><option value="all">すべてのグループ</option>{sortedGroupsForFilter.map(grp => <option key={grp} value={grp}>{grp}</option>)}</select>
                 <div className="inline-flex rounded-md shadow-sm" role="group">
-                    <button type="button" onClick={() => setSelectedSettingFilter('all')} className={`px-3 py-1 text-xs font-medium transition-colors duration-150 rounded-l-lg border h-7 ${selectedSettingFilter === 'all' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-900 hover:bg-gray-100'}`}>すべて</button>
-                    <button type="button" onClick={() => setSelectedSettingFilter('responsibility')} className={`px-3 py-1 text-xs font-medium transition-colors duration-150 border-t border-b h-7 ${selectedSettingFilter === 'responsibility' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-900 hover:bg-gray-100'}`}>担当設定</button>
-                    <button type="button" onClick={() => setSelectedSettingFilter('support')} className={`px-3 py-1 text-xs font-medium transition-colors duration-150 rounded-r-lg border h-7 ${selectedSettingFilter === 'support' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-900 hover:bg-gray-100'}`}>支援設定</button>
+                    <button type="button" onClick={() => setSelectedSettingFilter('all')} className={`px-3 py-1 text-xs font-medium transition-colors duration-150 rounded-l-md border h-7 ${selectedSettingFilter === 'all' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}>すべて</button>
+                    <button type="button" onClick={() => setSelectedSettingFilter('responsibility')} className={`px-3 py-1 text-xs font-medium transition-colors duration-150 border-t border-b border-r h-7 ${selectedSettingFilter === 'responsibility' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}>担当設定</button>
+                    <button type="button" onClick={() => setSelectedSettingFilter('support')} className={`px-3 py-1 text-xs font-medium transition-colors duration-150 rounded-r-md border h-7 ${selectedSettingFilter === 'support' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}>支援設定</button>
                 </div>
                 {isToday && (
                   <div className="inline-flex rounded-md shadow-sm" role="group">
-                      <button type="button" onClick={() => setSelectedStatus('all')} className={`px-3 py-1 text-xs font-medium transition-colors duration-150 rounded-l-lg border h-7 ${selectedStatus === 'all' ? 'bg-teal-500 text-white' : 'bg-white text-gray-900 hover:bg-gray-100'}`}>すべて</button>
-                      <button type="button" onClick={() => setSelectedStatus('available')} className={`px-3 py-1 text-xs font-medium transition-colors duration-150 border-t border-b h-7 ${selectedStatus === 'available' ? 'bg-teal-500 text-white' : 'bg-white text-gray-900 hover:bg-gray-100'}`}>対応可能</button>
-                      <button type="button" onClick={() => setSelectedStatus('unavailable')} className={`px-3 py-1 text-xs font-medium transition-colors duration-150 rounded-r-lg border h-7 ${selectedStatus === 'unavailable' ? 'bg-teal-500 text-white' : 'bg-white text-gray-900 hover:bg-gray-100'}`}>対応不可</button>
+                      <button type="button" onClick={() => setSelectedStatus('all')} className={`px-3 py-1 text-xs font-medium transition-colors duration-150 rounded-l-md border h-7 ${selectedStatus === 'all' ? 'bg-teal-500 text-white border-teal-500' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}>すべて</button>
+                      <button type="button" onClick={() => setSelectedStatus('available')} className={`px-3 py-1 text-xs font-medium transition-colors duration-150 border-t border-b border-r h-7 ${selectedStatus === 'available' ? 'bg-teal-500 text-white border-teal-500' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}>対応可能</button>
+                      <button type="button" onClick={() => setSelectedStatus('unavailable')} className={`px-3 py-1 text-xs font-medium transition-colors duration-150 rounded-r-md border h-7 ${selectedStatus === 'unavailable' ? 'bg-teal-500 text-white border-teal-500' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}>対応不可</button>
                   </div>
                 )}
             </div>
@@ -2730,10 +2767,10 @@ export default function FullMainApp() {
               {Object.keys(groupedStaffForGantt).length > 0 ? (
                 sortByDisplayOrder(Object.entries(groupedStaffForGantt), 'department').map(([department, groups]) => (
                   <div key={department} className="department-group">
-                    <h3 className="px-2 min-h-[33px] text-sm font-bold whitespace-nowrap flex items-center" style={{backgroundColor: getHoliday(displayDate, holidays) ? '#f5f5f5' : (departmentColors[department] || '#f5f5f5')}}>{department}</h3>
+                    <h3 className="px-2 min-h-[33px] text-sm font-bold whitespace-nowrap flex items-center" style={{backgroundColor: getHoliday(displayDate, holidays) ? '#f5f5f5' : (dynamicDepartmentColors[department] || departmentColors[department] || '#f5f5f5')}}>{department}</h3>
                     {sortByDisplayOrder(Object.entries(groups), 'group').map(([group, staffInGroup]) => (
                       <div key={group}>
-                        <h4 className="px-2 pl-6 min-h-[33px] text-xs font-semibold whitespace-nowrap flex items-center" style={{backgroundColor: getHoliday(displayDate, holidays) ? '#f5f5f5' : (teamColors[group] || '#f5f5f5')}}>{group}</h4>
+                        <h4 className="px-2 pl-6 min-h-[33px] text-xs font-semibold whitespace-nowrap flex items-center" style={{backgroundColor: getHoliday(displayDate, holidays) ? '#f5f5f5' : (dynamicTeamColors[group] || teamColors[group] || '#f5f5f5')}}>{group}</h4>
                         {staffInGroup.map((staff: any) => {
                           const supportBorderColor = getSupportBorderColor(staff);
                           return (
@@ -2845,10 +2882,10 @@ export default function FullMainApp() {
                   {Object.keys(groupedStaffForGantt).length > 0 ? (
                     sortByDisplayOrder(Object.entries(groupedStaffForGantt), 'department').map(([department, groups]) => (
                       <div key={department} className="department-group">
-                        <div className="min-h-[33px]" style={{backgroundColor: getHoliday(displayDate, holidays) ? '#f5f5f5' : (departmentColors[department] || '#f5f5f5')}}></div>
+                        <div className="min-h-[33px]" style={{backgroundColor: getHoliday(displayDate, holidays) ? '#f5f5f5' : (dynamicDepartmentColors[department] || departmentColors[department] || '#f5f5f5')}}></div>
                         {sortByDisplayOrder(Object.entries(groups), 'group').map(([group, staffInGroup]) => (
                           <div key={group}>
-                            <div className="min-h-[33px]" style={{backgroundColor: getHoliday(displayDate, holidays) ? '#f5f5f5' : (teamColors[group] || '#f5f5f5')}}></div>
+                            <div className="min-h-[33px]" style={{backgroundColor: getHoliday(displayDate, holidays) ? '#f5f5f5' : (dynamicTeamColors[group] || teamColors[group] || '#f5f5f5')}}></div>
                             {staffInGroup.map((staff: any) => {
                               const supportBorderColor = getSupportBorderColor(staff);
                               return (
@@ -2891,13 +2928,13 @@ export default function FullMainApp() {
                                        const duration = draggedSchedule.end - draggedSchedule.start;
                                        const snappedEnd = newStartTime + duration;
                                        
-                                       console.log('=== ドラッグ移動デバッグ（ゴーストエレメント位置対応版） ===');
-                                       console.log('マウス位置:', e.clientX - rect.left, 'ドラッグオフセット:', dragOffset);
-                                       console.log('ゴースト左端位置:', ghostLeftX, 'タイムライン幅:', rect.width);
-                                       console.log('quarterPosition:', quarterPosition, 'snappedQuarter:', snappedQuarter);
-                                       console.log('newStartTime:', newStartTime, 'duration:', duration);
-                                       console.log('元の時刻:', draggedSchedule.start, '-', draggedSchedule.end);
-                                       console.log('新しい時刻:', newStartTime, '-', snappedEnd);
+                                       // console.log('=== ドラッグ移動デバッグ（ゴーストエレメント位置対応版） ===');
+                                       // console.log('マウス位置:', e.clientX - rect.left, 'ドラッグオフセット:', dragOffset);
+                                       // console.log('ゴースト左端位置:', ghostLeftX, 'タイムライン幅:', rect.width);
+                                       // console.log('quarterPosition:', quarterPosition, 'snappedQuarter:', snappedQuarter);
+                                       // console.log('newStartTime:', newStartTime, 'duration:', duration);
+                                       // console.log('元の時刻:', draggedSchedule.start, '-', draggedSchedule.end);
+                                       // console.log('新しい時刻:', newStartTime, '-', snappedEnd);
                                        
                                        if (newStartTime >= 8 && snappedEnd <= 21) {
                                          // スケジュール移動のAPI呼び出し
@@ -2963,9 +3000,9 @@ export default function FullMainApp() {
                                            top: '50%', 
                                            transform: 'translateY(-50%)', 
                                            backgroundColor: (() => {
-                                             const color = statusColors[schedule.status] || '#9ca3af';
+                                             const color = getEffectiveStatusColor(schedule.status);
                                              if (schedule.layer === 'adjustment' && !statusColors[schedule.status]) {
-                                               console.log(`Status color debug: status="${schedule.status}", color="${color}", layer="${schedule.layer}"`);
+                                               // console.log(`Status color debug: status="${schedule.status}", color="${color}", layer="${schedule.layer}"`);
                                              }
                                              return color;
                                            })(),
@@ -3002,9 +3039,9 @@ export default function FullMainApp() {
                                            // ドラッグ開始時にスクロール位置をキャプチャ（メインコンテンツから）
                                            const horizontalScroll = bottomScrollRef.current?.scrollLeft || 0;
                            const verticalScroll = window.scrollY || document.documentElement.scrollTop || 0;
-                                           console.log('ドラッグ開始時のスクロール位置キャプチャ:');
-                           console.log('- 横スクロール:', horizontalScroll);
-                           console.log('- 縦スクロール:', verticalScroll);
+                                           // console.log('ドラッグ開始時のスクロール位置キャプチャ:');
+                           // console.log('- 横スクロール:', horizontalScroll);
+                           // console.log('- 縦スクロール:', verticalScroll);
                                            setSavedScrollPosition({ x: horizontalScroll, y: verticalScroll });
                                            
                                            setDraggedSchedule(schedule);
@@ -3022,9 +3059,9 @@ export default function FullMainApp() {
                                            setDraggedSchedule(null);
                                            setDragOffset(0);
                                          }}
-                                         title={`${capitalizeStatus(schedule.status)}${schedule.memo ? ': ' + schedule.memo : ''} (${isContract ? 'レイヤー1:契約' : (schedule as any).isApprovedPending ? 'レイヤー2:承認済み' : 'レイヤー2:調整'})`}>
+                                         title={`${getEffectiveDisplayName(schedule.status)}${schedule.memo ? ': ' + schedule.memo : ''} (${isContract ? 'レイヤー1:契約' : (schedule as any).isApprovedPending ? 'レイヤー2:承認済み' : 'レイヤー2:調整'})`}>
                                       <span className="truncate">
-                                        {capitalizeStatus(schedule.status)}
+                                        {getEffectiveDisplayName(schedule.status)}
                                         {schedule.memo && (
                                           <span className="ml-1 text-yellow-200">📝</span>
                                         )}
