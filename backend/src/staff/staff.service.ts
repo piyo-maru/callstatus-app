@@ -39,6 +39,38 @@ export class StaffService {
     private chunkImportService: ChunkImportService,
   ) {}
 
+  // 祝日データ（2025年）- フロントエンドと同期
+  private readonly holidays = [
+    { date: '2025-01-01', name: '元日' },
+    { date: '2025-01-13', name: '成人の日' },
+    { date: '2025-02-11', name: '建国記念の日' },
+    { date: '2025-02-23', name: '天皇誕生日' },
+    { date: '2025-03-20', name: '春分の日' },
+    { date: '2025-04-29', name: '昭和の日' },
+    { date: '2025-05-03', name: '憲法記念日' },
+    { date: '2025-05-04', name: 'みどりの日' },
+    { date: '2025-05-05', name: 'こどもの日' },
+    { date: '2025-07-21', name: '海の日' },
+    { date: '2025-08-11', name: '山の日' },
+    { date: '2025-09-15', name: '敬老の日' },
+    { date: '2025-09-23', name: '秋分の日' },
+    { date: '2025-10-13', name: '体育の日' },
+    { date: '2025-11-03', name: '文化の日' },
+    { date: '2025-11-23', name: '勤労感謝の日' },
+  ];
+
+  // UTC日付をJST日付文字列に変換して祝日判定
+  private isHoliday(utcDate: Date): boolean {
+    // UTC → JST変換（+9時間）
+    const jstDate = new Date(utcDate.getTime() + 9 * 60 * 60 * 1000);
+    const year = jstDate.getFullYear();
+    const month = String(jstDate.getMonth() + 1).padStart(2, '0');
+    const day = String(jstDate.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${day}`;
+    
+    return this.holidays.some(holiday => holiday.date === dateStr);
+  }
+
   // 文字チェック関数
   private checkSupportedCharacters(data: Array<{name: string; department: string; group: string}>): CharacterCheckResult {
     // JIS第1-2水準漢字 + ひらがな + カタカナ + 英数字 + 基本記号 + 反復記号「々」+ 全角英数字の範囲
@@ -612,8 +644,15 @@ export class StaffService {
       const targetDates = [];
       
       while (currentDateUTC <= endDateUTC) {
-        if (workingDays.includes(currentDateUTC.getUTCDay())) {
+        // 勤務日かつ祝日でない場合のみ対象とする
+        if (workingDays.includes(currentDateUTC.getUTCDay()) && !this.isHoliday(currentDateUTC)) {
           targetDates.push(new Date(currentDateUTC));
+        } else if (workingDays.includes(currentDateUTC.getUTCDay()) && this.isHoliday(currentDateUTC)) {
+          // 祝日時はログ出力（デバッグ用）
+          const jstDate = new Date(currentDateUTC.getTime() + 9 * 60 * 60 * 1000);
+          const dateStr = jstDate.toISOString().split('T')[0];
+          const holiday = this.holidays.find(h => h.date === dateStr);
+          console.log(`祝日のためbreak追加をスキップ: ${dateStr} (${holiday?.name || '祝日'})`);
         }
         currentDateUTC.setUTCDate(currentDateUTC.getUTCDate() + 1);
       }
@@ -717,6 +756,37 @@ export class StaffService {
   async testAddLunchBreaks(staffId: number) {
     console.log(`=== テスト用昼休み追加開始: スタッフID ${staffId} ===`);
     return this.addAutomaticLunchBreaks(staffId, new Date());
+  }
+
+  // 祝日判定テスト用メソッド
+  async testHolidayCheck() {
+    console.log('=== 祝日判定テスト開始 ===');
+    
+    // テスト対象日（2025年の祝日と平日を含む）
+    const testDates = [
+      '2025-01-01T00:00:00.000Z', // 元日（祝日）
+      '2025-01-02T00:00:00.000Z', // 平日
+      '2025-07-21T00:00:00.000Z', // 海の日（祝日・月曜日）
+      '2025-07-22T00:00:00.000Z', // 平日（火曜日）
+      '2025-12-25T00:00:00.000Z', // 平日（クリスマス・祝日ではない）
+    ];
+
+    testDates.forEach(dateStr => {
+      const utcDate = new Date(dateStr);
+      const isHol = this.isHoliday(utcDate);
+      const jstDate = new Date(utcDate.getTime() + 9 * 60 * 60 * 1000);
+      const jstStr = jstDate.toISOString().split('T')[0];
+      const dayOfWeek = ['日', '月', '火', '水', '木', '金', '土'][utcDate.getUTCDay()];
+      
+      console.log(`${jstStr} (${dayOfWeek}): ${isHol ? '祝日' : '平日'}`);
+      if (isHol) {
+        const holiday = this.holidays.find(h => h.date === jstStr);
+        console.log(`  → ${holiday?.name}`);
+      }
+    });
+    
+    console.log('=== 祝日判定テスト完了 ===');
+    return { message: '祝日判定テスト完了。ログを確認してください。' };
   }
 
   // 契約表示キャッシュ生成メソッド（公開）

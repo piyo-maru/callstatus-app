@@ -21,20 +21,20 @@ export const PRESET_CATEGORIES: PresetCategory[] = [
     icon: '🏖️'
   },
   {
-    id: 'special',
-    name: 'special',
-    displayName: '特殊勤務',
-    description: '夜間担当、研修、会議など',
-    color: '#3b82f6',
-    icon: '⭐'
-  },
-  {
     id: 'night-duty',
     name: 'night-duty',
     displayName: '夜間担当',
     description: '夜間・深夜時間帯の勤務',
     color: '#4f46e5',
     icon: '🌙'
+  },
+  {
+    id: 'special',
+    name: 'special',
+    displayName: 'その他',
+    description: '研修、会議など',
+    color: '#3b82f6',
+    icon: '⭐'
   }
 ];
 
@@ -42,17 +42,29 @@ export const PRESET_CATEGORIES: PresetCategory[] = [
 export const DEFAULT_UNIFIED_PRESETS: UnifiedPreset[] = [
   // 一般勤務カテゴリ
   {
-    id: 'standard-work',
-    name: 'standard-work',
-    displayName: '標準勤務',
-    description: '9:00-18:00の標準的な勤務時間',
+    id: 'full-time-employee',
+    name: 'full-time-employee',
+    displayName: '正社員',
+    description: '9:00-12:00 + 昼休み + 13:00-18:00の正社員勤務',
     category: 'general',
     schedules: [
       {
         status: 'online',
         startTime: 9,
+        endTime: 12,
+        memo: ''
+      },
+      {
+        status: 'break',
+        startTime: 12,
+        endTime: 13,
+        memo: ''
+      },
+      {
+        status: 'online',
+        startTime: 13,
         endTime: 18,
-        memo: '標準勤務時間'
+        memo: ''
       }
     ],
     isActive: true,
@@ -60,35 +72,29 @@ export const DEFAULT_UNIFIED_PRESETS: UnifiedPreset[] = [
     isDefault: true
   },
   {
-    id: 'early-work',
-    name: 'early-work', 
-    displayName: '早番勤務',
-    description: '8:00-17:00の早番勤務',
+    id: 'part-time-employee',
+    name: 'part-time-employee',
+    displayName: 'パートタイマー',
+    description: '9:00-12:00 + 昼休み + 13:00-16:00のパートタイム勤務',
     category: 'general',
     schedules: [
       {
         status: 'online',
-        startTime: 8,
-        endTime: 17,
-        memo: '早番勤務'
-      }
-    ],
-    isActive: true,
-    customizable: true,
-    isDefault: true
-  },
-  {
-    id: 'late-work',
-    name: 'late-work',
-    displayName: '遅番勤務', 
-    description: '10:00-19:00の遅番勤務',
-    category: 'general',
-    schedules: [
+        startTime: 9,
+        endTime: 12,
+        memo: ''
+      },
+      {
+        status: 'break',
+        startTime: 12,
+        endTime: 13,
+        memo: ''
+      },
       {
         status: 'online',
-        startTime: 10,
-        endTime: 19,
-        memo: '遅番勤務'
+        startTime: 13,
+        endTime: 16,
+        memo: ''
       }
     ],
     isActive: true,
@@ -96,35 +102,59 @@ export const DEFAULT_UNIFIED_PRESETS: UnifiedPreset[] = [
     isDefault: true
   },
   {
-    id: 'short-time-work',
-    name: 'short-time-work',
-    displayName: '時短勤務',
-    description: '10:00-15:00の時短勤務',
-    category: 'general',
-    schedules: [
-      {
-        status: 'online',
-        startTime: 10,
-        endTime: 15,
-        memo: '時短勤務'
-      }
-    ],
-    isActive: true,
-    customizable: true,
-    isDefault: true
-  },
-  {
-    id: 'remote-work',
-    name: 'remote-work',
-    displayName: '在宅勤務',
-    description: '9:00-18:00の在宅勤務',
+    id: 'remote-full-time',
+    name: 'remote-full-time',
+    displayName: '在宅勤務（正社員）',
+    description: '9:00-12:00 + 昼休み + 13:00-18:00の在宅正社員勤務',
     category: 'general',
     schedules: [
       {
         status: 'remote',
         startTime: 9,
+        endTime: 12,
+        memo: ''
+      },
+      {
+        status: 'break',
+        startTime: 12,
+        endTime: 13,
+        memo: ''
+      },
+      {
+        status: 'remote',
+        startTime: 13,
         endTime: 18,
-        memo: '在宅勤務'
+        memo: ''
+      }
+    ],
+    isActive: true,
+    customizable: true,
+    isDefault: true
+  },
+  {
+    id: 'remote-part-time',
+    name: 'remote-part-time',
+    displayName: '在宅勤務（パートタイマー）',
+    description: '9:00-12:00 + 昼休み + 13:00-16:00の在宅パートタイム勤務',
+    category: 'general',
+    schedules: [
+      {
+        status: 'remote',
+        startTime: 9,
+        endTime: 12,
+        memo: ''
+      },
+      {
+        status: 'break',
+        startTime: 12,
+        endTime: 13,
+        memo: ''
+      },
+      {
+        status: 'remote',
+        startTime: 13,
+        endTime: 16,
+        memo: ''
       }
     ],
     isActive: true,
@@ -132,7 +162,7 @@ export const DEFAULT_UNIFIED_PRESETS: UnifiedPreset[] = [
     isDefault: true
   },
 
-  // 休暇カテゴリ
+  // 休暇カテゴリ（指定順序：終日休み、突発休、午前休、午後休、昼休み）
   {
     id: 'full-day-off',
     name: 'full-day-off',
@@ -145,6 +175,24 @@ export const DEFAULT_UNIFIED_PRESETS: UnifiedPreset[] = [
         startTime: 9,
         endTime: 18,
         memo: '終日休暇'
+      }
+    ],
+    isActive: true,
+    customizable: false,
+    isDefault: true
+  },
+  {
+    id: 'sudden-off',
+    name: 'sudden-off',
+    displayName: '突発休',
+    description: '突発的な休暇',
+    category: 'time-off',
+    schedules: [
+      {
+        status: 'off',
+        startTime: 9,
+        endTime: 18,
+        memo: '突発休'
       }
     ],
     isActive: true,
@@ -166,7 +214,7 @@ export const DEFAULT_UNIFIED_PRESETS: UnifiedPreset[] = [
       }
     ],
     isActive: true,
-    customizable: true,
+    customizable: false,
     isDefault: true
   },
   {
@@ -184,45 +232,25 @@ export const DEFAULT_UNIFIED_PRESETS: UnifiedPreset[] = [
       }
     ],
     isActive: true,
-    customizable: true,
-    isDefault: true
-  },
-
-  // 特殊勤務カテゴリ
-  {
-    id: 'meeting-block',
-    name: 'meeting-block',
-    displayName: '会議ブロック',
-    description: '14:00-15:00の会議時間',
-    category: 'special',
-    schedules: [
-      {
-        status: 'meeting',
-        startTime: 14,
-        endTime: 15,
-        memo: '定例会議'
-      }
-    ],
-    isActive: true,
-    customizable: true,
+    customizable: false,
     isDefault: true
   },
   {
-    id: 'training',
-    name: 'training',
-    displayName: '研修・トレーニング',
-    description: '10:00-16:00の研修時間',
-    category: 'special',
+    id: 'lunch-break',
+    name: 'lunch-break',
+    displayName: '昼休み',
+    description: '12:00-13:00の昼休憩',
+    category: 'time-off',
     schedules: [
       {
-        status: 'training',
-        startTime: 10,
-        endTime: 16,
-        memo: '研修・トレーニング'
+        status: 'break',
+        startTime: 12,
+        endTime: 13,
+        memo: '昼休憩'
       }
     ],
     isActive: true,
-    customizable: true,
+    customizable: false,
     isDefault: true
   },
 
@@ -262,6 +290,44 @@ export const DEFAULT_UNIFIED_PRESETS: UnifiedPreset[] = [
     isActive: true,
     customizable: true,
     isDefault: true
+  },
+
+  // その他カテゴリ
+  {
+    id: 'meeting-block',
+    name: 'meeting-block',
+    displayName: '会議ブロック',
+    description: '14:00-15:00の会議時間',
+    category: 'special',
+    schedules: [
+      {
+        status: 'meeting',
+        startTime: 14,
+        endTime: 15,
+        memo: '定例会議'
+      }
+    ],
+    isActive: true,
+    customizable: true,
+    isDefault: true
+  },
+  {
+    id: 'training',
+    name: 'training',
+    displayName: '研修・トレーニング',
+    description: '10:00-16:00の研修時間',
+    category: 'special',
+    schedules: [
+      {
+        status: 'training',
+        startTime: 10,
+        endTime: 16,
+        memo: '研修・トレーニング'
+      }
+    ],
+    isActive: true,
+    customizable: true,
+    isDefault: true
   }
 ];
 
@@ -284,14 +350,16 @@ export const getCategoryInfo = (categoryId: string): PresetCategory | undefined 
 
 // 既存のPresetSchedule形式に変換するためのユーティリティ
 export const convertToLegacyFormat = (preset: UnifiedPreset) => {
-  // 最初のスケジュールを基準に変換（月次プランナー・個人ページ互換）
-  const schedule = preset.schedules[0];
+  // 代表色選択を考慮してスケジュールを決定
+  const representativeIndex = preset.representativeScheduleIndex ?? 0;  // デフォルトは最初のスケジュール
+  const representativeSchedule = preset.schedules[representativeIndex] || preset.schedules[0];
+  
   return {
     key: preset.id,
     label: preset.displayName,
-    status: schedule.status,
-    start: schedule.startTime,
-    end: schedule.endTime,
+    status: representativeSchedule.status,  // 代表スケジュールのステータスを使用
+    start: representativeSchedule.startTime,
+    end: representativeSchedule.endTime,
     // 複数スケジュールの場合の追加情報
     ...(preset.schedules.length > 1 && {
       id: preset.id,

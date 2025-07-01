@@ -2,6 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { getApiUrl } from '../../components/constants/MainAppConstants';
 
 function RequestInitialSetupForm() {
   const [email, setEmail] = useState('');
@@ -26,9 +27,7 @@ function RequestInitialSetupForm() {
     setMessage('');
 
     try {
-      const apiHost = typeof window !== 'undefined' && window.location.hostname === '10.99.129.21'
-        ? 'http://10.99.129.21:3003'
-        : 'http://localhost:3003';
+      const apiHost = getApiUrl();
 
       const response = await fetch(`${apiHost}/api/auth/request-initial-setup`, {
         method: 'POST',

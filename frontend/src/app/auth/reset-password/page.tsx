@@ -49,7 +49,7 @@ function ResetPasswordForm() {
     try {
       const apiHost = getApiBaseUrlSync();
 
-      const response = await fetch(`${apiHost}/api/auth/setup-password`, {
+      const response = await fetch(`${apiHost}/api/auth/reset-password`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

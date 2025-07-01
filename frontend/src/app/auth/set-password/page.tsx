@@ -2,6 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { getApiUrl } from '../../components/constants/MainAppConstants';
 
 function SetPasswordForm() {
   const [email, setEmail] = useState('');
@@ -46,7 +47,7 @@ function SetPasswordForm() {
     setSuccess('');
 
     try {
-      const response = await fetch(`${getApiHost()}/api/auth/set-password`, {
+      const response = await fetch(`${getApiUrl()}/api/auth/set-password`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -191,14 +192,4 @@ export default function SetPasswordPage() {
   );
 }
 
-function getApiHost(): string {
-  if (typeof window === 'undefined') {
-    return process.env.NEXTAUTH_BACKEND_URL || 'http://localhost:3002';
-  }
-  
-  const currentHost = window.location.hostname;
-  if (currentHost === '10.99.129.21') {
-    return 'http://10.99.129.21:3002';
-  }
-  return 'http://localhost:3002';
-}
+// getApiHost関数をgetApiUrl()に統一（MainAppConstants使用）

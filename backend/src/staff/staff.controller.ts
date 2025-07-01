@@ -60,6 +60,13 @@ export class StaffController {
     return this.staffService.testAddLunchBreaks(+id);
   }
 
+  // 祝日判定テスト用エンドポイント
+  @Get('test-holiday-check')
+  async testHolidayCheck() {
+    console.log('祝日判定テストAPI呼び出し');
+    return this.staffService.testHolidayCheck();
+  }
+
   @Post('sync-from-json-body')
   async syncFromJsonBody(@Body() jsonData: any) {
     console.log('=== syncFromJsonBody endpoint called ===');

@@ -14,6 +14,7 @@ export interface UnifiedPreset {
   description?: string;
   category: 'general' | 'time-off' | 'special' | 'night-duty';
   schedules: PresetScheduleItem[];
+  representativeScheduleIndex?: number;  // 代表色として使用するスケジュールのインデックス（デフォルト: 0）
   isActive: boolean;
   customizable: boolean;
   isDefault: boolean;
@@ -80,6 +81,7 @@ export interface PresetEditFormData {
   description: string;
   category: 'general' | 'time-off' | 'special' | 'night-duty';
   schedules: PresetScheduleItem[];
+  representativeScheduleIndex?: number;  // 代表色として使用するスケジュールのインデックス
   isActive: boolean;
   customizable: boolean;
 }

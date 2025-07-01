@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '../../components/AuthProvider';
 import LoadingSpinner from '../../components/LoadingSpinner';
+import { getApiUrl } from '../../components/constants/MainAppConstants';
 
 function InitialSetupForm() {
   const [token, setToken] = useState('');
@@ -46,11 +47,9 @@ function InitialSetupForm() {
     setError('');
 
     try {
-      const apiHost = typeof window !== 'undefined' && window.location.hostname === '10.99.129.21'
-        ? 'http://10.99.129.21:3003'
-        : 'http://localhost:3003';
+      const apiHost = getApiUrl();
 
-      const response = await fetch(`${apiHost}/api/auth/setup-password`, {
+      const response = await fetch(`${apiHost}/api/auth/reset-password`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

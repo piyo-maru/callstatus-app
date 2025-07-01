@@ -124,7 +124,7 @@ export function UnifiedSettingsModal({
   const [backupList, setBackupList] = useState<SettingsBackup[]>([]);
 
   // 管理者権限チェック
-  const isAdmin = user?.role === 'ADMIN';
+  const isAdmin = user?.role === 'ADMIN' || user?.role === 'SYSTEM_ADMIN';
   const canManage = isAdmin;
 
   // タブリスト（指定順序での並び）
@@ -934,18 +934,18 @@ export function UnifiedSettingsModal({
                         <span className="text-xs text-orange-600 self-center">変更済み</span>
                       )}
                       <button
-                        onClick={handleResetStatusColors}
-                        className="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded hover:bg-gray-200 transition-colors"
-                        disabled={!isStatusColorsModified}
-                      >
-                        色リセット
-                      </button>
-                      <button
                         onClick={handleResetStatusDisplayNames}
                         className="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded hover:bg-gray-200 transition-colors"
                         disabled={!isStatusDisplayNamesModified}
                       >
                         表示名リセット
+                      </button>
+                      <button
+                        onClick={handleResetStatusColors}
+                        className="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded hover:bg-gray-200 transition-colors"
+                        disabled={!isStatusColorsModified}
+                      >
+                        色リセット
                       </button>
                     </div>
                   </div>
@@ -1587,29 +1587,6 @@ export function UnifiedSettingsModal({
               <div>
                 <h3 className="text-lg font-medium text-gray-900 mb-4">📋 データインポート</h3>
                 
-                {/* CSVスケジュールインポート */}
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h4 className="font-medium text-blue-900">📅 スケジュールインポート</h4>
-                      <p className="text-sm text-blue-700 mt-1">
-                        CSVファイルから月次スケジュールを一括インポート
-                      </p>
-                    </div>
-                    <button 
-                      onClick={() => {
-                        if (setIsCsvUploadModalOpen) {
-                          setIsCsvUploadModalOpen(true);
-                          onClose();
-                        }
-                      }} 
-                      className="px-4 py-2 bg-gray-700 text-white rounded-md hover:bg-gray-800"
-                    >
-                      インポート実行
-                    </button>
-                  </div>
-                </div>
-
                 {/* 社員情報インポート */}
                 <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
                   <div className="flex items-center justify-between">
@@ -1633,13 +1610,36 @@ export function UnifiedSettingsModal({
                   </div>
                 </div>
 
-                {/* インポート履歴 */}
+                {/* スケジュールインポート */}
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="font-medium text-blue-900">📅 スケジュールインポート</h4>
+                      <p className="text-sm text-blue-700 mt-1">
+                        CSVファイルから月次スケジュールを一括インポート
+                      </p>
+                    </div>
+                    <button 
+                      onClick={() => {
+                        if (setIsCsvUploadModalOpen) {
+                          setIsCsvUploadModalOpen(true);
+                          onClose();
+                        }
+                      }} 
+                      className="px-4 py-2 bg-gray-700 text-white rounded-md hover:bg-gray-800"
+                    >
+                      インポート実行
+                    </button>
+                  </div>
+                </div>
+
+                {/* スケジュールインポート履歴 */}
                 <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <h4 className="font-medium text-gray-900">📊 インポート履歴</h4>
+                      <h4 className="font-medium text-gray-900">📊 スケジュールインポート履歴</h4>
                       <p className="text-sm text-gray-700 mt-1">
-                        過去のインポート実績とロールバック操作
+                        過去のスケジュールインポート実績とロールバック操作
                       </p>
                     </div>
                     <button 

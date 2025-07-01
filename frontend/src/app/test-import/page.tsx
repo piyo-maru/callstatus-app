@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { io, Socket } from 'socket.io-client'
+import { getApiUrl } from '../components/constants/MainAppConstants'
 
 interface ProgressInfo {
   total: number
@@ -28,14 +29,15 @@ export default function TestImportPage() {
 
   // WebSocket接続
   useEffect(() => {
-    console.log('🔍 WebSocket接続開始: http://localhost:3002 namespace: /import-progress')
+    const apiUrl = getApiUrl();
+    console.log('🔍 WebSocket接続開始:', apiUrl, 'namespace: /import-progress')
     
     // Socket.IO名前空間の接続方式 - 複数パターンテスト
     let newSocket;
     
     try {
       // 方式1: 名前空間指定でURL構築
-      newSocket = io('http://localhost:3002/import-progress', {
+      newSocket = io(`${apiUrl}/import-progress`, {
         transports: ['polling', 'websocket'],
         timeout: 10000,
         forceNew: true,
@@ -45,7 +47,7 @@ export default function TestImportPage() {
       console.warn('🔧 名前空間URL接続失敗、代替方式を試行:', error)
       
       // 方式2: ベースURL + 名前空間指定
-      newSocket = io('http://localhost:3002', {
+      newSocket = io(apiUrl, {
         transports: ['polling', 'websocket'],
         timeout: 10000,
         forceNew: true,
@@ -54,7 +56,7 @@ export default function TestImportPage() {
     }
     
     console.log('🔍 Socket.IO接続オプション:', {
-      url: 'http://localhost:3002/import-progress',
+      url: `${apiUrl}/import-progress`,
       transports: ['polling', 'websocket'],
       connected: newSocket.connected
     })
@@ -145,7 +147,7 @@ export default function TestImportPage() {
     
     const pollProgress = async () => {
       try {
-        const response = await fetch(`http://localhost:3002/api/staff/import-status/${importId}`)
+        const response = await fetch(`${getApiUrl()}/api/staff/import-status/${importId}`)
         const result = await response.json()
         
         if (result.success) {
@@ -244,7 +246,7 @@ export default function TestImportPage() {
     }
 
     try {
-      const response = await fetch('http://localhost:3002/api/staff/sync-from-json-body-chunked', {
+      const response = await fetch(`${getApiUrl()}/api/staff/sync-from-json-body-chunked`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
