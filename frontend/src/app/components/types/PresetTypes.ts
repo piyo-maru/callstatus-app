@@ -39,10 +39,12 @@ export interface UserPresetSettings {
     monthlyPlanner: {
       enabledPresetIds: string[];
       defaultPresetId?: string;
+      presetDisplayOrder?: string[];
     };
     personalPage: {
       enabledPresetIds: string[];
       defaultPresetId?: string;
+      presetDisplayOrder?: string[];
     };
   };
   lastModified: string;

@@ -4,6 +4,8 @@
 
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
+import { DndProvider, useDrag, useDrop } from 'react-dnd';
+import { HTML5Backend } from 'react-dnd-html5-backend';
 import { useAuth, UserRole } from '../AuthProvider';
 import { usePresetSettings } from '../../hooks/usePresetSettings';
 import { UnifiedPreset, PresetCategory, PresetEditFormData } from '../types/PresetTypes';
@@ -30,6 +32,110 @@ interface UnifiedSettingsModalProps {
 }
 
 type TabType = 'display' | 'presets' | 'settings-management' | 'import' | 'departments' | 'snapshots';
+
+// ドラッグ&ドロップ用のアイテム型定義
+interface DragItem {
+  type: string;
+  id: string;
+  index: number;
+}
+
+// ドラッグ可能なプリセットアイテムコンポーネント
+interface DraggablePresetItemProps {
+  preset: UnifiedPreset;
+  index: number;
+  isEnabled: boolean;
+  isDefault: boolean;
+  page: 'monthlyPlanner' | 'personalPage';
+  onToggle: (checked: boolean) => void;
+  onSetDefault: () => void;
+  onMove: (dragIndex: number, hoverIndex: number) => void;
+}
+
+function DraggablePresetItem({
+  preset,
+  index,
+  isEnabled,
+  isDefault,
+  page,
+  onToggle,
+  onSetDefault,
+  onMove
+}: DraggablePresetItemProps) {
+  const [{ isDragging }, drag] = useDrag({
+    type: `preset-${page}`,
+    item: { type: `preset-${page}`, id: preset.id, index },
+    canDrag: isEnabled && index !== -1, // 有効で順序がある場合のみドラッグ可能
+    collect: (monitor) => ({
+      isDragging: monitor.isDragging(),
+    }),
+  });
+
+  const [, drop] = useDrop({
+    accept: `preset-${page}`,
+    hover: (item: DragItem) => {
+      if (!isEnabled || index === -1) return; // 無効なアイテムや順序にないアイテムはドロップ対象外
+      
+      const dragIndex = item.index;
+      const hoverIndex = index;
+
+      if (dragIndex === hoverIndex || dragIndex === -1) {
+        return;
+      }
+
+      onMove(dragIndex, hoverIndex);
+      item.index = hoverIndex;
+    },
+  });
+
+  const ref = (node: HTMLDivElement | null) => {
+    drag(drop(node));
+  };
+
+  return (
+    <div
+      ref={ref}
+      className={`flex items-center justify-between p-2 bg-gray-50 rounded transition-opacity ${
+        isDragging ? 'opacity-50' : ''
+      } ${isEnabled && index !== -1 ? 'cursor-move' : 'cursor-default'}`}
+      style={{
+        opacity: isDragging ? 0.5 : 1,
+      }}
+    >
+      <div className="flex items-center">
+        <input
+          type="checkbox"
+          checked={isEnabled}
+          onChange={(e) => onToggle(e.target.checked)}
+          className="mr-2"
+        />
+        <span className="text-sm">{preset.displayName}</span>
+        {isDefault && (
+          <span className="ml-2 px-2 py-0.5 text-xs bg-blue-100 text-blue-700 rounded">
+            デフォルト
+          </span>
+        )}
+      </div>
+      <div className="flex items-center space-x-2">
+        {isEnabled && (
+          <button
+            onClick={onSetDefault}
+            className={`text-xs px-2 py-1 rounded ${
+              isDefault
+                ? 'bg-blue-500 text-white'
+                : 'bg-gray-200 text-gray-700 hover:bg-blue-200'
+            }`}
+          >
+            {isDefault ? 'デフォルト' : 'デフォルトに設定'}
+          </button>
+        )}
+        {isEnabled && index !== -1 && (
+          <span className="text-gray-400 cursor-move">⋮⋮</span>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export function UnifiedSettingsModal({ 
   isOpen, 
@@ -70,6 +176,10 @@ export function UnifiedSettingsModal({
   const [isPresetEditModalOpen, setIsPresetEditModalOpen] = useState(false);
   const [editingPreset, setEditingPreset] = useState<UnifiedPreset | null>(null);
   const [editMode, setEditMode] = useState<'create' | 'edit' | 'duplicate'>('create');
+
+  // ドラッグ&ドロップ用のローカル状態（表示順序制御）
+  const [monthlyPlannerOrder, setMonthlyPlannerOrder] = useState<string[]>([]);
+  const [personalPageOrder, setPersonalPageOrder] = useState<string[]>([]);
   
   const {
     presets,
@@ -84,6 +194,7 @@ export function UnifiedSettingsModal({
     getPresetsForPage,
     updatePagePresetSettings,
     getPagePresetSettings,
+    updatePresetDisplayOrder,
     saveSettings,
     resetToDefaults,
     isLoading,
@@ -126,6 +237,41 @@ export function UnifiedSettingsModal({
   // 管理者権限チェック
   const isAdmin = user?.role === 'ADMIN' || user?.role === 'SYSTEM_ADMIN';
   const canManage = isAdmin;
+
+  // 表示順序の初期化
+  useEffect(() => {
+    const monthlySettings = getPagePresetSettings('monthlyPlanner');
+    const personalSettings = getPagePresetSettings('personalPage');
+    
+    // 現在の表示順序を取得、なければ有効なプリセットIDをそのまま使用
+    const monthlyOrder = monthlySettings.presetDisplayOrder || monthlySettings.enabledPresetIds;
+    const personalOrder = personalSettings.presetDisplayOrder || personalSettings.enabledPresetIds;
+    
+    setMonthlyPlannerOrder(monthlyOrder);
+    setPersonalPageOrder(personalOrder);
+  }, [getPagePresetSettings]);
+
+  // ドラッグ&ドロップ用の移動ハンドラー
+  const handleMovePreset = useCallback((
+    page: 'monthlyPlanner' | 'personalPage',
+    dragIndex: number,
+    hoverIndex: number
+  ) => {
+    const setOrder = page === 'monthlyPlanner' ? setMonthlyPlannerOrder : setPersonalPageOrder;
+    const currentOrder = page === 'monthlyPlanner' ? monthlyPlannerOrder : personalPageOrder;
+    
+    const newOrder = [...currentOrder];
+    const draggedItem = newOrder[dragIndex];
+    
+    // 配列から要素を削除して新しい位置に挿入
+    newOrder.splice(dragIndex, 1);
+    newOrder.splice(hoverIndex, 0, draggedItem);
+    
+    setOrder(newOrder);
+    
+    // 順序変更をデータベースに保存
+    updatePresetDisplayOrder(page, newOrder);
+  }, [monthlyPlannerOrder, personalPageOrder, updatePresetDisplayOrder]);
 
   // タブリスト（指定順序での並び）
   const tabs = useMemo(() => [
@@ -835,7 +981,8 @@ export function UnifiedSettingsModal({
   if (!isOpen) return null;
 
   const modalContent = (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onClick={handleBackdropClick}>
+    <DndProvider backend={HTML5Backend}>
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onClick={handleBackdropClick}>
       <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
         {/* ヘッダー */}
         <div className="flex justify-between items-center p-6 border-b">
@@ -1163,58 +1310,59 @@ export function UnifiedSettingsModal({
                         ({getPresetsForPage('monthlyPlanner').length}個有効)
                       </span>
                     </h5>
-                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                    <div className="space-y-2 max-h-80 overflow-y-auto">
+                      <div className="mb-2 p-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-700">
+                        💡 チェックで選択、ドラッグ&ドロップで表示順序を変更できます
+                      </div>
                       {presets.filter(p => p.isActive).map((preset) => {
-                        const isEnabled = getPagePresetSettings('monthlyPlanner').enabledPresetIds.includes(preset.id);
-                        const isDefault = getPagePresetSettings('monthlyPlanner').defaultPresetId === preset.id;
+                        const currentSettings = getPagePresetSettings('monthlyPlanner');
+                        const isEnabled = currentSettings.enabledPresetIds.includes(preset.id);
+                        const isDefault = currentSettings.defaultPresetId === preset.id;
+                        
+                        // 有効なプリセットの場合、表示順序での位置を取得
+                        const orderIndex = isEnabled ? monthlyPlannerOrder.indexOf(preset.id) : -1;
+                        
                         return (
-                          <div key={preset.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                            <div className="flex items-center">
-                              <input
-                                type="checkbox"
-                                checked={isEnabled}
-                                onChange={(e) => {
-                                  const currentSettings = getPagePresetSettings('monthlyPlanner');
-                                  const newEnabledIds = e.target.checked
-                                    ? [...currentSettings.enabledPresetIds, preset.id]
-                                    : currentSettings.enabledPresetIds.filter(id => id !== preset.id);
-                                  updatePagePresetSettings(
-                                    'monthlyPlanner', 
-                                    newEnabledIds,
-                                    newEnabledIds.includes(currentSettings.defaultPresetId || '') 
-                                      ? currentSettings.defaultPresetId 
-                                      : newEnabledIds[0]
-                                  );
-                                }}
-                                className="mr-2"
-                              />
-                              <span className="text-sm">{preset.displayName}</span>
-                              {isDefault && (
-                                <span className="ml-2 px-2 py-0.5 text-xs bg-blue-100 text-blue-700 rounded">
-                                  デフォルト
-                                </span>
-                              )}
-                            </div>
-                            {isEnabled && (
-                              <button
-                                onClick={() => {
-                                  const currentSettings = getPagePresetSettings('monthlyPlanner');
-                                  updatePagePresetSettings(
-                                    'monthlyPlanner',
-                                    currentSettings.enabledPresetIds,
-                                    preset.id
-                                  );
-                                }}
-                                className={`text-xs px-2 py-1 rounded ${
-                                  isDefault
-                                    ? 'bg-blue-500 text-white'
-                                    : 'bg-gray-200 text-gray-700 hover:bg-blue-200'
-                                }`}
-                              >
-                                {isDefault ? 'デフォルト' : 'デフォルトに設定'}
-                              </button>
-                            )}
-                          </div>
+                          <DraggablePresetItem
+                            key={preset.id}
+                            preset={preset}
+                            index={orderIndex}
+                            isEnabled={isEnabled}
+                            isDefault={isDefault}
+                            page="monthlyPlanner"
+                            onToggle={(checked) => {
+                              const newEnabledIds = checked
+                                ? [...currentSettings.enabledPresetIds, preset.id]
+                                : currentSettings.enabledPresetIds.filter(id => id !== preset.id);
+                              
+                              // 新しく有効にした場合、表示順序にも追加
+                              if (checked && !monthlyPlannerOrder.includes(preset.id)) {
+                                setMonthlyPlannerOrder([...monthlyPlannerOrder, preset.id]);
+                              }
+                              // 無効にした場合、表示順序からも削除
+                              if (!checked) {
+                                setMonthlyPlannerOrder(monthlyPlannerOrder.filter(id => id !== preset.id));
+                              }
+                              
+                              updatePagePresetSettings(
+                                'monthlyPlanner', 
+                                newEnabledIds,
+                                newEnabledIds.includes(currentSettings.defaultPresetId || '') 
+                                  ? currentSettings.defaultPresetId 
+                                  : newEnabledIds[0]
+                              );
+                            }}
+                            onSetDefault={() => {
+                              updatePagePresetSettings(
+                                'monthlyPlanner',
+                                currentSettings.enabledPresetIds,
+                                preset.id
+                              );
+                            }}
+                            onMove={(dragIndex, hoverIndex) => 
+                              handleMovePreset('monthlyPlanner', dragIndex, hoverIndex)
+                            }
+                          />
                         );
                       })}
                     </div>
@@ -1228,58 +1376,59 @@ export function UnifiedSettingsModal({
                         ({getPresetsForPage('personalPage').length}個有効)
                       </span>
                     </h5>
-                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                    <div className="space-y-2 max-h-80 overflow-y-auto">
+                      <div className="mb-2 p-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-700">
+                        💡 チェックで選択、ドラッグ&ドロップで表示順序を変更できます
+                      </div>
                       {presets.filter(p => p.isActive).map((preset) => {
-                        const isEnabled = getPagePresetSettings('personalPage').enabledPresetIds.includes(preset.id);
-                        const isDefault = getPagePresetSettings('personalPage').defaultPresetId === preset.id;
+                        const currentSettings = getPagePresetSettings('personalPage');
+                        const isEnabled = currentSettings.enabledPresetIds.includes(preset.id);
+                        const isDefault = currentSettings.defaultPresetId === preset.id;
+                        
+                        // 有効なプリセットの場合、表示順序での位置を取得
+                        const orderIndex = isEnabled ? personalPageOrder.indexOf(preset.id) : -1;
+                        
                         return (
-                          <div key={preset.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                            <div className="flex items-center">
-                              <input
-                                type="checkbox"
-                                checked={isEnabled}
-                                onChange={(e) => {
-                                  const currentSettings = getPagePresetSettings('personalPage');
-                                  const newEnabledIds = e.target.checked
-                                    ? [...currentSettings.enabledPresetIds, preset.id]
-                                    : currentSettings.enabledPresetIds.filter(id => id !== preset.id);
-                                  updatePagePresetSettings(
-                                    'personalPage', 
-                                    newEnabledIds,
-                                    newEnabledIds.includes(currentSettings.defaultPresetId || '') 
-                                      ? currentSettings.defaultPresetId 
-                                      : newEnabledIds[0]
-                                  );
-                                }}
-                                className="mr-2"
-                              />
-                              <span className="text-sm">{preset.displayName}</span>
-                              {isDefault && (
-                                <span className="ml-2 px-2 py-0.5 text-xs bg-blue-100 text-blue-700 rounded">
-                                  デフォルト
-                                </span>
-                              )}
-                            </div>
-                            {isEnabled && (
-                              <button
-                                onClick={() => {
-                                  const currentSettings = getPagePresetSettings('personalPage');
-                                  updatePagePresetSettings(
-                                    'personalPage',
-                                    currentSettings.enabledPresetIds,
-                                    preset.id
-                                  );
-                                }}
-                                className={`text-xs px-2 py-1 rounded ${
-                                  isDefault
-                                    ? 'bg-blue-500 text-white'
-                                    : 'bg-gray-200 text-gray-700 hover:bg-blue-200'
-                                }`}
-                              >
-                                {isDefault ? 'デフォルト' : 'デフォルトに設定'}
-                              </button>
-                            )}
-                          </div>
+                          <DraggablePresetItem
+                            key={preset.id}
+                            preset={preset}
+                            index={orderIndex}
+                            isEnabled={isEnabled}
+                            isDefault={isDefault}
+                            page="personalPage"
+                            onToggle={(checked) => {
+                              const newEnabledIds = checked
+                                ? [...currentSettings.enabledPresetIds, preset.id]
+                                : currentSettings.enabledPresetIds.filter(id => id !== preset.id);
+                              
+                              // 新しく有効にした場合、表示順序にも追加
+                              if (checked && !personalPageOrder.includes(preset.id)) {
+                                setPersonalPageOrder([...personalPageOrder, preset.id]);
+                              }
+                              // 無効にした場合、表示順序からも削除
+                              if (!checked) {
+                                setPersonalPageOrder(personalPageOrder.filter(id => id !== preset.id));
+                              }
+                              
+                              updatePagePresetSettings(
+                                'personalPage', 
+                                newEnabledIds,
+                                newEnabledIds.includes(currentSettings.defaultPresetId || '') 
+                                  ? currentSettings.defaultPresetId 
+                                  : newEnabledIds[0]
+                              );
+                            }}
+                            onSetDefault={() => {
+                              updatePagePresetSettings(
+                                'personalPage',
+                                currentSettings.enabledPresetIds,
+                                preset.id
+                              );
+                            }}
+                            onMove={(dragIndex, hoverIndex) => 
+                              handleMovePreset('personalPage', dragIndex, hoverIndex)
+                            }
+                          />
                         );
                       })}
                     </div>
@@ -1975,7 +2124,8 @@ export function UnifiedSettingsModal({
         preset={editingPreset}
         mode={editMode}
       />
-    </div>
+      </div>
+    </DndProvider>
   );
 
   // ポータルを使用してモーダルをbody直下に描画

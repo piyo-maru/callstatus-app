@@ -49,10 +49,12 @@ interface ApiUserPresetSettingsDto {
     monthlyPlanner: {
       enabledPresetIds: string[];
       defaultPresetId?: string;
+      presetDisplayOrder?: string[];
     };
     personalPage: {
       enabledPresetIds: string[];
       defaultPresetId?: string;
+      presetDisplayOrder?: string[];
     };
   };
   lastModified: string;
@@ -322,6 +324,7 @@ interface UsePresetSettingsReturn {
   getPresetsForPage: (page: 'monthlyPlanner' | 'personalPage') => UnifiedPreset[];
   updatePagePresetSettings: (page: 'monthlyPlanner' | 'personalPage', enabledIds: string[], defaultId?: string) => void;
   getPagePresetSettings: (page: 'monthlyPlanner' | 'personalPage') => { enabledPresetIds: string[]; defaultPresetId: string };
+  updatePresetDisplayOrder: (page: 'monthlyPlanner' | 'personalPage', newOrder: string[]) => void;
   
   // 設定管理
   saveSettings: () => void;
@@ -490,12 +493,28 @@ export const usePresetSettings = (): UsePresetSettingsReturn => {
     return presets.filter(preset => preset.category === categoryId && preset.isActive);
   }, [presets]);
 
-  // ページ別プリセット取得
+  // ページ別プリセット取得（表示順序対応）
   const getPresetsForPage = useCallback((page: 'monthlyPlanner' | 'personalPage') => {
-    const enabledIds = pagePresetSettings[page].enabledPresetIds;
-    return presets.filter(preset => 
+    const settings = pagePresetSettings[page];
+    const enabledIds = settings.enabledPresetIds;
+    const displayOrder = settings.presetDisplayOrder || enabledIds;
+    
+    // 有効なプリセットを取得
+    const enabledPresets = presets.filter(preset => 
       preset.isActive && enabledIds.includes(preset.id)
     );
+    
+    // 表示順序に従ってソート
+    const orderedPresets = displayOrder
+      .map(id => enabledPresets.find(p => p.id === id))
+      .filter(Boolean) as typeof enabledPresets;
+    
+    // 順序にないが有効なプリセットがあれば最後に追加
+    const remainingPresets = enabledPresets.filter(
+      preset => !displayOrder.includes(preset.id)
+    );
+    
+    return [...orderedPresets, ...remainingPresets];
   }, [presets, pagePresetSettings]);
 
   // ページ別プリセット設定更新（API連携対応）
@@ -528,6 +547,39 @@ export const usePresetSettings = (): UsePresetSettingsReturn => {
         }
       } catch (apiError) {
         console.warn('[PresetSettings] API ページ別プリセット設定更新失敗（ローカル状態は更新済み）:', apiError);
+      }
+    }
+  }, [apiClient, pagePresetSettings]);
+
+  // プリセット表示順序更新
+  const updatePresetDisplayOrder = useCallback(async (
+    page: 'monthlyPlanner' | 'personalPage',
+    newOrder: string[]
+  ) => {
+    const currentSettings = pagePresetSettings[page];
+    const updatedSettings = {
+      ...currentSettings,
+      presetDisplayOrder: newOrder
+    };
+    
+    // ローカル状態を更新
+    const updatedPagePresetSettings = {
+      ...pagePresetSettings,
+      [page]: updatedSettings
+    };
+    
+    setPagePresetSettings(updatedPagePresetSettings);
+    setIsDirty(true);
+    
+    // API連携が有効な場合、APIにも送信
+    if (API_INTEGRATION_CONFIG.enabled) {
+      try {
+        const apiUpdateSuccessful = await apiClient.updatePagePresetSettings(updatedPagePresetSettings);
+        if (apiUpdateSuccessful) {
+          console.log('[PresetSettings] プリセット表示順序を更新しました:', page, newOrder);
+        }
+      } catch (apiError) {
+        console.warn('[PresetSettings] プリセット表示順序更新失敗（ローカル状態は更新済み）:', apiError);
       }
     }
   }, [apiClient, pagePresetSettings]);
@@ -702,6 +754,7 @@ export const usePresetSettings = (): UsePresetSettingsReturn => {
     getPresetsForPage,
     updatePagePresetSettings,
     getPagePresetSettings,
+    updatePresetDisplayOrder,
     saveSettings,
     loadSettings,
     resetToDefaults,
