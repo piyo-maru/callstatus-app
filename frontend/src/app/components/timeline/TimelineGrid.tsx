@@ -43,24 +43,31 @@ export const TimelineGrid: React.FC<TimelineGridProps> = ({
     ? `${currentTime.getHours()}:${String(currentTime.getMinutes()).padStart(2, '0')}`
     : '';
 
-  // 15分間隔のグリッド線を生成
+  // 5分間隔のグリッド線を生成（視認性重視）
   const generateGridLines = () => {
     if (!showMinorLines) return [];
     
     const markers = [];
+    const DISPLAY_STEP = 5; // 5分間隔で表示
     
     for (let hour = startHour; hour <= endHour; hour++) {
-      for (let minute = 0; minute < 60; minute += TIMELINE_CONFIG.MINUTES_STEP) {
+      for (let minute = 0; minute < 60; minute += DISPLAY_STEP) {
         if (hour === endHour && minute > 0) break; // 終了時刻で止める
         
         const time = hour + minute / 60;
         const position = timeToPosition(time);
         const timeString = `${hour}:${String(minute).padStart(2, '0')}`;
         
+        // 1時間間隔は濃い線、5分間隔は薄い線
+        const isHourMark = minute === 0;
+        const lineClassName = isHourMark 
+          ? "absolute top-0 bottom-0 w-0.5 border-l border-gray-400 z-10 opacity-70" // 控えめな濃い線
+          : "absolute top-0 bottom-0 w-0.5 border-l border-gray-300 z-5 opacity-50";  // 薄い線
+        
         markers.push(
           <div
             key={`${hour}-${minute}`}
-            className="absolute top-0 bottom-0 w-0.5 border-l border-gray-300 z-5 opacity-50"
+            className={lineClassName}
             style={{ left: `${position}%` }}
             title={timeString}
           />
@@ -114,7 +121,7 @@ export const TimelineGrid: React.FC<TimelineGridProps> = ({
 
   return (
     <div className={`absolute inset-0 ${className}`}>
-      {/* 15分間隔のグリッド線 */}
+      {/* 5分間隔のグリッド線 */}
       {generateGridLines()}
       
       {/* 特別エリアの背景 */}

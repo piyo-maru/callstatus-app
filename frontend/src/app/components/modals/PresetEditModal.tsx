@@ -6,7 +6,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { UnifiedPreset, PresetScheduleItem, PresetEditFormData } from '../types/PresetTypes';
 import { PRESET_CATEGORIES } from '../constants/PresetSchedules';
-import { formatDecimalTime, parseTimeString, AVAILABLE_STATUSES, getEffectiveStatusColor, capitalizeStatus } from '../timeline/TimelineUtils';
+import { ALL_STATUSES, getEffectiveStatusColor, capitalizeStatus } from '../timeline/TimelineUtils';
 
 interface PresetEditModalProps {
   isOpen: boolean;
@@ -21,6 +21,7 @@ interface ValidationError {
   message: string;
 }
 
+
 export function PresetEditModal({ isOpen, onClose, onSave, preset, mode }: PresetEditModalProps) {
   const [formData, setFormData] = useState<PresetEditFormData>({
     name: '',
@@ -28,6 +29,7 @@ export function PresetEditModal({ isOpen, onClose, onSave, preset, mode }: Prese
     description: '',
     category: 'general',
     schedules: [],
+    representativeScheduleIndex: 0,  // デフォルトは最初のスケジュール
     isActive: true,
     customizable: true
   });
@@ -45,6 +47,7 @@ export function PresetEditModal({ isOpen, onClose, onSave, preset, mode }: Prese
           description: preset.description || '',
           category: preset.category,
           schedules: [...preset.schedules],
+          representativeScheduleIndex: preset.representativeScheduleIndex ?? 0,
           isActive: preset.isActive,
           customizable: true // 編集時は常にカスタマイズ可能
         });
@@ -63,6 +66,7 @@ export function PresetEditModal({ isOpen, onClose, onSave, preset, mode }: Prese
               memo: ''
             }
           ],
+          representativeScheduleIndex: 0,
           isActive: true,
           customizable: true
         });
@@ -318,7 +322,7 @@ export function PresetEditModal({ isOpen, onClose, onSave, preset, mode }: Prese
                             onChange={(e) => updateSchedule(index, { status: e.target.value })}
                             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                           >
-                            {AVAILABLE_STATUSES.map((status) => (
+                            {ALL_STATUSES.map((status) => (
                               <option key={status} value={status}>
                                 {capitalizeStatus(status, true)}
                               </option>
@@ -337,8 +341,11 @@ export function PresetEditModal({ isOpen, onClose, onSave, preset, mode }: Prese
                         </label>
                         <input
                           type="time"
-                          value={formatDecimalTime(schedule.startTime)}
-                          onChange={(e) => updateSchedule(index, { startTime: parseTimeString(e.target.value) })}
+                          value={`${Math.floor(schedule.startTime).toString().padStart(2, '0')}:${Math.round((schedule.startTime % 1) * 60).toString().padStart(2, '0')}`}
+                          onChange={(e) => {
+                            const [hours, minutes] = e.target.value.split(':').map(Number);
+                            updateSchedule(index, { startTime: hours + (minutes / 60) });
+                          }}
                           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
                       </div>
@@ -349,8 +356,11 @@ export function PresetEditModal({ isOpen, onClose, onSave, preset, mode }: Prese
                         </label>
                         <input
                           type="time"
-                          value={formatDecimalTime(schedule.endTime)}
-                          onChange={(e) => updateSchedule(index, { endTime: parseTimeString(e.target.value) })}
+                          value={`${Math.floor(schedule.endTime).toString().padStart(2, '0')}:${Math.round((schedule.endTime % 1) * 60).toString().padStart(2, '0')}`}
+                          onChange={(e) => {
+                            const [hours, minutes] = e.target.value.split(':').map(Number);
+                            updateSchedule(index, { endTime: hours + (minutes / 60) });
+                          }}
                           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
                       </div>
@@ -372,6 +382,50 @@ export function PresetEditModal({ isOpen, onClose, onSave, preset, mode }: Prese
                 ))}
               </div>
             </div>
+
+            {/* 代表色選択（複数スケジュールの場合のみ表示） */}
+            {formData.schedules.length > 1 && (
+              <div>
+                <h4 className="text-sm font-semibold text-gray-900 mb-3">
+                  🎨 代表色設定
+                </h4>
+                <p className="text-xs text-gray-600 mb-3">
+                  複数の予定がある場合、プリセット選択時に表示される色を選択してください
+                </p>
+                
+                <div className="space-y-2">
+                  {formData.schedules.map((schedule, index) => (
+                    <label 
+                      key={index} 
+                      className="flex items-center p-2 border rounded-md hover:bg-gray-50 cursor-pointer"
+                    >
+                      <input
+                        type="radio"
+                        name="representativeSchedule"
+                        value={index}
+                        checked={(formData.representativeScheduleIndex ?? 0) === index}
+                        onChange={() => setFormData(prev => ({ ...prev, representativeScheduleIndex: index }))}
+                        className="mr-3 text-blue-600"
+                      />
+                      <div 
+                        className="w-4 h-4 rounded mr-3"
+                        style={{ backgroundColor: getEffectiveStatusColor(schedule.status) }}
+                      ></div>
+                      <div className="flex-1">
+                        <span className="text-sm font-medium">
+                          {capitalizeStatus(schedule.status, true)}
+                        </span>
+                        <span className="text-xs text-gray-500 ml-2">
+                          {Math.floor(schedule.startTime)}:{Math.round((schedule.startTime % 1) * 60).toString().padStart(2, '0')}
+                          -
+                          {Math.floor(schedule.endTime)}:{Math.round((schedule.endTime % 1) * 60).toString().padStart(2, '0')}
+                        </span>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* その他の設定 */}
             <div className="space-y-3">

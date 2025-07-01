@@ -1218,8 +1218,8 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
       const originalEnd = typeof scheduleData.end === 'number' ? scheduleData.end : 0;
       const duration = originalEnd - originalStart;
       
-      const snappedStart = Math.round(dropTime * 4) / 4; // 15分単位
-      const snappedEnd = Math.round((dropTime + duration) * 4) / 4;
+      const snappedStart = Math.round(dropTime * 60) / 60; // 1分単位
+      const snappedEnd = Math.round((dropTime + duration) * 60) / 60;
       
       console.log('移動計算:', {
         original: `${originalStart}-${originalEnd}`,
@@ -1841,16 +1841,14 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
         return; // 10px未満の移動は無効化
       }
 
-      // ドラッグ範囲を時刻に変換（15分単位にスナップ）
+      // ドラッグ範囲を時刻に変換（1分単位精度）
       const rowWidth = dragInfo.rowRef.offsetWidth;
       const startPercent = (Math.min(dragInfo.startX, dragInfo.currentX) / rowWidth) * 100;
       const endPercent = (Math.max(dragInfo.startX, dragInfo.currentX) / rowWidth) * 100;
-      const start = positionPercentToTime(startPercent);
-      const end = positionPercentToTime(endPercent);
-      const snappedStart = Math.round(start * 4) / 4; // 15分単位
-      const snappedEnd = Math.round(end * 4) / 4;
+      const snappedStart = positionPercentToTime(startPercent);
+      const snappedEnd = positionPercentToTime(endPercent);
 
-      if (isDebugMode) console.log('時刻変換:', { start, end, snappedStart, snappedEnd });
+      if (isDebugMode) console.log('時刻変換:', { snappedStart, snappedEnd });
 
       if (snappedStart < snappedEnd && snappedStart >= 8 && snappedEnd <= 21) {
         // 新規予定作成
@@ -2363,7 +2361,7 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
                         const isSunday = day.getDay() === 0;
                         
                         for (let hour = 8; hour <= 21; hour++) {
-                          for (let minute = 0; minute < 60; minute += 15) {
+                          for (let minute = 0; minute < 60; minute += 5) {
                             if (hour === 21 && minute > 0) break;
                             const time = hour + minute / 60;
                             const position = timeToPositionPercent(time);
@@ -2375,8 +2373,8 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
                                 key={`${hour}-${minute}`}
                                 className={`absolute top-0 bottom-0 z-5 ${
                                   isHourMark 
-                                    ? 'w-0.5 border-l border-gray-300 opacity-50' 
-                                    : 'w-0.5 border-l border-gray-200 opacity-30'
+                                    ? 'w-0.5 border-l border-gray-400 opacity-70' 
+                                    : 'w-0.5 border-l border-gray-300 opacity-50'
                                 }`}
                                 style={{ left: `${position}%` }}
                                 title={timeString}
@@ -2634,25 +2632,46 @@ const ScheduleModal = ({ isOpen, onClose, staffList, onSave, scheduleToEdit, ini
   const [selectedStatus, setSelectedStatus] = useState<string>('');
   const [startTime, setStartTime] = useState<number>(9);
   const [endTime, setEndTime] = useState<number>(18);
+  const [startTimeString, setStartTimeString] = useState<string>('09:00');
+  const [endTimeString, setEndTimeString] = useState<string>('18:00');
   const [memo, setMemo] = useState<string>('');
 
-  const timeOptions = useMemo(() => generateTimeOptions(8, 21), []);
+  // 時間をHH:MM形式に変換
+  const timeToString = (time: number): string => {
+    const hours = Math.floor(time);
+    const minutes = Math.round((time % 1) * 60);
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+  };
+  
+  // HH:MM形式を数値に変換
+  const stringToTime = (timeString: string): number => {
+    const [hours, minutes] = timeString.split(':').map(Number);
+    return hours + (minutes / 60);
+  };
 
   useEffect(() => {
     if (isOpen) {
       if (scheduleToEdit) {
         // 編集モード
+        const startTimeValue = typeof scheduleToEdit.start === 'number' ? scheduleToEdit.start : 9;
+        const endTimeValue = typeof scheduleToEdit.end === 'number' ? scheduleToEdit.end : 18;
         setSelectedStaff(scheduleToEdit.staffId);
         setSelectedStatus(scheduleToEdit.status);
-        setStartTime(typeof scheduleToEdit.start === 'number' ? scheduleToEdit.start : 9);
-        setEndTime(typeof scheduleToEdit.end === 'number' ? scheduleToEdit.end : 18);
+        setStartTime(startTimeValue);
+        setEndTime(endTimeValue);
+        setStartTimeString(timeToString(startTimeValue));
+        setEndTimeString(timeToString(endTimeValue));
         setMemo(scheduleToEdit.memo || '');
       } else if (initialData) {
         // ドラッグ&ドロップまたはプリセットからの新規作成
+        const startTimeValue = typeof initialData.start === 'number' ? initialData.start : 9;
+        const endTimeValue = typeof initialData.end === 'number' ? initialData.end : 18;
         setSelectedStaff(initialData.staffId || (staffList.length > 0 ? staffList[0].id : ''));
         setSelectedStatus(initialData.status || 'online');
-        setStartTime(typeof initialData.start === 'number' ? initialData.start : 9);
-        setEndTime(typeof initialData.end === 'number' ? initialData.end : 18);
+        setStartTime(startTimeValue);
+        setEndTime(endTimeValue);
+        setStartTimeString(timeToString(startTimeValue));
+        setEndTimeString(timeToString(endTimeValue));
         setMemo(initialData.memo || '');
       } else {
         // 空の新規作成
@@ -2660,6 +2679,8 @@ const ScheduleModal = ({ isOpen, onClose, staffList, onSave, scheduleToEdit, ini
         setSelectedStatus('online');
         setStartTime(9);
         setEndTime(18);
+        setStartTimeString('09:00');
+        setEndTimeString('18:00');
         setMemo('');
       }
     }
@@ -2747,23 +2768,23 @@ const ScheduleModal = ({ isOpen, onClose, staffList, onSave, scheduleToEdit, ini
             <label className="block text-sm font-medium text-gray-700 mb-1">
               開始時刻
             </label>
-            <select
-              value={startTime}
+            <input
+              type="time"
+              value={startTimeString}
               onChange={(e) => {
-                const newStartTime = Number(e.target.value);
+                const newStartTime = stringToTime(e.target.value);
+                setStartTimeString(e.target.value);
                 setStartTime(newStartTime);
                 if (newStartTime >= endTime) {
-                  setEndTime(Math.min(newStartTime + 1, 21));
+                  const newEndTime = Math.min(newStartTime + 1, 21);
+                  setEndTime(newEndTime);
+                  setEndTimeString(timeToString(newEndTime));
                 }
               }}
-              className="w-full border border-gray-300 rounded-md px-3 py-2"
-            >
-              {timeOptions.slice(0, -1).map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+              min="08:00"
+              max="20:59"
+              className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
           </div>
 
           {/* 終了時刻 */}
@@ -2771,17 +2792,18 @@ const ScheduleModal = ({ isOpen, onClose, staffList, onSave, scheduleToEdit, ini
             <label className="block text-sm font-medium text-gray-700 mb-1">
               終了時刻
             </label>
-            <select
-              value={endTime}
-              onChange={(e) => setEndTime(Number(e.target.value))}
-              className="w-full border border-gray-300 rounded-md px-3 py-2"
-            >
-              {timeOptions.filter(option => option.value > startTime).map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+            <input
+              type="time"
+              value={endTimeString}
+              onChange={(e) => {
+                const newEndTime = stringToTime(e.target.value);
+                setEndTimeString(e.target.value);
+                setEndTime(newEndTime);
+              }}
+              min="08:01"
+              max="21:00"
+              className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
           </div>
 
           {/* メモ */}

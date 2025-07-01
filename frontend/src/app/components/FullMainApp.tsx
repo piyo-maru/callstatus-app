@@ -731,7 +731,7 @@ const StatusChart = ({ data, staffList, selectedDepartment, selectedGroup, showC
                 <XAxis 
                   dataKey="time" 
                   tick={{ fontSize: 11 }} 
-                  interval={3}
+                  interval={11}
                   angle={-45}
                   textAnchor="end"
                   height={40}
@@ -1330,22 +1330,15 @@ export default function FullMainApp() {
     };
   }, [displayDate]);
   
-  // 現在時刻を15分間隔に丸める関数
-  const roundToNearest15Minutes = () => {
+  // 現在時刻を1分単位に調整する関数
+  const roundToNearestMinute = () => {
     const now = new Date();
     const currentHour = now.getHours();
     const currentMinute = now.getMinutes();
     
-    // 15分間隔に丸める（0, 15, 30, 45）
-    const roundedMinutes = Math.round(currentMinute / 15) * 15;
+    // 1分単位なので丸める必要なし
     let finalHour = currentHour;
-    let finalMinute = roundedMinutes;
-    
-    // 60分を超えた場合の処理
-    if (finalMinute === 60) {
-      finalHour += 1;
-      finalMinute = 0;
-    }
+    let finalMinute = currentMinute;
     
     // 営業時間外の場合のデフォルト処理（8:00-21:00）
     if (finalHour < 8) {
@@ -1386,7 +1379,7 @@ export default function FullMainApp() {
     // 新規作成時（scheduleもinitialDataもない場合）は現在時刻を自動設定
     let finalInitialData = initialData;
     if (!schedule && !initialData) {
-      const { startTime, endTime } = roundToNearest15Minutes();
+      const { startTime, endTime } = roundToNearestMinute();
       finalInitialData = {
         start: startTime,
         end: endTime,
@@ -2244,8 +2237,8 @@ export default function FullMainApp() {
         const endPercent = (Math.max(dragInfo.startX, dragInfo.currentX) / rowWidth) * 100;
         const start = positionPercentToTime(startPercent);
         const end = positionPercentToTime(endPercent);
-        const snappedStart = Math.round(start * 4) / 4;
-        const snappedEnd = Math.round(end * 4) / 4;
+        const snappedStart = Math.round(start * 60) / 60;
+        const snappedEnd = Math.round(end * 60) / 60;
         if (snappedStart < snappedEnd) {
             handleOpenModal(null, { staffId: dragInfo.staff.id, start: snappedStart, end: snappedEnd }, true);
         }
@@ -2389,16 +2382,16 @@ export default function FullMainApp() {
     else if (selectedStatus === 'available') { statusesToDisplay = [...AVAILABLE_STATUSES]; } 
     else { statusesToDisplay = ALL_STATUSES.filter(s => !AVAILABLE_STATUSES.includes(s)); }
     
-    // 15分単位でのデータポイント生成（8:00開始）
+    // 5分単位でのデータポイント生成（8:00開始）
     const timePoints = [];
     
-    // 8:00から15分刻みで追加
+    // 8:00から5分刻みで追加
     for (let hour = 8; hour <= 20; hour++) {
-      for (let minute = 0; minute < 60; minute += 15) {
-        if (hour === 20 && minute > 45) break; // 20:45まで
+      for (let minute = 0; minute < 60; minute += 5) {
+        if (hour === 20 && minute > 55) break; // 20:55まで
         const time = hour + minute / 60;
         const label = `${hour}:${String(minute).padStart(2, '0')}`;
-        const dataRange = [time, time + 0.25]; // 15分間の範囲
+        const dataRange = [time, time + 5/60]; // 5分間の範囲
         timePoints.push({ hour: time, label, dataRange });
       }
     }
@@ -2836,34 +2829,7 @@ export default function FullMainApp() {
               {/* メインコンテンツ */}
               <div className="flex-1 overflow-x-auto" ref={bottomScrollRef} onScroll={handleBottomScroll}>
                 <div className="min-w-[1300px] relative">
-                  {/* 15分単位の目盛り */}
-                  {(() => {
-                    const markers = [];
-                    
-                    // 8:00-21:00の15分単位目盛り
-                    for (let hour = 8; hour <= 21; hour++) {
-                      for (let minute = 0; minute < 60; minute += 15) {
-                        if (hour === 21 && minute > 0) break; // 21:00で終了
-                        const time = hour + minute / 60;
-                        const position = timeToPositionPercent(time);
-                        const timeString = `${hour}:${String(minute).padStart(2, '0')}`;
-                        
-                        // すべて同じ濃さの線に統一
-                        const lineClass = "absolute top-0 bottom-0 w-0.5 border-l border-gray-300 z-5 opacity-50";
-                        
-                        markers.push(
-                          <div
-                            key={`${hour}-${minute}`}
-                            className={lineClass}
-                            style={{ left: `${position}%` }}
-                            title={timeString}
-                          >
-                          </div>
-                        );
-                      }
-                    }
-                    return markers;
-                  })()}
+                  {/* グリッド線はスタッフ行に個別配置（下記のスタッフループ内） */}
                   {currentTimePosition !== null && (
                     <div className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-30" 
                          style={{ left: `${currentTimePosition}%` }} 
@@ -2905,17 +2871,17 @@ export default function FullMainApp() {
                                        // ゴーストエレメントの左端位置を計算（マウスポインタ位置からオフセットを引く）
                                        const ghostLeftX = e.clientX - rect.left - dragOffset;
                                        
-                                       // 13時間分（8:00-21:00）を52マス（15分×4マス/時間）に分割
+                                       // 13時間分（8:00-21:00）を780分に分割
                                        const TIMELINE_HOURS = 13; // 21 - 8
-                                       const QUARTERS_PER_HOUR = 4;
-                                       const TOTAL_QUARTERS = TIMELINE_HOURS * QUARTERS_PER_HOUR; // 52マス
+                                       const MINUTES_PER_HOUR = 60;
+                                       const TOTAL_MINUTES = TIMELINE_HOURS * MINUTES_PER_HOUR; // 780分
                                        
-                                       // ゴースト左端位置を15分単位のマス数に変換
-                                       const quarterPosition = (ghostLeftX / rect.width) * TOTAL_QUARTERS;
-                                       const snappedQuarter = Math.round(quarterPosition); // 最近傍の15分単位にスナップ
+                                       // ゴースト左端位置を1分単位の分数に変換
+                                       const minutePosition = (ghostLeftX / rect.width) * TOTAL_MINUTES;
+                                       const snappedMinute = Math.round(minutePosition); // 最近傍の1分単位にスナップ
                                        
-                                       // マス数を時刻に変換
-                                       const newStartTime = 8 + (snappedQuarter / QUARTERS_PER_HOUR);
+                                       // 分数を時刻に変換
+                                       const newStartTime = 8 + (snappedMinute / MINUTES_PER_HOUR);
                                        const duration = draggedSchedule.end - draggedSchedule.start;
                                        const snappedEnd = newStartTime + duration;
                                        
@@ -2933,6 +2899,34 @@ export default function FullMainApp() {
                                        }
                                      }
                                    }}>
+                                {/* グリッド線（スタッフ行内のみ） */}
+                                {(() => {
+                                  const gridLines = [];
+                                  for (let hour = 8; hour <= 21; hour++) {
+                                    for (let minute = 0; minute < 60; minute += 5) {
+                                      if (hour === 21 && minute > 0) break;
+                                      const time = hour + minute / 60;
+                                      const position = timeToPositionPercent(time);
+                                      const timeString = `${hour}:${String(minute).padStart(2, '0')}`;
+                                      
+                                      const isHourMark = minute === 0;
+                                      const lineClass = isHourMark 
+                                        ? "absolute top-0 bottom-0 w-0.5 border-l border-gray-400 z-5 opacity-70"
+                                        : "absolute top-0 bottom-0 w-0.5 border-l border-gray-300 z-5 opacity-50";
+                                      
+                                      gridLines.push(
+                                        <div
+                                          key={`grid-${staff.id}-${hour}-${minute}`}
+                                          className={lineClass}
+                                          style={{ left: `${position}%` }}
+                                          title={timeString}
+                                        />
+                                      );
+                                    }
+                                  }
+                                  return gridLines;
+                                })()}
+                                
                                 {/* 早朝エリア（8:00-9:00）の背景強調 */}
                                 <div className="absolute top-0 bottom-0 bg-blue-50 opacity-50 pointer-events-none" 
                                      style={{ left: `0%`, width: `${((9-8)*4)/52*100}%` }} 

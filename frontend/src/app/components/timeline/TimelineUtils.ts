@@ -14,9 +14,12 @@ const isTimelineDebugEnabled = () => typeof window !== 'undefined' &&
 export const TIMELINE_CONFIG = {
   START_HOUR: 8,        // 8:00
   END_HOUR: 21,         // 21:00
-  MINUTES_STEP: 15,     // 15分間隔
+  MINUTES_STEP: 1,      // 1分間隔
+  get TOTAL_MINUTES() {
+    return (this.END_HOUR - this.START_HOUR) * 60; // 13時間 × 60 = 780分
+  },
   get TOTAL_QUARTERS() {
-    return (this.END_HOUR - this.START_HOUR) * 4; // 13時間 × 4 = 52マス
+    return (this.END_HOUR - this.START_HOUR) * 4; // 13時間 × 4 = 52マス（表示用）
   },
   get TOTAL_HOURS() {
     return this.END_HOUR - this.START_HOUR; // 13時間
@@ -70,9 +73,8 @@ export const STATUS_COLORS: { [key: string]: string } = {
  * @returns 位置パーセンテージ（0-100）
  */
 export const timeToPositionPercent = (time: number): number => {
-  const roundedTime = Math.round(time * 4) / 4; // 15分単位に丸める
-  const quartersFromStart = (roundedTime - TIMELINE_CONFIG.START_HOUR) * 4;
-  return Math.max(0, Math.min(100, (quartersFromStart / TIMELINE_CONFIG.TOTAL_QUARTERS) * 100));
+  const minutesFromStart = (time - TIMELINE_CONFIG.START_HOUR) * 60;
+  return Math.max(0, Math.min(100, (minutesFromStart / TIMELINE_CONFIG.TOTAL_MINUTES) * 100));
 };
 
 /**
@@ -81,9 +83,8 @@ export const timeToPositionPercent = (time: number): number => {
  * @returns 時間（例: 9.5 = 9:30）
  */
 export const positionPercentToTime = (percent: number): number => {
-  const quartersFromStart = (percent / 100) * TIMELINE_CONFIG.TOTAL_QUARTERS;
-  const time = TIMELINE_CONFIG.START_HOUR + quartersFromStart / 4;
-  return Math.round(time * 4) / 4; // 15分単位に丸める
+  const minutesFromStart = (percent / 100) * TIMELINE_CONFIG.TOTAL_MINUTES;
+  return TIMELINE_CONFIG.START_HOUR + minutesFromStart / 60;
 };
 
 /**
