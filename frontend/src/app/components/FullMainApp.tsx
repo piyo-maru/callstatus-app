@@ -23,7 +23,8 @@ import {
   capitalizeStatus,
   getEffectiveStatusColor,
   getEffectiveDisplayName,
-  getDepartmentGroupStyle
+  getDepartmentGroupStyle,
+  LIGHT_ANIMATIONS
 } from './timeline/TimelineUtils';
 // ★★★ 分離されたモジュールのインポート ★★★
 import { 
@@ -246,8 +247,8 @@ declare global {
           )}
         </div>
         <div className="mt-6 flex justify-end space-x-2">
-          <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">キャンセル</button>
-          <button type="button" onClick={handleSave} className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 border-transparent rounded-md hover:bg-indigo-700">保存</button>
+          <button type="button" onClick={onClose} className={`px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 ${LIGHT_ANIMATIONS.button}`}>キャンセル</button>
+          <button type="button" onClick={handleSave} className={`px-4 py-2 text-sm font-medium text-white bg-indigo-600 border-transparent rounded-md hover:bg-indigo-700 ${LIGHT_ANIMATIONS.button}`}>保存</button>
         </div>
       </div>
 */
@@ -443,7 +444,7 @@ declare global {
               <button
                 type="button"
                 onClick={handleDelete}
-                className="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700"
+                className={`px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700 ${LIGHT_ANIMATIONS.button}`}
               >
                 支援設定を削除
               </button>
@@ -455,14 +456,14 @@ declare global {
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+              className={`px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 ${LIGHT_ANIMATIONS.button}`}
             >
               キャンセル
             </button>
             <button
               type="button"
               onClick={handleSave}
-              className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md hover:bg-indigo-700"
+              className={`px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md hover:bg-indigo-700 ${LIGHT_ANIMATIONS.button}`}
             >
               保存
             </button>
@@ -605,7 +606,7 @@ const ImportHistoryModal = ({ isOpen, onClose, onRollback, authenticatedFetch }:
                       {history.canRollback ? (
                         <button
                           onClick={() => handleRollback(history.batchId, history.recordCount)}
-                          className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm font-medium"
+                          className={`px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm font-medium ${LIGHT_ANIMATIONS.button}`}
                         >
                           ロールバック
                         </button>
@@ -629,7 +630,7 @@ const ImportHistoryModal = ({ isOpen, onClose, onRollback, authenticatedFetch }:
             </div>
             <button
               onClick={onClose}
-              className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 text-sm font-medium"
+              className={`px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 text-sm font-medium ${LIGHT_ANIMATIONS.button}`}
             >
               閉じる
             </button>
@@ -2769,7 +2770,7 @@ export default function FullMainApp() {
                           const supportBorderColor = getSupportBorderColor(staff);
                           return (
                           <div key={staff.id} 
-                               className={`staff-timeline-row px-2 pl-12 text-sm font-medium whitespace-nowrap h-[45px] ${isHistoricalMode ? 'cursor-default' : 'hover:bg-gray-50 cursor-pointer'} flex items-center border-b border-gray-100`}
+                               className={`staff-timeline-row px-2 pl-12 text-sm font-medium whitespace-nowrap h-[45px] ${isHistoricalMode ? 'cursor-default' : 'hover:bg-gray-50 cursor-pointer'} flex items-center border-b border-gray-200`}
                                style={{
                                  border: supportBorderColor ? `2px solid ${supportBorderColor}` : undefined
                                }}
@@ -2981,7 +2982,7 @@ export default function FullMainApp() {
                                          draggable={!isContract && !isHistoricalData && canEdit(schedule.staffId)}
                                          className={`schedule-block absolute h-6 rounded text-white text-xs flex items-center justify-between px-2 ${
                                            isContract || isHistoricalData ? 'cursor-default' : 
-                                           canEdit(schedule.staffId) ? 'cursor-ew-resize hover:opacity-80' : 'cursor-not-allowed'
+                                           canEdit(schedule.staffId) ? `cursor-ew-resize hover:opacity-90 ${LIGHT_ANIMATIONS.schedule}` : 'cursor-not-allowed'
                                          } ${
                                            selectedSchedule && selectedSchedule.schedule.id === schedule.id && selectedSchedule.layer === scheduleLayer
                                              ? 'ring-2 ring-yellow-400 ring-offset-1'

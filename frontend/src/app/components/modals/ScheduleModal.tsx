@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Staff, Schedule } from '../types/MainAppTypes';
-import { capitalizeStatus, ALL_STATUSES, formatDecimalTime, parseTimeString } from '../timeline/TimelineUtils';
+import { capitalizeStatus, ALL_STATUSES, formatDecimalTime, parseTimeString, LIGHT_ANIMATIONS } from '../timeline/TimelineUtils';
 
 interface ScheduleModalProps {
   isOpen: boolean;
@@ -96,14 +96,14 @@ export const ScheduleModal = ({ isOpen, onClose, staffList, onSave, scheduleToEd
         <div className="mt-4 space-y-4">
           <div>
             <label htmlFor="staff" className="block text-sm font-medium text-gray-700">スタッフ</label>
-            <select id="staff" value={staffId} onChange={e => setStaffId(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm" disabled={isEditMode}>
+            <select id="staff" value={staffId} onChange={e => setStaffId(e.target.value)} className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm ${LIGHT_ANIMATIONS.input}`} disabled={isEditMode}>
               <option value="" disabled>選択してください</option>
               {staffList.map(staff => <option key={staff.id} value={staff.id}>{staff.name}</option>)}
             </select>
           </div>
           <div>
             <label htmlFor="status" className="block text-sm font-medium text-gray-700">ステータス</label>
-            <select id="status" value={status} onChange={e => setStatus(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+            <select id="status" value={status} onChange={e => setStatus(e.target.value)} className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm ${LIGHT_ANIMATIONS.input}`}>
               {ALL_STATUSES.map(s => <option key={s} value={s}>{capitalizeStatus(s)}</option>)}
             </select>
           </div>
@@ -150,8 +150,8 @@ export const ScheduleModal = ({ isOpen, onClose, staffList, onSave, scheduleToEd
           )}
         </div>
         <div className="mt-6 flex justify-end space-x-2">
-          <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">キャンセル</button>
-          <button type="button" onClick={handleSave} className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 border-transparent rounded-md hover:bg-indigo-700">保存</button>
+          <button type="button" onClick={onClose} className={`px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 ${LIGHT_ANIMATIONS.button}`}>キャンセル</button>
+          <button type="button" onClick={handleSave} className={`px-4 py-2 text-sm font-medium text-white bg-indigo-600 border-transparent rounded-md hover:bg-indigo-700 ${LIGHT_ANIMATIONS.button}`}>保存</button>
         </div>
       </div>
     </div>,

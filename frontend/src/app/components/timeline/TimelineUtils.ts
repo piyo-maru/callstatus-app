@@ -557,3 +557,25 @@ export function getDepartmentGroupStyle(backgroundColor: string): React.CSSPrope
     color: getContrastTextColor(backgroundColor)
   };
 }
+
+// === 軽量アニメーション効果クラス（パフォーマンス優先） ===
+// 軽快さを保ちながら操作感を向上させる軽量なCSS効果
+export const LIGHT_ANIMATIONS = {
+  // ボタン用：色変化のみ（軽量）
+  button: "transition-colors duration-150 ease-out",
+  
+  // ホバー用：透明度変化（軽量）
+  hover: "transition-opacity duration-150 ease-out",
+  
+  // インタラクティブ要素用：色変化（軽量）
+  interactive: "transition-colors duration-150 ease-out",
+  
+  // フォーカス用：高速色変化（軽量）
+  focus: "transition-colors duration-100 ease-out",
+  
+  // スケジュール要素用：軽量な明度変化
+  schedule: "transition-all duration-150 ease-out",
+  
+  // 入力フィールド用：軽量な色・リング変化
+  input: "transition-colors duration-150 ease-out"
+} as const;

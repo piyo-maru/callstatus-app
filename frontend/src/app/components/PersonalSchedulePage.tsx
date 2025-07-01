@@ -14,7 +14,8 @@ import {
   STATUS_COLORS,
   TIMELINE_CONFIG,
   capitalizeStatus,
-  getEffectiveStatusColor
+  getEffectiveStatusColor,
+  LIGHT_ANIMATIONS
 } from './timeline/TimelineUtils';
 // 祝日関連のインポート
 import { Holiday } from './types/MainAppTypes';
@@ -2123,7 +2124,7 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
                     const targetDate = selectedDateForPreset || new Date();
                     addPresetSchedule(preset, targetDate);
                   }}
-                  className="p-2 text-sm border rounded-lg hover:opacity-80 transition-colors text-left"
+                  className={`p-2 text-sm border rounded-lg hover:opacity-90 text-left ${LIGHT_ANIMATIONS.interactive}`}
                   style={{
                     backgroundColor: lightBackgroundColor,
                     borderColor: borderColor,
@@ -2197,7 +2198,7 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
                 return (
                   <div 
                     key={day.getTime()} 
-                    className={`px-2 text-sm font-medium whitespace-nowrap ${isCompactMode ? 'h-[32px]' : 'h-[45px]'} ${isPastDate ? 'opacity-50 cursor-default' : 'hover:bg-gray-50 cursor-pointer'} flex items-center border-b border-gray-100 ${
+                    className={`px-2 text-sm font-medium whitespace-nowrap ${isCompactMode ? 'h-[32px]' : 'h-[45px]'} ${isPastDate ? 'opacity-50 cursor-default' : 'hover:bg-gray-50 cursor-pointer'} flex items-center border-b border-gray-200 ${
                       isCurrentDay ? 'bg-blue-50 font-semibold text-blue-900' : ''
                     } ${
                       selectedDateForPreset && isSameDay(selectedDateForPreset, day) ? 'bg-blue-100 border-blue-300' : ''
@@ -2317,7 +2318,7 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
                     return (
                       <div 
                         key={`timeline-${day.getTime()}`} 
-                        className={`flex border-b border-gray-100 relative ${isCompactMode ? 'h-[32px]' : 'h-[45px]'} ${isPastDate ? 'opacity-50' : ''} ${
+                        className={`flex border-b border-gray-200 relative ${isCompactMode ? 'h-[32px]' : 'h-[45px]'} ${isPastDate ? 'opacity-50' : ''} ${
                         day.getDay() === 0 ? 'bg-red-50/30' : ''  // 日曜日の背景
                       } ${
                         day.getDay() === 6 ? 'bg-blue-50/30' : ''  // 土曜日の背景
@@ -2430,8 +2431,8 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
                             key={`${schedule.id}-${schedule.layer}-${index}`}
                             data-layer={scheduleLayer}
                             draggable={!isContract && !isHistorical}
-                            className={`schedule-block absolute h-6 rounded text-white text-xs flex items-center justify-between px-2 group transition-all duration-200 ${
-                              isContract || isHistorical ? 'cursor-default' : 'cursor-ew-resize hover:opacity-80'
+                            className={`schedule-block absolute h-6 rounded text-white text-xs flex items-center justify-between px-2 group ${
+                              isContract || isHistorical ? 'cursor-default' : `cursor-ew-resize hover:opacity-90 ${LIGHT_ANIMATIONS.schedule}`
                             } ${
                               isHistorical ? 'border-2 border-dashed border-gray-400' : ''
                             } ${
@@ -2783,7 +2784,7 @@ const ScheduleModal = ({ isOpen, onClose, staffList, onSave, scheduleToEdit, ini
               }}
               min="08:00"
               max="20:59"
-              className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className={`w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 ${LIGHT_ANIMATIONS.input}`}
             />
           </div>
 
@@ -2802,7 +2803,7 @@ const ScheduleModal = ({ isOpen, onClose, staffList, onSave, scheduleToEdit, ini
               }}
               min="08:01"
               max="21:00"
-              className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className={`w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 ${LIGHT_ANIMATIONS.input}`}
             />
           </div>
 
