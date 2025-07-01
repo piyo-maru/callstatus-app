@@ -157,12 +157,12 @@ const ImportHistoryModal = ({ isOpen, onClose, onRollback, authenticatedFetch }:
                       {history.canRollback ? (
                         <button
                           onClick={() => handleRollback(history.batchId, history.recordCount)}
-                          className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm font-medium"
+                          className="px-4 h-7 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm font-medium flex items-center"
                         >
                           ロールバック
                         </button>
                       ) : (
-                        <div className="px-4 py-2 bg-gray-300 text-gray-500 rounded-md text-sm font-medium cursor-not-allowed">
+                        <div className="px-4 h-7 bg-gray-300 text-gray-500 rounded-md text-sm font-medium cursor-not-allowed flex items-center">
                           期限切れ
                         </div>
                       )}
@@ -181,7 +181,7 @@ const ImportHistoryModal = ({ isOpen, onClose, onRollback, authenticatedFetch }:
             </div>
             <button
               onClick={onClose}
-              className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 text-sm font-medium"
+              className="px-4 h-7 bg-gray-600 text-white rounded-md hover:bg-gray-700 text-sm font-medium flex items-center"
             >
               閉じる
             </button>
@@ -1968,7 +1968,7 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
     <div className="min-h-screen bg-gray-50 p-4">
       <div className="max-w-none mx-auto">
         {/* ヘッダー（メイン画面風） */}
-        <div className="bg-white rounded-lg shadow-sm mb-4">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 mb-2">
           {/* タイトル行 */}
           <div className="bg-indigo-600 px-6 py-3 flex justify-between items-center rounded-t-lg">
             <h1 className="text-lg font-semibold text-white">個人ページ</h1>
@@ -2103,13 +2103,13 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
 
         {/* エラー表示 */}
         {error && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-2">
             <div className="text-red-800">{error}</div>
           </div>
         )}
 
         {/* プリセット予定ボタン */}
-        <div className="sticky top-4 z-40 bg-white rounded-lg shadow-sm p-4 mb-6 border border-gray-200">
+        <div className="sticky top-4 z-40 bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-2">
           <div className="mb-3 text-xs text-gray-600">
             📌 今日の予定を追加、または下の日付をクリックして特定の日に追加
           </div>
@@ -2169,7 +2169,7 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
         </div>
 
         {/* 月間ガントチャート（メイン画面と同じ2列構造） */}
-        <div className="bg-white shadow rounded-lg relative">
+        <div className="bg-white shadow-sm rounded-xl border border-gray-100 relative overflow-hidden min-w-[1360px]">
           <div className="flex">
             {/* 左側：日付列（メイン画面のスタッフ名列と同じ構造） */}
             <div className="min-w-fit max-w-[400px] sticky left-0 z-20 bg-white border-r border-gray-200">
@@ -2266,11 +2266,11 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
             <div className="flex-1 flex flex-col">
               {/* 上部スクロールバー */}
               <div className="overflow-x-auto border-b" ref={topScrollRef} onScroll={handleTopScroll}>
-                <div className="min-w-[1300px] h-[17px]"></div>
+                <div className="min-w-[1120px] h-[17px]"></div>
               </div>
               {/* ヘッダー行 */}
               <div className="sticky top-0 z-10 bg-gray-100 border-b overflow-hidden">
-                <div className="min-w-[1300px]">
+                <div className="min-w-[1120px]">
                   <div className="flex font-bold text-sm">
                     {Array.from({ length: 13 }).map((_, i) => {
                       const hour = 8 + i;
@@ -2292,7 +2292,7 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
               
               {/* タイムライン行（各日付のスケジュール） */}
               <div ref={bottomScrollRef} className="overflow-x-auto" onScroll={handleBottomScroll}>
-                <div className="min-w-[1300px]">
+                <div className="min-w-[1120px]">
                   {monthDays.map((day) => {
                     const dayStr = format(day, 'yyyy-MM-dd');
                     // O(1)で日付別スケジュールを取得し、祝日フィルタリングを適用
@@ -2842,13 +2842,13 @@ const ScheduleModal = ({ isOpen, onClose, staffList, onSave, scheduleToEdit, ini
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+              className="flex-1 px-4 h-7 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 flex items-center"
             >
               キャンセル
             </button>
             <button
               type="submit"
-              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+              className="flex-1 px-4 h-7 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center"
             >
               {scheduleToEdit ? '更新' : '追加'}
             </button>
@@ -2882,14 +2882,14 @@ const ConfirmationModal = ({ isOpen, onClose, onConfirm, message }: {
           <button
             type="button"
             onClick={onClose}
-            className="flex-1 px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+            className="flex-1 px-4 h-7 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 flex items-center"
           >
             キャンセル
           </button>
           <button
             type="button"
             onClick={onConfirm}
-            className="flex-1 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+            className="flex-1 px-4 h-7 bg-red-600 text-white rounded-md hover:bg-red-700 flex items-center"
           >
             削除
           </button>
@@ -3072,13 +3072,13 @@ const ResponsibilityModal: React.FC<ResponsibilityModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+              className="flex-1 px-4 h-7 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 flex items-center"
             >
               キャンセル
             </button>
             <button
               type="submit"
-              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+              className="flex-1 px-4 h-7 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center"
             >
               保存
             </button>

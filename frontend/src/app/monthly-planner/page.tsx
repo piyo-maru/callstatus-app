@@ -150,12 +150,12 @@ const ImportHistoryModal = ({ isOpen, onClose, onRollback, authenticatedFetch }:
                       {history.canRollback ? (
                         <button
                           onClick={() => handleRollback(history.batchId, history.recordCount)}
-                          className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm font-medium"
+                          className="px-4 h-7 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm font-medium flex items-center"
                         >
                           ロールバック
                         </button>
                       ) : (
-                        <div className="px-4 py-2 bg-gray-300 text-gray-500 rounded-md text-sm font-medium cursor-not-allowed">
+                        <div className="px-4 h-7 bg-gray-300 text-gray-500 rounded-md text-sm font-medium cursor-not-allowed flex items-center">
                           期限切れ
                         </div>
                       )}
@@ -174,7 +174,7 @@ const ImportHistoryModal = ({ isOpen, onClose, onRollback, authenticatedFetch }:
             </div>
             <button
               onClick={onClose}
-              className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 text-sm font-medium"
+              className="px-4 h-7 bg-gray-600 text-white rounded-md hover:bg-gray-700 text-sm font-medium flex items-center"
             >
               閉じる
             </button>
@@ -1923,7 +1923,7 @@ function MonthlyPlannerPageContent() {
   return (
     <div className="min-h-screen bg-gray-50 p-4">
       {/* ヘッダー - 個人ページと同じレイアウト */}
-      <div className="bg-white rounded-lg shadow-sm mb-4">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 mb-2">
         {/* タイトル行 */}
         <div className="bg-indigo-600 px-6 py-3 rounded-t-lg">
           <div className="flex items-center justify-between">
@@ -2016,17 +2016,25 @@ function MonthlyPlannerPageContent() {
               </button>
             )}
             {canManage() && (
-              <label className="flex items-center space-x-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={isApprovalMode}
-                  onChange={(e) => setIsApprovalMode(e.target.checked)}
-                  className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
-                />
-                <span className={`font-medium ${isApprovalMode ? 'text-blue-600' : 'text-gray-600'}`}>
+              <div className="flex items-center space-x-3">
+                <span className={`text-xs ${!isApprovalMode ? 'text-gray-900 font-medium' : 'text-gray-500'}`}>
+                  通常
+                </span>
+                <button
+                  onClick={() => setIsApprovalMode(!isApprovalMode)}
+                  className={`relative w-12 h-6 rounded-full transition-colors duration-200 ${
+                    isApprovalMode ? 'bg-indigo-600' : 'bg-gray-300'
+                  }`}
+                  type="button"
+                >
+                  <div className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform duration-200 ${
+                    isApprovalMode ? 'translate-x-6' : 'translate-x-0'
+                  }`}></div>
+                </button>
+                <span className={`text-xs ${isApprovalMode ? 'text-gray-900 font-medium' : 'text-gray-500'}`}>
                   承認モード
                 </span>
-              </label>
+              </div>
             )}
           </div>
         </div>
@@ -2064,7 +2072,7 @@ function MonthlyPlannerPageContent() {
             <div className="text-gray-500">読み込み中...</div>
           </div>
         ) : (
-          <div className="bg-white shadow rounded-lg relative">
+          <div className="bg-white shadow-sm rounded-xl border border-gray-100 relative overflow-hidden" style={{ minWidth: `${Math.max(1360, dateArray.length * 96 + 400)}px` }}>
             <div className="flex">
               {/* 左側：スタッフ一覧 */}
               <div className="min-w-fit max-w-[400px] sticky left-0 z-20 bg-white border-r border-gray-200">
@@ -2275,8 +2283,8 @@ function MonthlyPlannerPageContent() {
       {showModal && selectedCell && typeof window !== 'undefined' && createPortal(
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-lg max-w-md w-full mx-4">
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-4">
+            <div className="p-4">
+              <div className="flex items-center justify-between mb-3">
                 <h3 className="text-lg font-medium text-gray-900">
                   予定登録
                 </h3>
@@ -2298,13 +2306,13 @@ function MonthlyPlannerPageContent() {
                 </p>
               </div>
 
-              <div className="space-y-3 mb-6">
+              <div className="space-y-2 mb-4">
                 <h4 className="text-sm font-medium text-gray-700">プリセット予定を選択</h4>
                 {monthlyPlannerPresets.map(preset => (
                   <button
                     key={preset.key}
                     onClick={() => applyPreset(preset)}
-                    className="w-full text-left px-4 py-3 border border-gray-200 rounded-md hover:bg-gray-50 flex items-center"
+                    className="w-full text-left px-3 py-2 border border-gray-200 rounded-md hover:bg-gray-50 flex items-center"
                   >
                     <div
                       className="w-4 h-4 rounded mr-3"
@@ -2323,7 +2331,7 @@ function MonthlyPlannerPageContent() {
               <div className="flex space-x-3">
                 <button
                   onClick={clearSchedule}
-                  className="flex-1 px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600"
+                  className="flex-1 px-4 h-7 bg-red-500 text-white rounded-md hover:bg-red-600 flex items-center"
                 >
                   予定クリア
                 </button>
@@ -2332,7 +2340,7 @@ function MonthlyPlannerPageContent() {
                     setShowModal(false);
                     setSelectedCellForHighlight(null);
                   }}
-                  className="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
+                  className="flex-1 px-4 h-7 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 flex items-center"
                 >
                   キャンセル
                 </button>
@@ -2425,7 +2433,7 @@ function MonthlyPlannerPageContent() {
               <div className="flex space-x-3">
                 <button
                   onClick={() => handleApprove()}
-                  className="flex-1 px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600"
+                  className="flex-1 px-4 h-7 bg-green-500 text-white rounded-md hover:bg-green-600 flex items-center"
                 >
                   承認
                 </button>
@@ -2434,7 +2442,7 @@ function MonthlyPlannerPageContent() {
                     const textarea = document.getElementById('rejectionReason') as HTMLTextAreaElement;
                     handleReject(textarea.value);
                   }}
-                  className="flex-1 px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600"
+                  className="flex-1 px-4 h-7 bg-red-500 text-white rounded-md hover:bg-red-600 flex items-center"
                 >
                   却下
                 </button>
@@ -2443,7 +2451,7 @@ function MonthlyPlannerPageContent() {
                     setShowApprovalModal(false);
                     setSelectedPendingForApproval(null);
                   }}
-                  className="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
+                  className="flex-1 px-4 h-7 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 flex items-center"
                 >
                   キャンセル
                 </button>
@@ -2494,7 +2502,7 @@ function MonthlyPlannerPageContent() {
               <div className="flex space-x-3">
                 <button
                   onClick={handleClearRejected}
-                  className="flex-1 px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600"
+                  className="flex-1 px-4 h-7 bg-red-500 text-white rounded-md hover:bg-red-600 flex items-center"
                 >
                   予定を削除
                 </button>
@@ -2503,7 +2511,7 @@ function MonthlyPlannerPageContent() {
                     setShowRejectedModal(false);
                     setSelectedRejectedPending(null);
                   }}
-                  className="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
+                  className="flex-1 px-4 h-7 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 flex items-center"
                 >
                   キャンセル
                 </button>
@@ -2570,7 +2578,7 @@ function MonthlyPlannerPageContent() {
                       alert('削除理由を入力してください');
                     }
                   }}
-                  className="flex-1 px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600"
+                  className="flex-1 px-4 h-7 bg-red-500 text-white rounded-md hover:bg-red-600 flex items-center"
                   disabled={!unapprovalReason.trim()}
                 >
                   承認を取り消す
@@ -2581,7 +2589,7 @@ function MonthlyPlannerPageContent() {
                     setSelectedApprovedPending(null);
                     setUnapprovalReason('');
                   }}
-                  className="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
+                  className="flex-1 px-4 h-7 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 flex items-center"
                 >
                   キャンセル
                 </button>
@@ -2641,7 +2649,7 @@ function MonthlyPlannerPageContent() {
                 <div className="flex gap-3">
                   <button
                     onClick={handleEditDelete}
-                    className="flex-1 px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600"
+                    className="flex-1 px-4 h-7 bg-red-500 text-white rounded-md hover:bg-red-600 flex items-center"
                   >
                     クリア（削除）
                   </button>
@@ -2650,7 +2658,7 @@ function MonthlyPlannerPageContent() {
                       setShowEditModal(false);
                       setSelectedPendingForEdit(null);
                     }}
-                    className="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
+                    className="flex-1 px-4 h-7 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 flex items-center"
                   >
                     キャンセル
                   </button>
