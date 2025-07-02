@@ -5,14 +5,18 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('🔄 テストデータベース初期化中...');
 
-  // 既存データクリア（依存関係を考慮した順序）
-  console.log('既存データをクリア中...');
+  // 🚨🚨🚨 【重要警告】全データベース完全削除実行中 🚨🚨🚨
+  console.log('🚨🚨🚨 データベース完全リセット開始 🚨🚨🚨');
+  console.log('🗑️  全スタッフデータ（225人分含む）を完全削除します');
+  console.log('🗑️  全スケジュール・契約データを完全削除します');
+  console.log('⚠️  この操作は取り消せません！');
   await prisma.adjustment.deleteMany();
   await prisma.contract.deleteMany();
   await prisma.temporaryAssignment.deleteMany();
   await prisma.dailyAssignment.deleteMany();
   await prisma.departmentSettings.deleteMany();
   await prisma.staff.deleteMany();
+  console.log('✅ データベース完全削除完了');
 
   // テスト用スタッフデータ作成
   console.log('スタッフデータ作成中...');

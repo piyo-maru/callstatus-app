@@ -22,6 +22,7 @@ interface UnifiedSettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSettingsChange?: (settings: any) => void;
+  onSave?: () => Promise<void> | void; // 設定保存後のコールバック
   // 子モーダル制御用のprops
   setIsCsvUploadModalOpen?: (open: boolean) => void;
   setIsJsonUploadModalOpen?: (open: boolean) => void;
@@ -147,6 +148,7 @@ export function UnifiedSettingsModal({
   isOpen, 
   onClose, 
   onSettingsChange,
+  onSave,
   setIsCsvUploadModalOpen,
   setIsJsonUploadModalOpen,
   setIsImportHistoryModalOpen,
@@ -221,7 +223,11 @@ export function UnifiedSettingsModal({
     resetToDefaults,
     discardChanges,
     isLoading,
-    isDirty
+    isDirty,
+    // グローバル設定統合（新機能）
+    globalSettings,
+    refreshGlobalSettings,
+    isUsingGlobalSettings
   } = usePresetSettings();
 
   // 設定インポート・エクスポート機能
@@ -324,7 +330,7 @@ export function UnifiedSettingsModal({
       await saveSettings();
     }
     
-    // 親コンポーネントに設定変更を通知
+    // 親コンポーネントに設定変更を通知（ページリロードの代わり）
     if (onSettingsChange) {
       onSettingsChange({
         displaySettings: {
@@ -337,8 +343,17 @@ export function UnifiedSettingsModal({
       });
     }
     
+    // 設定保存後のコールバック実行（データ再読込など）
+    if (onSave) {
+      try {
+        await onSave();
+      } catch (error) {
+        console.error('設定保存後のコールバック実行エラー:', error);
+      }
+    }
+    
     onClose();
-  }, [isDirty, saveSettings, onSettingsChange, viewMode, maskingEnabled, filteredPresets, onClose]);
+  }, [isDirty, saveSettings, onSettingsChange, viewMode, maskingEnabled, timeRange, filteredPresets, departments, onSave, onClose]);
 
   // サーバーから設定を読み込み
   useEffect(() => {
@@ -1237,6 +1252,89 @@ export function UnifiedSettingsModal({
                     {isLoading ? '保存中...' : '保存'}
                   </button>
                 </div>
+              </div>
+
+              {/* グローバルプリセット設定セクション */}
+              <div className="border rounded-lg p-4 bg-blue-50 border-blue-200">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h4 className="font-medium text-gray-900 mb-1 flex items-center">
+                      🌐 グローバルプリセット設定
+                      <span className="ml-2 text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
+                        組織共通
+                      </span>
+                    </h4>
+                    <p className="text-sm text-gray-600 mb-3">
+                      組織全体で共有されるプリセット設定です。管理者により管理されています。
+                    </p>
+                    
+                    {/* グローバル設定状態表示 */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+                      <div>
+                        <span className="text-gray-500">状態:</span>
+                        <span className={`ml-1 ${globalSettings.isAvailable ? 'text-green-600' : 'text-red-600'}`}>
+                          {globalSettings.isAvailable ? '✅ 利用可能' : '❌ 未接続'}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">バージョン:</span>
+                        <span className="ml-1 text-gray-700 font-mono">
+                          {globalSettings.version || 'N/A'}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">最終同期:</span>
+                        <span className="ml-1 text-gray-700">
+                          {globalSettings.lastSyncTime || 'なし'}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">統合:</span>
+                        <span className={`ml-1 ${isUsingGlobalSettings ? 'text-green-600' : 'text-orange-600'}`}>
+                          {isUsingGlobalSettings ? '✅ 有効' : '⚠️ 無効'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={refreshGlobalSettings}
+                      className="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+                      disabled={globalSettings.isLoading}
+                    >
+                      {globalSettings.isLoading ? '同期中...' : '🔄 再同期'}
+                    </button>
+                    {/* 管理者のみ表示予定（認証システム有効化後） */}
+                    <button
+                      onClick={() => alert('グローバル設定管理画面（準備中）')}
+                      className="px-3 py-1 text-sm bg-purple-500 text-white rounded hover:bg-purple-600 transition-colors"
+                      title="管理者のみ利用可能（準備中）"
+                    >
+                      ⚙️ グローバル管理
+                    </button>
+                  </div>
+                </div>
+                
+                {/* グローバル設定が利用可能な場合の統合状況表示 */}
+                {globalSettings.isAvailable && (
+                  <div className="mt-4 pt-4 border-t border-blue-200">
+                    <p className="text-sm text-blue-700">
+                      📊 グローバル設定が適用されています。下記のプリセットには組織共通の設定が含まれています。
+                      個人的なカスタマイズも可能です。
+                    </p>
+                  </div>
+                )}
+                
+                {/* グローバル設定が利用不可の場合の説明 */}
+                {!globalSettings.isAvailable && (
+                  <div className="mt-4 pt-4 border-t border-blue-200">
+                    <p className="text-sm text-orange-700">
+                      ⚠️ グローバル設定に接続できませんでした。ローカル設定のみで動作しています。
+                      ネットワーク接続を確認して「再同期」をお試しください。
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* カテゴリ別プリセット表示 */}

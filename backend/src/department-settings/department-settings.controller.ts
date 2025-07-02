@@ -21,6 +21,7 @@ export class DepartmentSettingsController {
     name: string;
     shortName?: string;
     backgroundColor?: string;
+    displayOrder?: number;
   }>) {
     return this.departmentSettingsService.updateSettings(settings);
   }

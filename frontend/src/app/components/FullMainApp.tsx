@@ -1103,7 +1103,7 @@ export default function FullMainApp() {
       const maskingParam = maskingEnabled ? 'true' : 'false';
       const scheduleRes = await fetch(`${currentApiUrl}/api/schedules/unified?date=${dateString}&includeMasking=${maskingParam}`);
       
-      // console.log('Unified API response status:', scheduleRes.status);
+      console.log('Unified API response status:', scheduleRes.status);
       
       if (!scheduleRes.ok) throw new Error(`Unified API response was not ok`);
       
@@ -1116,13 +1116,14 @@ export default function FullMainApp() {
         message?: string
       } = await scheduleRes.json();
       
-      // console.log('Unified API data:', {
-      //   isHistorical: scheduleData.isHistorical,
-      //   snapshotDate: scheduleData.snapshotDate,
-      //   recordCount: scheduleData.recordCount,
-      //   schedulesCount: scheduleData.schedules?.length || 0,
-      //   staffCount: scheduleData.staff?.length || 0
-      // });
+      console.log('Unified API data:', {
+        isHistorical: scheduleData.isHistorical,
+        snapshotDate: scheduleData.snapshotDate,
+        recordCount: scheduleData.recordCount,
+        schedulesCount: scheduleData.schedules?.length || 0,
+        staffCount: scheduleData.staff?.length || 0
+      });
+      console.log('Staff data details:', scheduleData.staff);
       // 支援データを取得
       let supportData = { assignments: [] };
       try {
@@ -1231,6 +1232,8 @@ export default function FullMainApp() {
         return result;
       });
       
+      console.log('Final staff data being set:', staffWithSupportAndResponsibility);
+      console.log('Staff count after processing:', staffWithSupportAndResponsibility.length);
       setStaffList(staffWithSupportAndResponsibility);
       
       // 履歴データ状態を更新
@@ -2270,18 +2273,21 @@ export default function FullMainApp() {
   }, [schedules]);
 
   const staffWithCurrentStatus = useMemo(() => {
+    console.log('staffWithCurrentStatus - input staffList length:', staffList.length);
     const currentDecimalHour = currentTime.getHours() + currentTime.getMinutes() / 60;
-    return staffList.map(staff => {
+    const result = staffList.map(staff => {
       // O(1)でスタッフのスケジュールを取得
       const staffSchedules = schedulesByStaffMap.get(staff.id) || [];
       const applicableSchedules = staffSchedules.filter(s => currentDecimalHour >= s.start && currentDecimalHour < s.end);
       const currentSchedule = applicableSchedules.length > 0 ? applicableSchedules.reduce((latest, current) => latest.id > current.id ? latest : current) : null;
       return { ...staff, currentStatus: currentSchedule ? currentSchedule.status : 'off' };
     });
+    console.log('staffWithCurrentStatus - output result length:', result.length);
+    return result;
   }, [staffList, schedulesByStaffMap, currentTime]);
   
   const departmentGroupFilteredStaff = useMemo(() => {
-    return staffWithCurrentStatus.filter(staff => {
+    const filtered = staffWithCurrentStatus.filter(staff => {
         // 支援中の場合は現在の部署/グループでフィルタリング、そうでなければ元の部署/グループでフィルタリング
         const currentDepartment = staff.isSupporting ? (staff.currentDept || staff.department) : staff.department;
         const currentGroup = staff.isSupporting ? (staff.currentGroup || staff.group) : staff.group;
@@ -2289,6 +2295,9 @@ export default function FullMainApp() {
         const groupMatch = selectedGroup === 'all' || currentGroup === selectedGroup;
         return departmentMatch && groupMatch;
     });
+    console.log('departmentGroupFilteredStaff:', filtered.length, 'out of', staffWithCurrentStatus.length);
+    console.log('selectedDepartment:', selectedDepartment, 'selectedGroup:', selectedGroup);
+    return filtered;
   }, [staffWithCurrentStatus, selectedDepartment, selectedGroup]);
 
   const availableStaffCount = useMemo(() => departmentGroupFilteredStaff.filter(staff => AVAILABLE_STATUSES.includes(staff.currentStatus)).length, [departmentGroupFilteredStaff]);
@@ -2362,12 +2371,17 @@ export default function FullMainApp() {
         return true;
       });
       
-      return statusFiltered.filter(staff => {
+      const final = statusFiltered.filter(staff => {
         if (selectedSettingFilter === 'all') return true;
         if (selectedSettingFilter === 'responsibility') return staff.hasResponsibilities;
         if (selectedSettingFilter === 'support') return staff.isSupporting;
         return true;
       });
+      
+      console.log('filteredStaffForDisplay final count:', final.length);
+      console.log('Filter states - status:', selectedStatus, 'setting:', selectedSettingFilter);
+      
+      return final;
   }, [departmentGroupFilteredStaff, selectedStatus, selectedSettingFilter]);
   
   const chartData = useMemo(() => {
@@ -2641,6 +2655,12 @@ export default function FullMainApp() {
           refreshSettings();
           // 強制再レンダリングトリガー
           setSettingsUpdateTrigger(prev => prev + 1);
+        }}
+        onSave={async () => {
+          // 設定保存後に現在の日付でデータを自動再読込
+          console.log('🔄 設定保存完了 - 出社状況ページのデータを自動再読込中...');
+          await fetchData(selectedDate);
+          console.log('✅ 出社状況ページのデータ再読込完了');
         }}
       />
       

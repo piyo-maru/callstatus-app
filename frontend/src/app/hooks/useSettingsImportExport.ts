@@ -383,8 +383,9 @@ export function useSettingsImportExport(): UseSettingsImportExportReturn {
       }
 
       // 管理設定のインポート（管理者のみ）
-      if (options.includeManagement && settings.settings.management && user?.role === 'ADMIN') {
-        console.log('管理設定インポート開始:', settings.settings.management);
+      if (options.includeManagement && settings.settings.management) {
+        if (user?.role === 'ADMIN' || user?.role === 'SYSTEM_ADMIN') {
+          console.log('管理設定インポート開始:', settings.settings.management);
         
         try {
           const management = settings.settings.management;
@@ -428,6 +429,10 @@ export function useSettingsImportExport(): UseSettingsImportExportReturn {
         } catch (error) {
           console.error('部署・グループ設定インポートエラー:', error);
           errors.push(`部署・グループ設定のインポートに失敗: ${error instanceof Error ? error.message : 'unknown error'}`);
+        }
+        } else {
+          console.warn('管理設定のインポートはスキップされました: 管理者権限が必要です (現在の権限:', user?.role, ')');
+          warnings.push(`管理設定のインポートには管理者権限が必要です (現在の権限: ${user?.role || '未認証'})`);
         }
       }
 
