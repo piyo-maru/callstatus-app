@@ -283,26 +283,19 @@ export function UnifiedSettingsModal({
     dragIndex: number,
     hoverIndex: number
   ) => {
-    console.log(`[DnD] handleMovePreset called: ${page}, ${dragIndex} -> ${hoverIndex}`);
-    
     const setOrder = page === 'monthlyPlanner' ? setMonthlyPlannerOrder : setPersonalPageOrder;
     const currentOrder = page === 'monthlyPlanner' ? monthlyPlannerOrder : personalPageOrder;
-    
-    console.log(`[DnD] Current order:`, currentOrder);
     
     const newOrder = [...currentOrder];
     const draggedItem = newOrder[dragIndex];
     
     if (!draggedItem) {
-      console.warn(`[DnD] No item found at dragIndex ${dragIndex}`);
       return;
     }
     
     // 配列から要素を削除して新しい位置に挿入
     newOrder.splice(dragIndex, 1);
     newOrder.splice(hoverIndex, 0, draggedItem);
-    
-    console.log(`[DnD] New order:`, newOrder);
     
     // ローカル状態を即座に更新
     setOrder(newOrder);
@@ -364,9 +357,7 @@ export function UnifiedSettingsModal({
           setCustomStatusDisplayNames(settings.customStatusDisplayNames || {});
           setIsStatusColorsModified(Object.keys(settings.customStatusColors || {}).length > 0);
           setIsStatusDisplayNamesModified(Object.keys(settings.customStatusDisplayNames || {}).length > 0);
-          console.log('サーバーからグローバル表示設定を読み込みました:', settings);
         } else {
-          console.warn('グローバル表示設定の取得に失敗、ローカル設定を使用');
           loadLocalStorageSettings();
         }
       } catch (error) {
@@ -432,11 +423,8 @@ export function UnifiedSettingsModal({
       });
 
       if (response.ok) {
-        const updatedSettings = await response.json();
-        console.log('グローバル表示設定を更新しました:', updatedSettings);
         return true;
       } else {
-        console.warn('グローバル表示設定の更新に失敗:', response.status);
         return false;
       }
     } catch (error) {
@@ -924,7 +912,6 @@ export function UnifiedSettingsModal({
         
         // インポート成功後に部署・グループ設定を更新
         if (importOptions.includeManagement && canManage) {
-          console.log('部署・グループ設定を再取得します');
           await fetchDepartmentSettings();
         }
         

@@ -58,6 +58,15 @@ export class PendingService {
     //   throw new ForbiddenException('他の人のpendingは作成できません');
     // }
 
+    // 対象スタッフIDが存在するかチェック
+    const targetStaff = await this.prisma.staff.findUnique({
+      where: { id: createPendingDto.staffId }
+    });
+
+    if (!targetStaff) {
+      throw new BadRequestException(`スタッフID ${createPendingDto.staffId} が見つかりません`);
+    }
+
     // 作成者IDが存在するかチェック
     const creator = await this.prisma.staff.findUnique({
       where: { id: creatorId }

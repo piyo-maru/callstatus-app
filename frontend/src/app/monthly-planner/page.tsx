@@ -357,7 +357,8 @@ const DraggablePending: React.FC<{
   onApprovalClick?: (pending: PendingSchedule) => void;
   isApprovalMode?: boolean;
   onCaptureScrollPosition?: () => void;
-}> = ({ pending, textColor, pendingStyle, isTransparent, onDragStart, onApprovalClick, isApprovalMode, onCaptureScrollPosition }) => {
+  onPendingHover?: (pendingId: number | null, position?: { x: number, y: number }) => void;
+}> = ({ pending, textColor, pendingStyle, isTransparent, onDragStart, onApprovalClick, isApprovalMode, onCaptureScrollPosition, onPendingHover }) => {
   const canDrag = !pending.approvedAt && !pending.rejectedAt; // 未承認のみドラッグ可能
   const canApprove = !pending.approvedAt && !pending.rejectedAt; // 未承認のみ承認可能
   const isRejected = pending.rejectedAt && !pending.approvedAt; // 却下済み
@@ -405,11 +406,30 @@ const DraggablePending: React.FC<{
     return 'cursor-default';
   };
 
+  // ホバーイベントハンドラー
+  const handleMouseEnter = (e: React.MouseEvent) => {
+    if (onPendingHover) {
+      const rect = e.currentTarget.getBoundingClientRect();
+      onPendingHover(pending.id, {
+        x: rect.right + 10,
+        y: rect.top
+      });
+    }
+  };
+
+  const handleMouseLeave = () => {
+    if (onPendingHover) {
+      onPendingHover(null);
+    }
+  };
+
   return (
     <div
       draggable={canDrag && !isApprovalMode}
       onDragStart={handleDragStart}
       onClick={handleClick}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
       className={`w-full h-full rounded-md flex flex-col text-xs text-center pt-1 ${getCursor()}`}
       style={pendingStyle}
     >
@@ -554,6 +574,50 @@ function MonthlyPlannerPageContent() {
       memo: schedule.memo || null
     }));
   }, [originalPresets]);
+
+  // Pending予定の詳細を取得する関数
+  const getPendingDetails = useCallback((pending: PendingSchedule) => {
+    // memoからpresetIdを抽出
+    const presetIdMatch = pending.memo?.match(/\|presetId:(.+)$/);
+    if (presetIdMatch) {
+      const presetId = presetIdMatch[1];
+      // 既存のgetPresetDetails関数と同じロジック
+      const presetDetails = getPresetDetails(presetId);
+      if (presetDetails) {
+        return {
+          id: pending.id,
+          staffName: pending.staffName,
+          status: pending.status,
+          startTime: pending.start,
+          endTime: pending.end,
+          memo: pending.memo,
+          createdAt: pending.createdAt,
+          approvedAt: pending.approvedAt,
+          rejectedAt: pending.rejectedAt,
+          approvedBy: pending.approvedBy,
+          rejectionReason: pending.rejectionReason,
+          presetDetails: presetDetails,
+          isComposite: true
+        };
+      }
+    }
+    
+    // プリセットでない場合は単一予定として扱う
+    return {
+      id: pending.id,
+      staffName: pending.staffName,
+      status: pending.status,
+      startTime: pending.start,
+      endTime: pending.end,
+      memo: pending.memo,
+      createdAt: pending.createdAt,
+      approvedAt: pending.approvedAt,
+      rejectedAt: pending.rejectedAt,
+      approvedBy: pending.approvedBy,
+      rejectionReason: pending.rejectionReason,
+      isComposite: false
+    };
+  }, [getPresetDetails]);
   
   // 基本状態 - 初期表示は翌月
   const [currentMonth, setCurrentMonth] = useState(() => {
@@ -565,6 +629,10 @@ function MonthlyPlannerPageContent() {
   // プリセットホバー状態管理
   const [hoveredPreset, setHoveredPreset] = useState<string | null>(null);
   const [hoverPosition, setHoverPosition] = useState({ x: 0, y: 0 });
+  
+  // Pending予定ホバー状態管理
+  const [hoveredPending, setHoveredPending] = useState<number | null>(null);
+  const [pendingHoverPosition, setPendingHoverPosition] = useState({ x: 0, y: 0 });
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [isLoading] = useState(false);
   const [, setDraggedPending] = useState<PendingSchedule | null>(null);
@@ -881,13 +949,10 @@ function MonthlyPlannerPageContent() {
         const data = await response.json();
         if (data.success) {
           setDisplayCache(data.data || {});
-          console.log(`契約表示キャッシュ取得完了: ${data.count}件`);
         } else {
-          console.warn('契約表示キャッシュ取得失敗:', data.error);
           setDisplayCache({});
         }
       } else {
-        console.warn('契約表示キャッシュ取得API失敗');
         setDisplayCache({});
       }
     } catch (error) {
@@ -912,7 +977,7 @@ function MonthlyPlannerPageContent() {
         setDepartmentSettings(data);
       }
     } catch (error) {
-      console.warn('Failed to fetch department settings:', error);
+      console.error('Failed to fetch department settings:', error);
     }
   }, [token]);
 
@@ -960,7 +1025,6 @@ function MonthlyPlannerPageContent() {
       
       if (response.ok) {
         const data: PendingSchedule[] = await response.json();
-        console.log(`Monthly planner: fetched ${data.length} pending schedules for ${year}-${month}`);
         setPendingSchedules(data);
       } else {
         console.error('Failed to fetch pending schedules:', response.status);
@@ -1297,7 +1361,7 @@ function MonthlyPlannerPageContent() {
         status: preset.status,
         start: preset.start,
         end: preset.end,
-        memo: `月次プランナー: ${preset.label}`,
+        memo: `月次プランナー: ${preset.label}|presetId:${preset.key}`,
         pendingType: 'monthly-planner' as const
       };
 
@@ -1391,14 +1455,11 @@ function MonthlyPlannerPageContent() {
       }
 
       alert('Pending予定を削除しました');
-      console.log('復元予定のスクロール位置:', savedScrollPosition);
       await fetchPendingSchedules();
       
       // データ更新後、保存した位置に復元
       const restoreScroll = () => {
         if (topScrollRef.current && bottomScrollRef.current) {
-          console.log('スクロール復元実行:', savedScrollPosition, 'current横:', topScrollRef.current.scrollLeft, 'current縦:', window.scrollY);
-          
           // 横スクロール復元
           if (savedScrollPosition.x > 0) {
             topScrollRef.current.scrollLeft = savedScrollPosition.x;
@@ -1409,8 +1470,6 @@ function MonthlyPlannerPageContent() {
           if (savedScrollPosition.y >= 0) {
             window.scrollTo(savedScrollPosition.x || 0, savedScrollPosition.y);
           }
-        } else {
-          console.log('スクロール要素が見つかりません');
         }
       };
       
@@ -1672,8 +1731,6 @@ function MonthlyPlannerPageContent() {
       });
       
       if (response.ok) {
-        console.log('担当設定保存成功');
-        
         // ローカル状態を即座に更新
         const responsibilityKey = `${staffId}-${date}`;
         setResponsibilityData(prev => ({
@@ -2240,6 +2297,12 @@ function MonthlyPlannerPageContent() {
                                                     onApprovalClick={handleApprovalClick}
                                                     isApprovalMode={isApprovalMode}
                                                     onCaptureScrollPosition={captureScrollPosition}
+                                                    onPendingHover={(pendingId, position) => {
+                                                      setHoveredPending(pendingId);
+                                                      if (position) {
+                                                        setPendingHoverPosition(position);
+                                                      }
+                                                    }}
                                                   />
                                                 </div>
                                               );
@@ -2402,6 +2465,130 @@ function MonthlyPlannerPageContent() {
                     )}
                   </div>
                 ))}
+              </div>
+            );
+          })()}
+        </div>,
+        document.body
+      )}
+
+      {/* Pending予定詳細ポップアップ */}
+      {hoveredPending && typeof window !== 'undefined' && createPortal(
+        <div
+          className="fixed z-[60] bg-white border border-gray-200 rounded-lg shadow-lg p-3 max-w-sm"
+          style={{
+            left: `${pendingHoverPosition.x}px`,
+            top: `${pendingHoverPosition.y}px`
+          }}
+        >
+          {(() => {
+            const hoveredPendingData = pendingSchedules.find(p => p.id === hoveredPending);
+            if (!hoveredPendingData) return <div className="text-xs text-gray-500">予定情報なし</div>;
+            
+            const details = getPendingDetails(hoveredPendingData);
+            const isApproved = details.approvedAt;
+            const isRejected = details.rejectedAt;
+            
+            return (
+              <div>
+                <div className="text-sm font-medium text-gray-900 mb-2">
+                  {details.isComposite ? '詳細内訳' : '予定詳細'}
+                </div>
+                
+                {/* 複合予定の場合：全スケジュール表示 */}
+                {details.isComposite && details.presetDetails ? (
+                  <div className="space-y-1 mb-3">
+                    {details.presetDetails.map((schedule, index) => (
+                      <div key={index} className="flex items-center text-xs">
+                        <div 
+                          className="w-3 h-3 rounded mr-2" 
+                          style={{ backgroundColor: getEffectiveStatusColor(schedule.status) }} 
+                        />
+                        <span>
+                          {String(schedule.startTime).padStart(2, '0')}:00-{String(schedule.endTime).padStart(2, '0')}:00
+                        </span>
+                        <span className="ml-2">{capitalizeStatus(schedule.status)}</span>
+                        {schedule.memo && <span className="ml-1">({schedule.memo})</span>}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  /* 単一予定の場合：既存表示 */
+                  <div className="space-y-2 mb-3">
+                    <div className="flex items-center text-xs">
+                      <div
+                        className="w-3 h-3 rounded mr-2"
+                        style={{ backgroundColor: getEffectiveStatusColor(details.status) }}
+                      />
+                      <span className="font-medium text-gray-700">
+                        {capitalizeStatus(details.status)}
+                      </span>
+                    </div>
+                    
+                    <div className="text-xs text-gray-600">
+                      <span className="font-medium">時間:</span>
+                      <span className="ml-1">
+                        {String(details.startTime).padStart(2, '0')}:00-{String(details.endTime).padStart(2, '0')}:00
+                      </span>
+                    </div>
+                    
+                    {details.memo && (
+                      <div className="text-xs text-gray-600">
+                        <span className="font-medium">メモ:</span>
+                        <span className="ml-1">{details.memo}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+                
+                {/* 承認状況表示 */}
+                <div className="border-t border-gray-100 pt-2 mb-2">
+                  <div className="flex items-center text-xs">
+                    {isApproved && <span className="text-green-600 font-medium">✓ 承認済み</span>}
+                    {isRejected && <span className="text-red-600 font-medium">✗ 却下済み</span>}
+                    {!isApproved && !isRejected && <span className="text-orange-600 font-medium">⏳ 申請中</span>}
+                  </div>
+                </div>
+                
+                {/* 承認情報 */}
+                {(isApproved || isRejected) && (
+                  <div className="border-t border-gray-100 pt-2 space-y-1">
+                    {isApproved && details.approvedBy && (
+                      <div className="text-xs text-gray-500">
+                        <span className="font-medium">承認者:</span>
+                        <span className="ml-1">
+                          {typeof details.approvedBy === 'object' && details.approvedBy?.name 
+                            ? details.approvedBy.name 
+                            : String(details.approvedBy)}
+                        </span>
+                      </div>
+                    )}
+                    {isRejected && details.rejectionReason && (
+                      <div className="text-xs text-gray-500">
+                        <span className="font-medium">却下理由:</span>
+                        <span className="ml-1">{details.rejectionReason}</span>
+                      </div>
+                    )}
+                    <div className="text-xs text-gray-400">
+                      {isApproved && details.approvedAt && (
+                        <span>承認日時: {new Date(details.approvedAt).toLocaleString('ja-JP')}</span>
+                      )}
+                      {isRejected && details.rejectedAt && (
+                        <span>却下日時: {new Date(details.rejectedAt).toLocaleString('ja-JP')}</span>
+                      )}
+                    </div>
+                  </div>
+                )}
+                
+                {/* 申請情報 */}
+                <div className="border-t border-gray-100 pt-2 mt-2">
+                  <div className="text-xs text-gray-400">
+                    申請ID: {details.id}
+                  </div>
+                  <div className="text-xs text-gray-400">
+                    申請日時: {new Date(details.createdAt).toLocaleString('ja-JP')}
+                  </div>
+                </div>
               </div>
             );
           })()}

@@ -64,6 +64,15 @@ export const STATUS_COLORS: { [key: string]: string } = {
   'unplanned': '#dc2626',
   'night duty': '#4f46e5',
   'trip': '#ec4899',
+  // 日本語ステータス名
+  '出社': '#22c55e',      // online (緑)
+  'リモート': '#10b981',   // remote (青緑)
+  '会議': '#f59e0b',      // meeting (オレンジ)
+  '研修': '#3b82f6',      // training (青)
+  '休憩': '#f97316',      // break (オレンジ)
+  '休暇': '#ef4444',      // off (赤)
+  '夜間勤務': '#4f46e5',  // night duty (紫)
+  '遅刻': '#dc2626',      // unplanned (濃い赤)
 };
 
 // === 時間変換ユーティリティ関数 ===
