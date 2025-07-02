@@ -963,16 +963,20 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
       if (isDev) console.log('全スケジュール取得完了:', allSchedules.length, '件');
       
       setSchedules(allSchedules);
-      
-      // スクロール位置復元
-      restoreScrollPosition();
     } catch (err) {
       console.error('スケジュールの取得に失敗:', err);
       setError('スケジュールの取得に失敗しました');
     } finally {
       setLoading(false);
     }
-  }, [currentStaff, monthDays, getApiUrl, authenticatedFetch, restoreScrollPosition]);
+  }, [currentStaff, monthDays, getApiUrl, authenticatedFetch]);
+
+  // スケジュール取得完了後のスクロール復元（独立処理）
+  useEffect(() => {
+    if (schedules.length > 0 && !loading) {
+      restoreScrollPosition();
+    }
+  }, [schedules, loading, restoreScrollPosition]);
 
   // 祝日データを初期化
   useEffect(() => {
@@ -1053,7 +1057,7 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
     // 表示設定の変更を反映するため、強制的に再レンダリングをトリガー
     // ステータス色や表示名の変更がすぐに反映されるようにする
     setSelectedDate(prev => new Date(prev)); // 同じ日付で再セットしてre-render
-  }, [fetchCurrentStaff, currentStaff, fetchSchedules, loadResponsibilityData]);
+  }, [fetchCurrentStaff, currentStaff]);
 
   useEffect(() => {
     if (currentStaff) {
@@ -1061,7 +1065,7 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
       // 担当設定データも取得
       loadResponsibilityData();
     }
-  }, [currentStaff, fetchSchedules, loadResponsibilityData]);
+  }, [currentStaff]);
 
   // インポート関連の処理関数
   const handleJsonUpload = async (file: File) => {
@@ -1248,7 +1252,7 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
       console.error('スケジュール更新エラー:', error);
       setError('スケジュールの更新に失敗しました');
     }
-  }, [authenticatedFetch, getApiUrl, fetchSchedules, restoreScrollPosition]);
+  }, [authenticatedFetch, getApiUrl]);
 
   // ドロップハンドラー（メイン画面と同じ）
   const handleDrop = useCallback((e: React.DragEvent, day: Date) => {
@@ -1619,7 +1623,7 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
       console.error('スケジュール追加エラー:', err); // エラーログは保持
       setError(`${preset.name}の追加に失敗しました`);
     }
-  }, [currentStaff, getApiUrl, authenticatedFetch, fetchSchedules, restoreScrollPosition, fetchExistingSchedulesForDate, filterNonDuplicateSchedules]);
+  }, [currentStaff, getApiUrl, authenticatedFetch, fetchExistingSchedulesForDate, filterNonDuplicateSchedules]);
 
   // スケジュール保存ハンドラー（メイン画面と同じ）
   const handleSaveSchedule = useCallback(async (scheduleData: Schedule & { id?: number | string; date?: string }) => {
@@ -1715,7 +1719,7 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
       console.error('スケジュール保存エラー:', err); // エラーログは保持
       setError('スケジュールの保存中にエラーが発生しました');
     }
-  }, [currentStaff, getApiUrl, authenticatedFetch, fetchSchedules, restoreScrollPosition]);
+  }, [currentStaff, getApiUrl, authenticatedFetch]);
 
   // スケジュール削除ハンドラー
   const handleDeleteSchedule = useCallback(async (scheduleId: number | string) => {
@@ -1759,7 +1763,7 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
       console.error('スケジュール削除エラー:', err); // エラーログは保持
       setError('スケジュールの削除中にエラーが発生しました');
     }
-  }, [getApiUrl, authenticatedFetch, fetchSchedules, restoreScrollPosition]);
+  }, [getApiUrl, authenticatedFetch]);
 
   // 月変更ハンドラー
   const handleMonthChange = useCallback((direction: 'prev' | 'next') => {
