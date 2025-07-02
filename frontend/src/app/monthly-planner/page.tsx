@@ -575,14 +575,65 @@ function MonthlyPlannerPageContent() {
     }));
   }, [originalPresets]);
 
+  // getPresetDetails関数を拡張（一時プリセット対応）
+  const getPresetDetailsExtended = useCallback((presetKey: string) => {
+    // まず一時プリセットをチェック
+    const tempPreset = tempPresets.current.get(presetKey);
+    if (tempPreset) {
+      return tempPreset.schedules.map((schedule: any) => ({
+        status: schedule.status,
+        startTime: schedule.startTime,
+        endTime: schedule.endTime,
+        memo: schedule.memo || null
+      }));
+    }
+
+    // 既存のプリセットをチェック
+    const originalPreset = originalPresets.find(p => p.id === presetKey);
+    if (!originalPreset) return null;
+    
+    return originalPreset.schedules.map(schedule => ({
+      status: schedule.status,
+      startTime: schedule.startTime,
+      endTime: schedule.endTime,
+      memo: schedule.memo || null
+    }));
+  }, [originalPresets]);
+
   // Pending予定の詳細を取得する関数
   const getPendingDetails = useCallback((pending: PendingSchedule) => {
-    // memoからpresetIdを抽出
-    const presetIdMatch = pending.memo?.match(/\|presetId:(.+)$/);
+    // memoから詳細情報を抽出（JSON形式優先）
+    const detailsMatch = pending.memo?.match(/\|details:(.+)$/);
+    if (detailsMatch) {
+      try {
+        const details = JSON.parse(detailsMatch[1]);
+        return {
+          id: pending.id,
+          staffName: pending.staffName,
+          status: pending.status,
+          startTime: pending.start,
+          endTime: pending.end,
+          memo: pending.memo,
+          createdAt: pending.createdAt,
+          approvedAt: pending.approvedAt,
+          rejectedAt: pending.rejectedAt,
+          approvedBy: pending.approvedBy,
+          rejectionReason: pending.rejectionReason,
+          presetDetails: details.schedules,
+          compositeDescription: details.description,
+          isComposite: true
+        };
+      } catch (error) {
+        console.error('Failed to parse composite details from memo:', error);
+      }
+    }
+    
+    // fallback: memoからpresetIdを抽出（既存プリセット対応）
+    const presetIdMatch = pending.memo?.match(/\|presetId:([^|]+)/);
     if (presetIdMatch) {
       const presetId = presetIdMatch[1];
-      // 既存のgetPresetDetails関数と同じロジック
-      const presetDetails = getPresetDetails(presetId);
+      // 拡張版のgetPresetDetails関数を使用（一時プリセット対応）
+      const presetDetails = getPresetDetailsExtended(presetId);
       if (presetDetails) {
         return {
           id: pending.id,
@@ -617,7 +668,7 @@ function MonthlyPlannerPageContent() {
       rejectionReason: pending.rejectionReason,
       isComposite: false
     };
-  }, [getPresetDetails]);
+  }, [getPresetDetailsExtended]);
   
   // 基本状態 - 初期表示は翌月
   const [currentMonth, setCurrentMonth] = useState(() => {
@@ -707,6 +758,20 @@ function MonthlyPlannerPageContent() {
   const [customScheduleStart, setCustomScheduleStart] = useState('09:00');
   const [customScheduleEnd, setCustomScheduleEnd] = useState('18:00');
   const [customScheduleMemo, setCustomScheduleMemo] = useState('');
+  
+  // カスタム複合予定モーダル状態
+  const [showCustomCompositeModal, setShowCustomCompositeModal] = useState(false);
+  const [compositeSchedules, setCompositeSchedules] = useState([
+    {
+      status: 'online',
+      startTime: 9,
+      endTime: 18,
+      memo: ''
+    }
+  ]);
+  const [representativeScheduleIndex, setRepresentativeScheduleIndex] = useState(0);
+  const [compositeValidationErrors, setCompositeValidationErrors] = useState<string[]>([]);
+  const [compositeDescription, setCompositeDescription] = useState('');
   
   // 担当設定関連の状態
   const [responsibilityData, setResponsibilityData] = useState<{ [key: string]: ResponsibilityData }>({});
@@ -1498,6 +1563,171 @@ function MonthlyPlannerPageContent() {
     setSelectedCell(null);
     setSelectedCellForHighlight(null);
   }, [selectedCell, pendingScheduleMap, fetchPendingSchedules]);
+
+  // カスタム複合予定管理関数
+  const addCompositeSchedule = useCallback(() => {
+    const lastSchedule = compositeSchedules[compositeSchedules.length - 1];
+    const newStartTime = lastSchedule ? lastSchedule.endTime : 9;
+    const newEndTime = Math.min(newStartTime + 1, 21);
+
+    setCompositeSchedules(prev => [
+      ...prev,
+      {
+        status: 'online',
+        startTime: newStartTime,
+        endTime: newEndTime,
+        memo: ''
+      }
+    ]);
+  }, [compositeSchedules]);
+
+  const removeCompositeSchedule = useCallback((index: number) => {
+    setCompositeSchedules(prev => prev.filter((_, i) => i !== index));
+    // 代表スケジュールインデックスの調整
+    if (representativeScheduleIndex >= compositeSchedules.length - 1) {
+      setRepresentativeScheduleIndex(Math.max(0, compositeSchedules.length - 2));
+    }
+  }, [representativeScheduleIndex, compositeSchedules.length]);
+
+  const updateCompositeSchedule = useCallback((index: number, updates: any) => {
+    setCompositeSchedules(prev => 
+      prev.map((schedule, i) => 
+        i === index ? { ...schedule, ...updates } : schedule
+      )
+    );
+  }, []);
+
+  // 複合予定バリデーション
+  const validateCompositeSchedules = useCallback((): string[] => {
+    const errors: string[] = [];
+
+    if (compositeSchedules.length === 0) {
+      errors.push('少なくとも1つのスケジュールが必要です');
+      return errors;
+    }
+
+    // 各スケジュールの妥当性チェック
+    compositeSchedules.forEach((schedule, index) => {
+      if (schedule.startTime >= schedule.endTime) {
+        errors.push(`スケジュール${index + 1}: 開始時間は終了時間より前である必要があります`);
+      }
+
+      if (schedule.startTime < 8 || schedule.endTime > 21) {
+        errors.push(`スケジュール${index + 1}: 時間は8:00-21:00の範囲内で設定してください`);
+      }
+    });
+
+    // 時間重複チェック
+    for (let i = 0; i < compositeSchedules.length; i++) {
+      for (let j = i + 1; j < compositeSchedules.length; j++) {
+        const schedule1 = compositeSchedules[i];
+        const schedule2 = compositeSchedules[j];
+        
+        if (
+          (schedule1.startTime < schedule2.endTime && schedule1.endTime > schedule2.startTime) ||
+          (schedule2.startTime < schedule1.endTime && schedule2.endTime > schedule1.startTime)
+        ) {
+          errors.push(`スケジュール${i + 1}と${j + 1}の時間が重複しています`);
+        }
+      }
+    }
+
+    return errors;
+  }, [compositeSchedules]);
+
+  // 一時プリセット管理
+  const tempPresets = useRef<Map<string, any>>(new Map());
+  
+  // 一時プリセットをlocalStorageに保存
+  const saveTempPresetsToStorage = useCallback(() => {
+    try {
+      const presetsArray = Array.from(tempPresets.current.entries());
+      localStorage.setItem('callstatus-tempPresets', JSON.stringify(presetsArray));
+    } catch (error) {
+      console.error('Failed to save temp presets to storage:', error);
+    }
+  }, []);
+
+  // localStorageから一時プリセットを復元
+  const loadTempPresetsFromStorage = useCallback(() => {
+    try {
+      const stored = localStorage.getItem('callstatus-tempPresets');
+      if (stored) {
+        const presetsArray = JSON.parse(stored);
+        tempPresets.current = new Map(presetsArray);
+      }
+    } catch (error) {
+      console.error('Failed to load temp presets from storage:', error);
+    }
+  }, []);
+
+  // 古い一時プリセットをクリーンアップ
+  const cleanupOldTempPresets = useCallback(() => {
+    try {
+      const now = Date.now();
+      const sevenDaysAgo = now - (7 * 24 * 60 * 60 * 1000); // 7日前
+      let hasChanges = false;
+      
+      for (const [key, preset] of tempPresets.current.entries()) {
+        if (preset.createdAt) {
+          const createdAt = new Date(preset.createdAt).getTime();
+          if (createdAt < sevenDaysAgo) {
+            tempPresets.current.delete(key);
+            hasChanges = true;
+          }
+        }
+      }
+      
+      if (hasChanges) {
+        saveTempPresetsToStorage();
+      }
+    } catch (error) {
+      console.error('Failed to cleanup old temp presets:', error);
+    }
+  }, [saveTempPresetsToStorage]);
+
+  // ページ読み込み時に一時プリセットを復元
+  useEffect(() => {
+    loadTempPresetsFromStorage();
+    // 古い一時プリセットをクリーンアップ（7日以上前のものを削除）
+    cleanupOldTempPresets();
+  }, [loadTempPresetsFromStorage, cleanupOldTempPresets]);
+
+  const createTempPreset = useCallback((schedules: any[], representativeIndex: number, description?: string) => {
+    const tempId = `custom-composite-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const representativeSchedule = schedules[representativeIndex] || schedules[0];
+    
+    const tempPreset = {
+      id: tempId,
+      name: `カスタム複合予定-${tempId}`,
+      displayName: 'カスタム複合予定',
+      description: description || `${schedules.length}個の予定を組み合わせた複合予定`,
+      category: 'general',
+      schedules: schedules.map(schedule => ({
+        status: schedule.status,
+        startTime: schedule.startTime,
+        endTime: schedule.endTime,
+        memo: schedule.memo || ''
+      })),
+      representativeScheduleIndex: representativeIndex,
+      isActive: true,
+      customizable: true,
+      // 代表スケジュールの情報をトップレベルに設定（既存API互換のため）
+      status: representativeSchedule.status,
+      start: representativeSchedule.startTime,
+      end: representativeSchedule.endTime,
+      label: 'カスタム複合予定',
+      createdAt: new Date().toISOString() // 作成日時を追加
+    };
+
+    // 一時プリセットを保存
+    tempPresets.current.set(tempId, tempPreset);
+    
+    // localStorageに保存
+    saveTempPresetsToStorage();
+    
+    return tempPreset;
+  }, [saveTempPresetsToStorage]);
 
   // スタッフ名クリック時の個人ページ遷移（全ユーザー閲覧可能）
   const handleStaffNameClick = useCallback((staffId: number) => {
@@ -2459,6 +2689,26 @@ function MonthlyPlannerPageContent() {
                     </span>
                   </div>
                 </button>
+
+                {/* カスタム複合予定ボタン */}
+                <button
+                  onClick={() => {
+                    // モーダル開く前にスクロール位置をキャプチャ
+                    captureScrollPosition();
+                    setShowCustomCompositeModal(true);
+                  }}
+                  className="w-full text-left px-3 py-2 border-2 border-dashed border-green-300 rounded-md hover:bg-green-50 hover:border-green-400 flex items-center relative"
+                >
+                  <div className="w-4 h-4 rounded mr-3 bg-green-400 flex items-center justify-center">
+                    <span className="text-white text-xs font-bold">⚡</span>
+                  </div>
+                  <div className="flex-1">
+                    <span className="font-medium text-green-600">カスタム複合予定</span>
+                    <span className="text-sm text-green-500 ml-2">
+                      複数の予定を組み合わせて申請
+                    </span>
+                  </div>
+                </button>
               </div>
 
               <div className="flex space-x-3">
@@ -2706,6 +2956,368 @@ function MonthlyPlannerPageContent() {
         document.body
       )}
 
+      {/* カスタム複合予定設定モーダル */}
+      {showCustomCompositeModal && selectedCell && typeof window !== 'undefined' && createPortal(
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-5xl w-full max-h-[90vh] flex flex-col">
+            {/* ヘッダー */}
+            <div className="flex justify-between items-center p-6 border-b">
+              <h3 className="text-xl font-bold text-gray-800">カスタム複合予定設定</h3>
+              <button
+                onClick={() => {
+                  setShowCustomCompositeModal(false);
+                  setCompositeSchedules([{
+                    status: 'online',
+                    startTime: 9,
+                    endTime: 18,
+                    memo: ''
+                  }]);
+                  setRepresentativeScheduleIndex(0);
+                  setCompositeValidationErrors([]);
+                  setCompositeDescription('');
+                }}
+                className="text-gray-400 hover:text-gray-600 text-2xl font-bold"
+              >
+                ×
+              </button>
+            </div>
+
+            {/* スタッフ・日付情報 */}
+            <div className="px-6 py-3 bg-gray-50 border-b">
+              <p className="text-sm text-gray-600">
+                <span className="font-medium">{selectedCell.staffName}</span> の
+                <span className="font-medium">{selectedCell.day}日</span> の複合予定設定
+              </p>
+              <p className="text-xs text-gray-500 mt-1">
+                複数の予定を組み合わせて1日のスケジュールを作成できます
+              </p>
+            </div>
+
+            {/* メインコンテンツ */}
+            <div className="flex-1 overflow-y-auto p-6">
+              <div className="space-y-6">
+                {/* 複合予定の説明 */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    複合予定の説明
+                  </label>
+                  <textarea
+                    value={compositeDescription}
+                    onChange={(e) => setCompositeDescription(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                    rows={2}
+                    placeholder="この複合予定全体の説明を入力してください（オプション）"
+                  />
+                </div>
+
+                {/* スケジュール設定 */}
+                <div>
+                  <div className="flex justify-between items-center mb-4">
+                    <h4 className="text-lg font-medium text-gray-900">予定リスト</h4>
+                    <button
+                      type="button"
+                      onClick={addCompositeSchedule}
+                      className="px-3 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors text-sm"
+                    >
+                      + 予定追加
+                    </button>
+                  </div>
+
+                  {/* バリデーションエラー表示 */}
+                  {compositeValidationErrors.length > 0 && (
+                    <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
+                      {compositeValidationErrors.map((error, index) => (
+                        <p key={index} className="text-sm text-red-600">⚠️ {error}</p>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="space-y-4">
+                    {compositeSchedules.map((schedule, index) => (
+                      <div key={index} className="border border-gray-200 rounded-lg p-4">
+                        <div className="flex justify-between items-center mb-3">
+                          <h5 className="font-medium text-gray-900">予定 {index + 1}</h5>
+                          {compositeSchedules.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => removeCompositeSchedule(index)}
+                              className="text-red-500 hover:text-red-700 transition-colors text-sm"
+                            >
+                              削除
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              ステータス
+                            </label>
+                            <div className="relative">
+                              <select
+                                value={schedule.status}
+                                onChange={(e) => updateCompositeSchedule(index, { status: e.target.value })}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                              >
+                                {ALL_STATUSES.map((status) => (
+                                  <option key={status} value={status}>
+                                    {capitalizeStatus(status, true)}
+                                  </option>
+                                ))}
+                              </select>
+                              <div 
+                                className="absolute right-9 top-1/2 transform -translate-y-1/2 w-4 h-4 rounded"
+                                style={{ backgroundColor: getEffectiveStatusColor(schedule.status) }}
+                              ></div>
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              開始時刻
+                            </label>
+                            <input
+                              type="time"
+                              value={`${Math.floor(schedule.startTime).toString().padStart(2, '0')}:${Math.round((schedule.startTime % 1) * 60).toString().padStart(2, '0')}`}
+                              onChange={(e) => {
+                                const [hours, minutes] = e.target.value.split(':').map(Number);
+                                updateCompositeSchedule(index, { startTime: hours + (minutes / 60) });
+                              }}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              終了時刻
+                            </label>
+                            <input
+                              type="time"
+                              value={`${Math.floor(schedule.endTime).toString().padStart(2, '0')}:${Math.round((schedule.endTime % 1) * 60).toString().padStart(2, '0')}`}
+                              onChange={(e) => {
+                                const [hours, minutes] = e.target.value.split(':').map(Number);
+                                updateCompositeSchedule(index, { endTime: hours + (minutes / 60) });
+                              }}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              メモ
+                            </label>
+                            <input
+                              type="text"
+                              value={schedule.memo || ''}
+                              onChange={(e) => updateCompositeSchedule(index, { memo: e.target.value })}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                              placeholder="メモ（オプション）"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 代表色選択（複数スケジュールの場合のみ表示） */}
+                {compositeSchedules.length > 1 && (
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-900 mb-3">
+                      🎨 代表色設定
+                    </h4>
+                    <p className="text-xs text-gray-600 mb-3">
+                      複数の予定がある場合、カレンダーに表示される色を選択してください
+                    </p>
+                    
+                    <div className="space-y-2">
+                      {compositeSchedules.map((schedule, index) => (
+                        <label 
+                          key={index} 
+                          className="flex items-center p-2 border rounded-md hover:bg-gray-50 cursor-pointer"
+                        >
+                          <input
+                            type="radio"
+                            name="representativeSchedule"
+                            value={index}
+                            checked={representativeScheduleIndex === index}
+                            onChange={() => setRepresentativeScheduleIndex(index)}
+                            className="mr-3 text-green-600"
+                          />
+                          <div 
+                            className="w-4 h-4 rounded mr-3"
+                            style={{ backgroundColor: getEffectiveStatusColor(schedule.status) }}
+                          ></div>
+                          <div className="flex-1">
+                            <span className="text-sm font-medium">
+                              {capitalizeStatus(schedule.status, true)}
+                            </span>
+                            <span className="text-xs text-gray-500 ml-2">
+                              {Math.floor(schedule.startTime)}:{Math.round((schedule.startTime % 1) * 60).toString().padStart(2, '0')}
+                              -
+                              {Math.floor(schedule.endTime)}:{Math.round((schedule.endTime % 1) * 60).toString().padStart(2, '0')}
+                            </span>
+                            {schedule.memo && (
+                              <span className="text-xs text-gray-400 ml-2">({schedule.memo})</span>
+                            )}
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* フッター */}
+            <div className="flex justify-between items-center p-6 border-t bg-gray-50">
+              <div className="text-sm text-gray-500">
+                {compositeValidationErrors.length > 0 && (
+                  <span className="text-red-600">⚠️ {compositeValidationErrors.length}個のエラーがあります</span>
+                )}
+              </div>
+              <div className="flex space-x-3">
+                <button
+                  onClick={() => {
+                    setShowCustomCompositeModal(false);
+                    setCompositeSchedules([{
+                      status: 'online',
+                      startTime: 9,
+                      endTime: 18,
+                      memo: ''
+                    }]);
+                    setRepresentativeScheduleIndex(0);
+                    setCompositeValidationErrors([]);
+                    setCompositeDescription('');
+                  }}
+                  className="px-4 py-2 text-sm text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50 transition-colors"
+                >
+                  キャンセル
+                </button>
+                <button
+                  onClick={async () => {
+                    // バリデーション実行
+                    const errors = validateCompositeSchedules();
+                    setCompositeValidationErrors(errors);
+
+                    if (errors.length > 0) {
+                      return;
+                    }
+
+                    // 該当セルに既存のpending予定があるかチェック
+                    const cellPendings = pendingScheduleMap.get(`${selectedCell.staffId}-${selectedCell.dateString}`) || [];
+                    
+                    // 承認済み予定があるかチェック
+                    const approvedPending = cellPendings.find(pending => pending.approvedAt);
+                    if (approvedPending) {
+                      alert('承認済み予定があるため編集できません。');
+                      return;
+                    }
+
+                    // 未承認のpending予定があるかチェック
+                    const existingPending = cellPendings.find(pending => 
+                      !pending.approvedAt && !pending.rejectedAt
+                    );
+                    if (existingPending) {
+                      alert('このマスには既にpending予定が設定されています。先に既存の予定を削除してください。');
+                      return;
+                    }
+
+                    try {
+                      // 一時プリセットを作成（説明を含む）
+                      const tempPreset = createTempPreset(compositeSchedules, representativeScheduleIndex, compositeDescription);
+                      
+                      const currentApiUrl = getApiUrl();
+                      
+                      // 詳細情報をJSON形式で準備
+                      const compositeDetails = {
+                        description: compositeDescription || `${compositeSchedules.length}個の予定を組み合わせた複合予定`,
+                        schedules: compositeSchedules.map(schedule => ({
+                          status: schedule.status,
+                          startTime: schedule.startTime,
+                          endTime: schedule.endTime,
+                          memo: schedule.memo || ''
+                        }))
+                      };
+
+                      const pendingData = {
+                        staffId: selectedCell.staffId,
+                        date: selectedCell.dateString,
+                        status: tempPreset.status,
+                        start: tempPreset.start,
+                        end: tempPreset.end,
+                        memo: `月次プランナー: ${tempPreset.label}|presetId:${tempPreset.id}|details:${JSON.stringify(compositeDetails)}`,
+                        pendingType: 'monthly-planner' as const
+                      };
+
+                      const response = await fetch(`${currentApiUrl}/api/schedules/pending`, {
+                        method: 'POST',
+                        headers: { 
+                          'Content-Type': 'application/json' 
+                        },
+                        body: JSON.stringify(pendingData)
+                      });
+
+                      if (response.ok) {
+                        alert(`${tempPreset.label}のPending予定を作成しました（承認待ち）`);
+                        await fetchPendingSchedules();
+                        
+                        // データ更新後、保存した位置に復元
+                        const restoreScroll = () => {
+                          // window全体の横スクロール復元
+                          if (savedScrollPosition.x > 0) {
+                            window.scrollTo(savedScrollPosition.x, savedScrollPosition.y || 0);
+                          } else if (savedScrollPosition.y >= 0) {
+                            window.scrollTo(0, savedScrollPosition.y);
+                          }
+                          
+                          // 内部要素の横スクロール復元（念のため）
+                          if (topScrollRef.current && headerScrollRef.current && bottomScrollRef.current && savedScrollPosition.x > 0) {
+                            topScrollRef.current.scrollLeft = savedScrollPosition.x;
+                            headerScrollRef.current.scrollLeft = savedScrollPosition.x;
+                            bottomScrollRef.current.scrollLeft = savedScrollPosition.x;
+                          }
+                        };
+                        
+                        // 複数回復元を試行（DOM更新タイミングの違いに対応）
+                        setTimeout(restoreScroll, 50);
+                        setTimeout(restoreScroll, 200);
+                        setTimeout(restoreScroll, 500);
+                        
+                        // モーダルを閉じる
+                        setShowCustomCompositeModal(false);
+                        setShowModal(false);
+                        setSelectedCellForHighlight(null);
+                        setCompositeSchedules([{
+                          status: 'online',
+                          startTime: 9,
+                          endTime: 18,
+                          memo: ''
+                        }]);
+                        setRepresentativeScheduleIndex(0);
+                        setCompositeValidationErrors([]);
+                        setCompositeDescription('');
+                      } else {
+                        const errorData = await response.json();
+                        alert(`カスタム複合予定の作成に失敗しました: ${errorData.message || '不明なエラー'}`);
+                      }
+                    } catch (error) {
+                      console.error('Failed to create custom composite schedule:', error);
+                      alert('カスタム複合予定の作成に失敗しました');
+                    }
+                  }}
+                  disabled={compositeValidationErrors.length > 0}
+                  className="px-4 py-2 text-sm bg-green-600 text-white rounded hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  申請する
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
       {/* プリセット詳細ポップアップ */}
       {hoveredPreset && typeof window !== 'undefined' && createPortal(
         <div
@@ -2717,7 +3329,7 @@ function MonthlyPlannerPageContent() {
         >
           <div className="text-sm font-medium text-gray-900 mb-2">詳細内訳</div>
           {(() => {
-            const details = getPresetDetails(hoveredPreset);
+            const details = getPresetDetailsExtended(hoveredPreset);
             if (!details || details.length === 0) return <div className="text-xs text-gray-500">詳細情報なし</div>;
             
             return (
@@ -2771,20 +3383,31 @@ function MonthlyPlannerPageContent() {
                 
                 {/* 複合予定の場合：全スケジュール表示 */}
                 {details.isComposite && details.presetDetails ? (
-                  <div className="space-y-1 mb-3">
-                    {details.presetDetails.map((schedule, index) => (
-                      <div key={index} className="flex items-center text-xs">
-                        <div 
-                          className="w-3 h-3 rounded mr-2" 
-                          style={{ backgroundColor: getEffectiveStatusColor(schedule.status) }} 
-                        />
-                        <span>
-                          {String(schedule.startTime).padStart(2, '0')}:00-{String(schedule.endTime).padStart(2, '0')}:00
-                        </span>
-                        <span className="ml-2">{capitalizeStatus(schedule.status)}</span>
-                        {schedule.memo && <span className="ml-1">({schedule.memo})</span>}
+                  <div className="mb-3">
+                    {/* 複合予定の説明 */}
+                    {details.compositeDescription && (
+                      <div className="text-xs text-gray-600 mb-2">
+                        <span className="font-medium">説明:</span>
+                        <span className="ml-1">{details.compositeDescription}</span>
                       </div>
-                    ))}
+                    )}
+                    
+                    {/* スケジュール詳細 */}
+                    <div className="space-y-1">
+                      {details.presetDetails.map((schedule, index) => (
+                        <div key={index} className="flex items-center text-xs">
+                          <div 
+                            className="w-3 h-3 rounded mr-2" 
+                            style={{ backgroundColor: getEffectiveStatusColor(schedule.status) }} 
+                          />
+                          <span>
+                            {String(schedule.startTime).padStart(2, '0')}:00-{String(schedule.endTime).padStart(2, '0')}:00
+                          </span>
+                          <span className="ml-2">{capitalizeStatus(schedule.status)}</span>
+                          {schedule.memo && <span className="ml-1">({schedule.memo})</span>}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 ) : (
                   /* 単一予定の場合：既存表示 */
@@ -2922,17 +3545,59 @@ function MonthlyPlannerPageContent() {
                 <div className="text-sm text-gray-600 mb-2">
                   <strong>日付:</strong> {new Date(selectedPendingForApproval.date).toLocaleDateString('ja-JP')}
                 </div>
-                <div className="text-sm text-gray-600 mb-2">
-                  <strong>時間:</strong> {String(selectedPendingForApproval.start).padStart(2, '0')}:00 - {String(selectedPendingForApproval.end).padStart(2, '0')}:00
-                </div>
-                <div className="text-sm text-gray-600 mb-2">
-                  <strong>ステータス:</strong> {capitalizeStatus(selectedPendingForApproval.status)}
-                </div>
-                {selectedPendingForApproval.memo && (
-                  <div className="text-sm text-gray-600">
-                    <strong>メモ:</strong> {selectedPendingForApproval.memo}
-                  </div>
-                )}
+                
+                {(() => {
+                  const details = getPendingDetails(selectedPendingForApproval);
+                  
+                  if (details.isComposite && details.presetDetails) {
+                    return (
+                      <>
+                        {/* 複合予定の説明 */}
+                        {details.compositeDescription && (
+                          <div className="text-sm text-gray-600 mb-3">
+                            <strong>複合予定の説明:</strong> {details.compositeDescription}
+                          </div>
+                        )}
+                        
+                        {/* 複合予定の詳細内訳 */}
+                        <div className="text-sm text-gray-600 mb-2">
+                          <strong>詳細内訳:</strong>
+                        </div>
+                        <div className="ml-4 space-y-1 mb-2">
+                          {details.presetDetails.map((schedule, index) => (
+                            <div key={index} className="text-xs text-gray-700 flex items-center">
+                              <div 
+                                className="w-3 h-3 rounded mr-2" 
+                                style={{ backgroundColor: getEffectiveStatusColor(schedule.status) }} 
+                              />
+                              <span>
+                                {String(schedule.startTime).padStart(2, '0')}:00-{String(schedule.endTime).padStart(2, '0')}:00
+                              </span>
+                              <span className="ml-2">{capitalizeStatus(schedule.status)}</span>
+                              {schedule.memo && <span className="ml-1 text-gray-500">({schedule.memo})</span>}
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    );
+                  } else {
+                    return (
+                      <>
+                        <div className="text-sm text-gray-600 mb-2">
+                          <strong>時間:</strong> {String(selectedPendingForApproval.start).padStart(2, '0')}:00 - {String(selectedPendingForApproval.end).padStart(2, '0')}:00
+                        </div>
+                        <div className="text-sm text-gray-600 mb-2">
+                          <strong>ステータス:</strong> {capitalizeStatus(selectedPendingForApproval.status)}
+                        </div>
+                        {selectedPendingForApproval.memo && (
+                          <div className="text-sm text-gray-600">
+                            <strong>メモ:</strong> {selectedPendingForApproval.memo}
+                          </div>
+                        )}
+                      </>
+                    );
+                  }
+                })()}
               </div>
 
               {/* 却下理由入力 */}
