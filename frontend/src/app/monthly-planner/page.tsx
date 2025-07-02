@@ -670,9 +670,6 @@ function MonthlyPlannerPageContent() {
   
   const handleHeaderScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const scrollLeft = e.currentTarget.scrollLeft;
-    if (topScrollRef.current) {
-      topScrollRef.current.scrollLeft = scrollLeft;
-    }
     if (bottomScrollRef.current) {
       bottomScrollRef.current.scrollLeft = scrollLeft;
     }
@@ -680,9 +677,6 @@ function MonthlyPlannerPageContent() {
   
   const handleBottomScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const scrollLeft = e.currentTarget.scrollLeft;
-    if (topScrollRef.current) {
-      topScrollRef.current.scrollLeft = scrollLeft;
-    }
     if (headerScrollRef.current) {
       headerScrollRef.current.scrollLeft = scrollLeft;
     }
@@ -2072,16 +2066,44 @@ function MonthlyPlannerPageContent() {
             <div className="text-gray-500">読み込み中...</div>
           </div>
         ) : (
-          <div className="bg-white shadow-sm rounded-xl border border-gray-100 relative overflow-hidden" style={{ minWidth: `${Math.max(1360, dateArray.length * 96 + 400)}px` }}>
+          <div className="bg-white shadow-sm rounded-xl border border-gray-100 relative" style={{ minWidth: `${Math.max(1360, dateArray.length * 96 + 200)}px` }}>
+            {/* 統一ヘッダー行 */}
+            <div className="sticky top-0 z-30 flex bg-gray-100 border-b shadow-sm">
+              <div className="min-w-fit max-w-[200px] w-[200px] px-2 py-2 font-bold text-gray-600 text-xs text-center border-r whitespace-nowrap overflow-hidden text-ellipsis">
+                部署 / グループ / スタッフ名
+              </div>
+              <div className="flex-1 overflow-x-auto" ref={headerScrollRef} onScroll={handleHeaderScroll} style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+                <div className="min-w-[1300px]" style={{ width: `${dateArray.length * 96}px` }}>
+                  <div className="flex">
+                    {dateArray.map(day => {
+                      const year = currentMonth.getFullYear();
+                      const month = currentMonth.getMonth();
+                      const date = new Date(year, month, day);
+                      const dayOfWeek = date.getDay();
+                      const dayNames = ['日', '月', '火', '水', '木', '金', '土'];
+                      const getTextColor = () => {
+                        // 祝日判定：祝日は赤色
+                        const holiday = getHoliday(date, holidays);
+                        if (holiday) return 'text-red-600';
+                        // 土曜日は青色、日曜日は赤色
+                        if (dayOfWeek === 0) return 'text-red-600';
+                        if (dayOfWeek === 6) return 'text-blue-600';
+                        return 'text-gray-900';
+                      };
+                      return (
+                        <div key={day} className={`w-24 px-2 py-2 text-center font-bold text-xs border-r ${getTextColor()}`}>
+                          {day}日({dayNames[dayOfWeek]})
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
+            
             <div className="flex">
               {/* 左側：スタッフ一覧 */}
-              <div className="min-w-fit max-w-[400px] sticky left-0 z-20 bg-white border-r border-gray-200">
-                  {/* 上部スクロールバー用のスペーサー */}
-                  <div className="h-[17px] bg-gray-50 border-b"></div>
-                  {/* ヘッダー */}
-                  <div className="px-2 py-2 bg-gray-100 font-bold text-gray-600 text-xs text-center border-b whitespace-nowrap">
-                    部署 / グループ / スタッフ名
-                  </div>
+              <div className="min-w-fit max-w-[200px] w-[200px] sticky left-0 z-20 bg-white border-r border-gray-200">
                   
                   {/* スタッフリスト */}
                   {Object.keys(groupedStaffForDisplay).length > 0 ? (
@@ -2126,47 +2148,10 @@ function MonthlyPlannerPageContent() {
                   )}
                 </div>
 
-                {/* 右側：日付グリッド */}
-                <div className="flex-1 flex flex-col">
-                  {/* 上部スクロールバー */}
-                  <div className="overflow-x-auto border-b" ref={topScrollRef} onScroll={handleTopScroll}>
-                    <div className="min-w-[1300px] h-[17px]" style={{ width: `${dateArray.length * 96}px` }}></div>
-                  </div>
-                  {/* 日付ヘッダー */}
-                  <div className="sticky top-0 z-10 bg-gray-100 border-b overflow-x-auto" ref={headerScrollRef} onScroll={handleHeaderScroll} style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-                    <div className="min-w-[1300px]" style={{ width: `${dateArray.length * 96}px` }}>
-                      <div className="flex">
-                        {dateArray.map(day => {
-                          const year = currentMonth.getFullYear();
-                          const month = currentMonth.getMonth();
-                          const date = new Date(year, month, day);
-                          const dayOfWeek = date.getDay();
-                          const dayNames = ['日', '月', '火', '水', '木', '金', '土'];
-                          const getTextColor = () => {
-                            // 祝日判定：祝日は赤色
-                            const holiday = getHoliday(date, holidays);
-                            if (holiday) return 'text-red-600';
-                            
-                            if (dayOfWeek === 0) return 'text-red-600'; // 日曜日は赤
-                            if (dayOfWeek === 6) return 'text-blue-600'; // 土曜日は青
-                            return 'text-gray-800'; // 平日は通常色
-                          };
-                          
-                          return (
-                            <div
-                              key={day}
-                              className={`w-24 px-2 py-2 text-center font-bold text-xs border-r ${getTextColor()}`}
-                            >
-                              {day}日({dayNames[dayOfWeek]})
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* セルグリッド */}
-                  <div className="overflow-x-auto" ref={bottomScrollRef} onScroll={handleBottomScroll}>
+              {/* 右側：日付グリッド */}
+              <div className="flex-1">
+                {/* セルグリッド */}
+                <div className="overflow-x-auto" ref={bottomScrollRef} onScroll={handleBottomScroll}>
                     <div className="min-w-[1300px]" style={{ width: `${dateArray.length * 96}px` }}>
                     {Object.keys(groupedStaffForDisplay).length > 0 ? (
                       sortByDisplayOrder(Object.entries(groupedStaffForDisplay), 'department').map(([department, groups]) => (

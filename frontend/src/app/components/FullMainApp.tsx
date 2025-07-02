@@ -2775,13 +2775,36 @@ export default function FullMainApp() {
           />
         </div>
         
-        <div className="bg-white shadow-lg rounded-xl border border-gray-100 relative overflow-hidden min-w-[1360px]">
+        <div className="bg-white shadow-lg rounded-xl border border-gray-100 relative min-w-[1360px]">
+          {/* 統一ヘッダー行 */}
+          <div className="sticky top-0 z-30 flex bg-gray-100 border-b shadow-sm">
+            <div className="min-w-fit max-w-[400px] w-[400px] px-2 py-2 font-bold text-gray-600 text-sm text-center border-r whitespace-nowrap">
+              部署 / グループ / スタッフ名
+            </div>
+            <div className="flex-1">
+              <div className="min-w-[1120px]">
+                <div className="flex font-bold text-sm">
+                  {Array.from({ length: 13 }).map((_, i) => {
+                    const hour = 8 + i;
+                    const isEarlyOrNight = hour === 8 || hour >= 18;
+                    const width = `${(4 / 52) * 100}%`;
+                    return (
+                      <div 
+                        key={hour} 
+                        className={`text-left pl-2 border-r py-2 whitespace-nowrap ${isEarlyOrNight ? 'bg-blue-50' : ''}`}
+                        style={{ width }}
+                      >
+                        {hour}:00
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+          
           <div className="flex">
-            <div className="min-w-fit max-w-[400px] sticky left-0 z-20 bg-white border-r border-gray-200">
-              {/* 上部スクロールバー用のスペーサー */}
-              <div className="h-[17px] bg-gray-50 border-b"></div>
-              {/* ヘッダー行 - 時刻行と同じ高さに調整 */}
-              <div className="px-2 py-2 bg-gray-100 font-bold text-gray-600 text-sm text-center border-b whitespace-nowrap">部署 / グループ / スタッフ名</div>
+            <div className="min-w-fit max-w-[400px] w-[400px] sticky left-0 z-20 bg-white border-r border-gray-200">
               {Object.keys(groupedStaffForGantt).length > 0 ? (
                 sortByDisplayOrder(Object.entries(groupedStaffForGantt), 'department').map(([department, groups]) => (
                   <div key={department} className="department-group">
@@ -2824,34 +2847,9 @@ export default function FullMainApp() {
                 <div className="p-8 text-center text-gray-500 whitespace-nowrap">表示対象のスタッフがいません。</div>
               )}
             </div>
-            <div className="flex-1 flex flex-col">
-              {/* 上部スクロールバー */}
-              <div className="overflow-x-auto border-b" ref={topScrollRef} onScroll={handleTopScroll}>
-                <div className="min-w-fit h-[17px]"></div>
-              </div>
-              {/* ヘッダー行 */}
-              <div className="sticky top-0 z-10 bg-gray-100 border-b overflow-hidden">
-                <div className="min-w-[1120px]">
-                  <div className="flex font-bold text-sm">
-                    {Array.from({ length: 13 }).map((_, i) => {
-                      const hour = 8 + i;
-                      const isEarlyOrNight = hour === 8 || hour >= 18; // 8:00と18:00以降を特別扱い
-                      const width = `${(4 / 52) * 100}%`; // 4マス分 = 1時間分の幅
-                      return (
-                        <div 
-                          key={hour} 
-                          className={`text-left pl-2 border-r py-2 whitespace-nowrap ${isEarlyOrNight ? 'bg-blue-50' : ''}`}
-                          style={{ width }}
-                        >
-                          {hour}:00
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
+            <div className="flex-1">
               {/* メインコンテンツ */}
-              <div className="flex-1 overflow-x-auto" ref={bottomScrollRef} onScroll={handleBottomScroll}>
+              <div className="overflow-x-auto" ref={bottomScrollRef} onScroll={handleBottomScroll}>
                 <div className="min-w-[1120px] relative">
                   {/* グリッド線はスタッフ行に個別配置（下記のスタッフループ内） */}
                   {currentTimePosition !== null && (
