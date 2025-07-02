@@ -16,7 +16,7 @@ import { getApiBaseUrlSync } from '../../lib/api-config';
 
 // API連携設定（段階的移行用）
 const API_INTEGRATION_CONFIG = {
-  enabled: true, // API連携を有効にするフラグ
+  enabled: false, // API連携を無効にして手動保存モードに変更
   fallbackToLocalStorage: true, // API失敗時にLocalStorageにフォールバック
   enableDebugLogging: true, // デバッグログを有効にする
   saveInterval: 5000 // 自動保存間隔（ミリ秒）
@@ -330,6 +330,7 @@ interface UsePresetSettingsReturn {
   saveSettings: () => void;
   loadSettings: () => void;
   resetToDefaults: () => void;
+  discardChanges: () => void;
   
   // 状態管理
   isLoading: boolean;
@@ -367,6 +368,21 @@ export const usePresetSettings = (): UsePresetSettingsReturn => {
     personalPage: {
       enabledPresetIds: DEFAULT_PRESET_SETTINGS.pagePresetSettings.personalPage.enabledPresetIds,
       defaultPresetId: DEFAULT_PRESET_SETTINGS.pagePresetSettings.personalPage.defaultPresetId || 'standard-work'
+    }
+  });
+
+  // 元の設定を保存（変更破棄用）
+  const [originalSettings, setOriginalSettings] = useState({
+    presets: DEFAULT_UNIFIED_PRESETS,
+    pagePresetSettings: {
+      monthlyPlanner: {
+        enabledPresetIds: DEFAULT_PRESET_SETTINGS.pagePresetSettings.monthlyPlanner.enabledPresetIds,
+        defaultPresetId: DEFAULT_PRESET_SETTINGS.pagePresetSettings.monthlyPlanner.defaultPresetId || 'standard-work'
+      },
+      personalPage: {
+        enabledPresetIds: DEFAULT_PRESET_SETTINGS.pagePresetSettings.personalPage.enabledPresetIds,
+        defaultPresetId: DEFAULT_PRESET_SETTINGS.pagePresetSettings.personalPage.defaultPresetId || 'standard-work'
+      }
     }
   });
 
@@ -517,13 +533,13 @@ export const usePresetSettings = (): UsePresetSettingsReturn => {
     return [...orderedPresets, ...remainingPresets];
   }, [presets, pagePresetSettings]);
 
-  // ページ別プリセット設定更新（API連携対応）
+  // ページ別プリセット設定更新（手動保存モード対応）
   const updatePagePresetSettings = useCallback(async (
     page: 'monthlyPlanner' | 'personalPage', 
     enabledIds: string[], 
     defaultId?: string
   ) => {
-    // ローカル状態を更新（既存機能の完全な互換性を保持）
+    // ローカル状態のみ更新（手動保存モード）
     const newPageSettings = {
       enabledPresetIds: enabledIds,
       defaultPresetId: defaultId || enabledIds[0] || 'standard-work'
@@ -537,7 +553,7 @@ export const usePresetSettings = (): UsePresetSettingsReturn => {
     setPagePresetSettings(updatedPagePresetSettings);
     setIsDirty(true);
     
-    // API連携が有効な場合、APIにも送信
+    // API連携が有効な場合のみ、APIにも送信
     if (API_INTEGRATION_CONFIG.enabled) {
       try {
         // 更新された全体のページ別設定をAPIに送信
@@ -549,9 +565,10 @@ export const usePresetSettings = (): UsePresetSettingsReturn => {
         console.warn('[PresetSettings] API ページ別プリセット設定更新失敗（ローカル状態は更新済み）:', apiError);
       }
     }
+    // 手動保存モードではここでLocalStorageに保存しない
   }, [apiClient, pagePresetSettings]);
 
-  // プリセット表示順序更新
+  // プリセット表示順序更新（手動保存モード対応）
   const updatePresetDisplayOrder = useCallback(async (
     page: 'monthlyPlanner' | 'personalPage',
     newOrder: string[]
@@ -562,7 +579,7 @@ export const usePresetSettings = (): UsePresetSettingsReturn => {
       presetDisplayOrder: newOrder
     };
     
-    // ローカル状態を更新
+    // ローカル状態のみ更新（手動保存モード）
     const updatedPagePresetSettings = {
       ...pagePresetSettings,
       [page]: updatedSettings
@@ -571,7 +588,7 @@ export const usePresetSettings = (): UsePresetSettingsReturn => {
     setPagePresetSettings(updatedPagePresetSettings);
     setIsDirty(true);
     
-    // API連携が有効な場合、APIにも送信
+    // API連携が有効な場合のみ、APIにも送信
     if (API_INTEGRATION_CONFIG.enabled) {
       try {
         const apiUpdateSuccessful = await apiClient.updatePagePresetSettings(updatedPagePresetSettings);
@@ -582,6 +599,7 @@ export const usePresetSettings = (): UsePresetSettingsReturn => {
         console.warn('[PresetSettings] プリセット表示順序更新失敗（ローカル状態は更新済み）:', apiError);
       }
     }
+    // 手動保存モードではここでLocalStorageに保存しない
   }, [apiClient, pagePresetSettings]);
 
   // ページ別プリセット設定取得
@@ -616,14 +634,19 @@ export const usePresetSettings = (): UsePresetSettingsReturn => {
         }
       }
       
-      // LocalStorageに保存（API連携に関係なく常に実行）
-      // これにより既存機能の完全な互換性を保持
-      if (API_INTEGRATION_CONFIG.fallbackToLocalStorage || !apiSaveSuccessful) {
+      // LocalStorageに保存（手動保存時のみ実行）
+      if (!API_INTEGRATION_CONFIG.enabled || (API_INTEGRATION_CONFIG.fallbackToLocalStorage && !apiSaveSuccessful)) {
         localStorage.setItem('userPresetSettings', JSON.stringify(settings));
         console.log('[PresetSettings] LocalStorageにプリセット設定を保存しました');
       }
       
       setIsDirty(false);
+      
+      // 保存成功時に元の設定も更新
+      setOriginalSettings({
+        presets,
+        pagePresetSettings
+      });
       
       if (apiSaveSuccessful) {
         console.log('[PresetSettings] プリセット設定をAPIに保存しました');
@@ -665,6 +688,11 @@ export const usePresetSettings = (): UsePresetSettingsReturn => {
                 }
               };
               setPagePresetSettings(pageSettings);
+              // 元の設定も更新
+              setOriginalSettings({
+                presets: apiSettings.presets,
+                pagePresetSettings: pageSettings
+              });
             }
             
             setIsDirty(false);
@@ -697,6 +725,11 @@ export const usePresetSettings = (): UsePresetSettingsReturn => {
               }
             };
             setPagePresetSettings(pageSettings);
+            // 元の設定も更新
+            setOriginalSettings({
+              presets: settings.presets,
+              pagePresetSettings: pageSettings
+            });
           }
           
           setIsDirty(false);
@@ -734,6 +767,14 @@ export const usePresetSettings = (): UsePresetSettingsReturn => {
     console.log('プリセット設定をデフォルトに戻しました');
   }, []);
 
+  // 変更を破棄して元の設定に戻す
+  const discardChanges = useCallback(() => {
+    setPresets(originalSettings.presets);
+    setPagePresetSettings(originalSettings.pagePresetSettings);
+    setIsDirty(false);
+    console.log('プリセット設定の変更を破棄しました');
+  }, [originalSettings]);
+
   // 初期化時に設定読み込み
   useEffect(() => {
     loadSettings();
@@ -758,6 +799,7 @@ export const usePresetSettings = (): UsePresetSettingsReturn => {
     saveSettings,
     loadSettings,
     resetToDefaults,
+    discardChanges,
     isLoading,
     isDirty
   };

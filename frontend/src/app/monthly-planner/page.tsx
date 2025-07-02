@@ -537,12 +537,34 @@ function MonthlyPlannerPageContent() {
     return unifiedPresets.map(preset => convertToLegacyFormat(preset)) as PresetSchedule[];
   }, [getPresetsForPage]);
   
+  // 元のプリセットデータも保持（詳細表示用）
+  const originalPresets = useMemo(() => {
+    return getPresetsForPage('monthlyPlanner');
+  }, [getPresetsForPage]);
+  
+  // プリセットの詳細を取得する関数
+  const getPresetDetails = useCallback((presetKey: string) => {
+    const originalPreset = originalPresets.find(p => p.id === presetKey);
+    if (!originalPreset) return null;
+    
+    return originalPreset.schedules.map(schedule => ({
+      status: schedule.status,
+      startTime: schedule.startTime,
+      endTime: schedule.endTime,
+      memo: schedule.memo || null
+    }));
+  }, [originalPresets]);
+  
   // 基本状態 - 初期表示は翌月
   const [currentMonth, setCurrentMonth] = useState(() => {
     const nextMonth = new Date();
     nextMonth.setMonth(nextMonth.getMonth() + 1);
     return nextMonth;
   });
+  
+  // プリセットホバー状態管理
+  const [hoveredPreset, setHoveredPreset] = useState<string | null>(null);
+  const [hoverPosition, setHoverPosition] = useState({ x: 0, y: 0 });
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [isLoading] = useState(false);
   const [, setDraggedPending] = useState<PendingSchedule | null>(null);
@@ -2297,17 +2319,28 @@ function MonthlyPlannerPageContent() {
                   <button
                     key={preset.key}
                     onClick={() => applyPreset(preset)}
-                    className="w-full text-left px-3 py-2 border border-gray-200 rounded-md hover:bg-gray-50 flex items-center"
+                    onMouseEnter={(e) => {
+                      setHoveredPreset(preset.key);
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      setHoverPosition({
+                        x: rect.right + 10,
+                        y: rect.top
+                      });
+                    }}
+                    onMouseLeave={() => {
+                      setHoveredPreset(null);
+                    }}
+                    className="w-full text-left px-3 py-2 border border-gray-200 rounded-md hover:bg-gray-50 flex items-center relative"
                   >
                     <div
                       className="w-4 h-4 rounded mr-3"
                       style={{ backgroundColor: getEffectiveStatusColor(preset.status) }}
                     />
                     <div className="flex-1">
-                      <div className="font-medium">{preset.label}</div>
-                      <div className="text-sm text-gray-500">
+                      <span className="font-medium">{preset.label}</span>
+                      <span className="text-sm text-gray-500 ml-2">
                         {preset.start}:00 - {preset.end}:00
-                      </div>
+                      </span>
                     </div>
                   </button>
                 ))}
@@ -2316,7 +2349,7 @@ function MonthlyPlannerPageContent() {
               <div className="flex space-x-3">
                 <button
                   onClick={clearSchedule}
-                  className="flex-1 px-4 h-7 bg-red-500 text-white rounded-md hover:bg-red-600 flex items-center"
+                  className="flex-1 px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 flex items-center justify-center"
                 >
                   予定クリア
                 </button>
@@ -2325,13 +2358,53 @@ function MonthlyPlannerPageContent() {
                     setShowModal(false);
                     setSelectedCellForHighlight(null);
                   }}
-                  className="flex-1 px-4 h-7 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 flex items-center"
+                  className="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 flex items-center justify-center"
                 >
                   キャンセル
                 </button>
               </div>
             </div>
           </div>
+        </div>,
+        document.body
+      )}
+
+      {/* プリセット詳細ポップアップ */}
+      {hoveredPreset && typeof window !== 'undefined' && createPortal(
+        <div
+          className="fixed z-[60] bg-white border border-gray-200 rounded-lg shadow-lg p-3 max-w-xs"
+          style={{
+            left: `${hoverPosition.x}px`,
+            top: `${hoverPosition.y}px`
+          }}
+        >
+          <div className="text-sm font-medium text-gray-900 mb-2">詳細内訳</div>
+          {(() => {
+            const details = getPresetDetails(hoveredPreset);
+            if (!details || details.length === 0) return <div className="text-xs text-gray-500">詳細情報なし</div>;
+            
+            return (
+              <div className="space-y-1">
+                {details.map((schedule, index) => (
+                  <div key={index} className="flex items-center text-xs">
+                    <div
+                      className="w-3 h-3 rounded mr-2"
+                      style={{ backgroundColor: getEffectiveStatusColor(schedule.status) }}
+                    />
+                    <span className="text-gray-700">
+                      {String(schedule.startTime).padStart(2, '0')}:00-{String(schedule.endTime).padStart(2, '0')}:00
+                    </span>
+                    <span className="ml-2 text-gray-500">
+                      {capitalizeStatus(schedule.status)}
+                    </span>
+                    {schedule.memo && (
+                      <span className="ml-1 text-gray-400">({schedule.memo})</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
         </div>,
         document.body
       )}

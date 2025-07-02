@@ -5,6 +5,7 @@ import { useAuth } from '../../components/AuthProvider';
 import AuthGuard from '../../components/AuthGuard';
 import { useRouter } from 'next/navigation';
 import { getApiUrl } from '../../components/constants/MainAppConstants';
+import { BUTTON_STYLES } from '../../components/timeline/TimelineUtils';
 
 // 型定義
 interface StaffMember {
@@ -225,13 +226,13 @@ const ManagerPermissionEditModal: React.FC<ManagerPermissionEditProps> = ({
         <div className="flex justify-end space-x-3 mt-6 pt-6 border-t">
           <button
             onClick={onCancel}
-            className="px-4 py-2 text-gray-700 bg-gray-200 rounded hover:bg-gray-300 transition-colors"
+            className="px-4 h-7 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-lg shadow-sm hover:bg-gray-50 transition-colors duration-150 flex items-center"
           >
             キャンセル
           </button>
           <button
             onClick={handleSave}
-            className="px-4 py-2 text-white bg-blue-600 rounded hover:bg-blue-700 transition-colors"
+            className="px-4 h-7 text-xs font-medium text-white bg-indigo-600 border border-transparent rounded-lg shadow-sm hover:bg-indigo-700 transition-colors duration-150 flex items-center"
           >
             保存
           </button>
@@ -528,66 +529,89 @@ export default function StaffManagementPage() {
   return (
     <AuthGuard requiredRole="SYSTEM_ADMIN">
       <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
         {/* ヘッダー */}
-        <div className="mb-8">
+        <div className="mb-4 p-4 bg-white shadow-sm rounded-xl border border-gray-100">
           <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">管理者権限管理</h1>
-              <p className="text-gray-600 mt-1">スタッフの管理者権限を設定・管理します</p>
+            <div className="flex items-center space-x-3">
+              <div className="flex items-center space-x-2">
+                <svg className="w-6 h-6 text-indigo-600" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                </svg>
+                <h1 className="text-lg font-semibold text-gray-900">管理者権限管理</h1>
+              </div>
+              <div className="text-sm text-gray-600">スタッフの管理者権限を設定・管理</div>
             </div>
-            <button
-              onClick={() => router.back()}
-              className="px-4 py-2 text-gray-600 bg-white border border-gray-300 rounded hover:bg-gray-50 transition-colors"
-            >
-              ← 戻る
-            </button>
+            <div className="flex items-center space-x-2">
+              <a
+                href="/"
+                className={BUTTON_STYLES.headerSecondary}
+              >
+                <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z" clipRule="evenodd" />
+                </svg>
+                出社状況
+              </a>
+              <a
+                href="/admin/pending-approval"
+                className={BUTTON_STYLES.headerPrimary}
+              >
+                <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" clipRule="evenodd" />
+                </svg>
+                承認管理
+              </a>
+              <button
+                onClick={() => router.back()}
+                className={BUTTON_STYLES.headerNeutral}
+              >
+                <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clipRule="evenodd" />
+                </svg>
+                戻る
+              </button>
+            </div>
           </div>
         </div>
 
         {/* フィルター */}
-        <div className="bg-white rounded-lg shadow-sm border p-4 mb-6">
-          <div className="flex flex-wrap items-center gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">部署</label>
+        <div className="mb-4 p-4 bg-white shadow-sm rounded-xl border border-gray-100">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
               <select
                 value={filterDepartment}
                 onChange={(e) => setFilterDepartment(e.target.value)}
-                className="border border-gray-300 rounded px-3 py-2 text-sm"
+                className="rounded-lg border-gray-200 shadow-sm text-xs px-3 h-7 font-medium text-gray-700 bg-white transition-colors duration-150 hover:border-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
               >
                 <option value="all">すべての部署</option>
                 {departments.map(dept => (
                   <option key={dept} value={dept}>{dept}</option>
                 ))}
               </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">グループ</label>
               <select
                 value={filterGroup}
                 onChange={(e) => setFilterGroup(e.target.value)}
-                className="border border-gray-300 rounded px-3 py-2 text-sm"
+                className="rounded-lg border-gray-200 shadow-sm text-xs px-3 h-7 font-medium text-gray-700 bg-white transition-colors duration-150 hover:border-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
               >
                 <option value="all">すべてのグループ</option>
                 {groups.map(group => (
                   <option key={group} value={group}>{group}</option>
                 ))}
               </select>
-            </div>
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                id="managerOnly"
-                checked={filterManagerOnly}
-                onChange={(e) => setFilterManagerOnly(e.target.checked)}
-                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-              />
-              <label htmlFor="managerOnly" className="ml-2 text-sm text-gray-700">
-                管理者のみ表示
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={filterManagerOnly}
+                  onChange={(e) => setFilterManagerOnly(e.target.checked)}
+                  className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                />
+                <span className="ml-2 text-xs font-medium text-gray-700">管理者のみ</span>
               </label>
             </div>
-            <div className="text-sm text-gray-500">
-              {filteredStaff.length}件表示 / 全{staffList.length}件
+            <div className="text-right bg-green-50 px-3 rounded-lg border border-green-200 h-7 flex items-center">
+              <span className="text-xs text-green-700 font-medium mr-2">表示中:</span>
+              <span className="text-sm font-bold text-green-600">{filteredStaff.length}</span>
+              <span className="text-xs text-green-700 ml-1">/ {staffList.length}件</span>
             </div>
           </div>
         </div>
@@ -603,13 +627,16 @@ export default function StaffManagementPage() {
             <p className="text-red-600">{error}</p>
             <button
               onClick={fetchStaffList}
-              className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+              className="mt-4 px-4 h-7 text-xs font-medium text-white bg-indigo-600 border border-transparent rounded-lg shadow-sm hover:bg-indigo-700 transition-colors duration-150 flex items-center mx-auto"
             >
+              <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
+              </svg>
               再試行
             </button>
           </div>
         ) : (
-          <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
+          <div className="bg-white shadow-sm rounded-xl border border-gray-100 overflow-hidden">
             <table className="w-full">
               <thead className="bg-gray-50">
                 <tr>
@@ -690,9 +717,12 @@ export default function StaffManagementPage() {
                     <td className="px-6 py-4">
                       <button
                         onClick={() => setEditingStaff(staff)}
-                        className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                        className="px-3 h-7 text-xs font-medium text-indigo-600 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition-colors duration-150 flex items-center"
                       >
-                        権限編集
+                        <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                          <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                        </svg>
+                        編集
                       </button>
                     </td>
                   </tr>

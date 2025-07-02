@@ -292,6 +292,10 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [isUnifiedSettingsOpen, setIsUnifiedSettingsOpen] = useState(false);
   
+  // プリセットホバー状態管理
+  const [hoveredPreset, setHoveredPreset] = useState<string | null>(null);
+  const [hoverPosition, setHoverPosition] = useState({ x: 0, y: 0 });
+  
   // インポートモーダル関連の状態
   const [isCsvUploadModalOpen, setIsCsvUploadModalOpen] = useState(false);
   const [isJsonUploadModalOpen, setIsJsonUploadModalOpen] = useState(false);
@@ -363,6 +367,24 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
       }))
     }));
   }, [getPresetsForPage]);
+  
+  // 元のプリセットデータも保持（詳細表示用）
+  const originalPresets = useMemo(() => {
+    return getPresetsForPage('personalPage');
+  }, [getPresetsForPage]);
+  
+  // プリセットの詳細を取得する関数
+  const getPresetDetails = useCallback((presetId: string) => {
+    const originalPreset = originalPresets.find(p => p.id === presetId);
+    if (!originalPreset) return null;
+    
+    return originalPreset.schedules.map(schedule => ({
+      status: schedule.status,
+      startTime: schedule.startTime,
+      endTime: schedule.endTime,
+      memo: schedule.memo || null
+    }));
+  }, [originalPresets]);
 
   // 旧プリセット定義（統一プリセットシステムに移行済み）
   // const presetSchedules: PresetSchedule[] = [
@@ -2138,7 +2160,18 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
                     const targetDate = selectedDateForPreset || new Date();
                     addPresetSchedule(preset, targetDate);
                   }}
-                  className={`p-2 text-sm border rounded-lg hover:opacity-90 text-left ${LIGHT_ANIMATIONS.interactive}`}
+                  onMouseEnter={(e) => {
+                    setHoveredPreset(preset.id);
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    setHoverPosition({
+                      x: rect.right + 10,
+                      y: rect.top
+                    });
+                  }}
+                  onMouseLeave={() => {
+                    setHoveredPreset(null);
+                  }}
+                  className={`p-2 text-sm border rounded-lg hover:opacity-90 text-left ${LIGHT_ANIMATIONS.interactive} relative`}
                   style={{
                     backgroundColor: lightBackgroundColor,
                     borderColor: borderColor,
@@ -2629,6 +2662,46 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
             <span className="text-lg font-medium text-gray-700">インポート中...</span>
           </div>
         </div>
+      )}
+
+      {/* プリセット詳細ポップアップ */}
+      {hoveredPreset && typeof window !== 'undefined' && createPortal(
+        <div
+          className="fixed z-[60] bg-white border border-gray-200 rounded-lg shadow-lg p-3 max-w-xs"
+          style={{
+            left: `${hoverPosition.x}px`,
+            top: `${hoverPosition.y}px`
+          }}
+        >
+          <div className="text-sm font-medium text-gray-900 mb-2">詳細内訳</div>
+          {(() => {
+            const details = getPresetDetails(hoveredPreset);
+            if (!details || details.length === 0) return <div className="text-xs text-gray-500">詳細情報なし</div>;
+            
+            return (
+              <div className="space-y-1">
+                {details.map((schedule, index) => (
+                  <div key={index} className="flex items-center text-xs">
+                    <div
+                      className="w-3 h-3 rounded mr-2"
+                      style={{ backgroundColor: getEffectiveStatusColor(schedule.status) }}
+                    />
+                    <span className="text-gray-700">
+                      {String(schedule.startTime).padStart(2, '0')}:00-{String(schedule.endTime).padStart(2, '0')}:00
+                    </span>
+                    <span className="ml-2 text-gray-500">
+                      {capitalizeStatus(schedule.status)}
+                    </span>
+                    {schedule.memo && (
+                      <span className="ml-1 text-gray-400">({schedule.memo})</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+        </div>,
+        document.body
       )}
     </div>
   );
