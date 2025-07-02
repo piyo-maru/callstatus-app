@@ -128,11 +128,6 @@ export class SettingsValidator {
       return { errors, warnings };
     }
 
-    // viewModeチェック
-    if (settings.viewMode && !['normal', 'compact'].includes(settings.viewMode)) {
-      warnings.push(`無効な表示モード: ${settings.viewMode}`);
-    }
-
     // maskingEnabledチェック
     if (settings.maskingEnabled !== undefined && typeof settings.maskingEnabled !== 'boolean') {
       warnings.push('マスキング設定は真偽値である必要があります');

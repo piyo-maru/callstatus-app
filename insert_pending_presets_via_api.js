@@ -1,0 +1,7199 @@
+
+const axios = require('axios');
+
+const baseURL = 'http://localhost:3002/api';
+
+async function insertPendingSchedulesWithPresets() {
+  try {
+    console.log('🔄 既存のpending schedulesを削除中...');
+    
+    // 1. Adjustmentテーブルのpending schedulesを削除
+    try {
+      await axios.delete(`${baseURL}/schedules/pending/adjustment/bulk`, {
+        data: {
+          startDate: '2025-07-01',
+          endDate: '2025-08-31'
+        }
+      });
+      console.log('✅ Adjustment pending削除完了');
+    } catch (error) {
+      console.log('ℹ️ Adjustment pending削除スキップ（エンドポイントなし）');
+    }
+    
+    // 2. PendingScheduleテーブルのデータを削除
+    try {
+      await axios.delete(`${baseURL}/pending-schedules/bulk`, {
+        data: {
+          startDate: '2025-07-01',
+          endDate: '2025-08-31'
+        }
+      });
+      console.log('✅ PendingSchedule削除完了');
+    } catch (error) {
+      console.log('ℹ️ PendingSchedule削除スキップ:', error.response?.status);
+    }
+    
+    console.log('📝 新しいpending schedules（プリセット対応）を挿入中...');
+    
+    // 3. 新しいpending schedulesを挿入
+    const schedules = [
+  {
+    "staffId": 1,
+    "date": "2025-07-08",
+    "presetId": "business-trip",
+    "memo": "preset:business-trip|出張",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 1
+  },
+  {
+    "staffId": 1,
+    "date": "2025-07-11",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 1
+  },
+  {
+    "staffId": 2,
+    "date": "2025-07-08",
+    "presetId": "business-trip",
+    "memo": "preset:business-trip|出張",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 2
+  },
+  {
+    "staffId": 2,
+    "date": "2025-07-15",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|チェック",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 2
+  },
+  {
+    "staffId": 3,
+    "date": "2025-07-01",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 3
+  },
+  {
+    "staffId": 3,
+    "date": "2025-07-04",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 3
+  },
+  {
+    "staffId": 3,
+    "date": "2025-07-07",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 3
+  },
+  {
+    "staffId": 3,
+    "date": "2025-07-08",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 3
+  },
+  {
+    "staffId": 3,
+    "date": "2025-07-09",
+    "presetId": "vacation",
+    "memo": "preset:vacation|夏休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 3
+  },
+  {
+    "staffId": 3,
+    "date": "2025-07-10",
+    "presetId": "vacation",
+    "memo": "preset:vacation|夏休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 3
+  },
+  {
+    "staffId": 3,
+    "date": "2025-07-11",
+    "presetId": "vacation",
+    "memo": "preset:vacation|夏休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 3
+  },
+  {
+    "staffId": 3,
+    "date": "2025-07-14",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 3
+  },
+  {
+    "staffId": 3,
+    "date": "2025-07-16",
+    "presetId": "compensatory-leave",
+    "memo": "preset:compensatory-leave|振休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 3
+  },
+  {
+    "staffId": 3,
+    "date": "2025-07-17",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 3
+  },
+  {
+    "staffId": 3,
+    "date": "2025-07-19",
+    "presetId": "makeup-work",
+    "memo": "preset:makeup-work|振出",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 3
+  },
+  {
+    "staffId": 3,
+    "date": "2025-07-23",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|チェック",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 3
+  },
+  {
+    "staffId": 3,
+    "date": "2025-07-25",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 3
+  },
+  {
+    "staffId": 3,
+    "date": "2025-07-28",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 3
+  },
+  {
+    "staffId": 3,
+    "date": "2025-07-29",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|ドック休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 3
+  },
+  {
+    "staffId": 3,
+    "date": "2025-07-31",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 3
+  },
+  {
+    "staffId": 4,
+    "date": "2025-07-04",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 4
+  },
+  {
+    "staffId": 4,
+    "date": "2025-07-09",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 4
+  },
+  {
+    "staffId": 4,
+    "date": "2025-07-12",
+    "presetId": "makeup-work",
+    "memo": "preset:makeup-work|振出",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 4
+  },
+  {
+    "staffId": 4,
+    "date": "2025-07-14",
+    "presetId": "compensatory-leave",
+    "memo": "preset:compensatory-leave|振休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 4
+  },
+  {
+    "staffId": 4,
+    "date": "2025-07-15",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 4
+  },
+  {
+    "staffId": 4,
+    "date": "2025-07-18",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 4
+  },
+  {
+    "staffId": 4,
+    "date": "2025-07-24",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 4
+  },
+  {
+    "staffId": 4,
+    "date": "2025-07-28",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 4
+  },
+  {
+    "staffId": 5,
+    "date": "2025-07-02",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 5
+  },
+  {
+    "staffId": 5,
+    "date": "2025-07-08",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 5
+  },
+  {
+    "staffId": 5,
+    "date": "2025-07-11",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 5
+  },
+  {
+    "staffId": 5,
+    "date": "2025-07-14",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 5
+  },
+  {
+    "staffId": 5,
+    "date": "2025-07-15",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 5
+  },
+  {
+    "staffId": 5,
+    "date": "2025-07-16",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 5
+  },
+  {
+    "staffId": 5,
+    "date": "2025-07-22",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 5
+  },
+  {
+    "staffId": 5,
+    "date": "2025-07-25",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 5
+  },
+  {
+    "staffId": 5,
+    "date": "2025-07-26",
+    "presetId": "makeup-work",
+    "memo": "preset:makeup-work|振出",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 5
+  },
+  {
+    "staffId": 5,
+    "date": "2025-07-28",
+    "presetId": "compensatory-leave",
+    "memo": "preset:compensatory-leave|振休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 5
+  },
+  {
+    "staffId": 5,
+    "date": "2025-07-30",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 5
+  },
+  {
+    "staffId": 6,
+    "date": "2025-07-03",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 6
+  },
+  {
+    "staffId": 6,
+    "date": "2025-07-05",
+    "presetId": "makeup-work",
+    "memo": "preset:makeup-work|振出",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 6
+  },
+  {
+    "staffId": 6,
+    "date": "2025-07-07",
+    "presetId": "compensatory-leave",
+    "memo": "preset:compensatory-leave|振休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 6
+  },
+  {
+    "staffId": 6,
+    "date": "2025-07-10",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 6
+  },
+  {
+    "staffId": 6,
+    "date": "2025-07-18",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 6
+  },
+  {
+    "staffId": 6,
+    "date": "2025-07-22",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|ドック休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 6
+  },
+  {
+    "staffId": 6,
+    "date": "2025-07-23",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 6
+  },
+  {
+    "staffId": 6,
+    "date": "2025-07-29",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 6
+  },
+  {
+    "staffId": 7,
+    "date": "2025-07-02",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 7
+  },
+  {
+    "staffId": 7,
+    "date": "2025-07-05",
+    "presetId": "makeup-work",
+    "memo": "preset:makeup-work|振出",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 7
+  },
+  {
+    "staffId": 7,
+    "date": "2025-07-07",
+    "presetId": "compensatory-leave",
+    "memo": "preset:compensatory-leave|振休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 7
+  },
+  {
+    "staffId": 7,
+    "date": "2025-07-08",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 7
+  },
+  {
+    "staffId": 7,
+    "date": "2025-07-11",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 7
+  },
+  {
+    "staffId": 7,
+    "date": "2025-07-16",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 7
+  },
+  {
+    "staffId": 7,
+    "date": "2025-07-22",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 7
+  },
+  {
+    "staffId": 7,
+    "date": "2025-07-24",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|チェック",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 7
+  },
+  {
+    "staffId": 7,
+    "date": "2025-07-30",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 7
+  },
+  {
+    "staffId": 7,
+    "date": "2025-07-31",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|ドック休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 7
+  },
+  {
+    "staffId": 8,
+    "date": "2025-07-17",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|ドック休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 8
+  },
+  {
+    "staffId": 8,
+    "date": "2025-07-18",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|チェック",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 8
+  },
+  {
+    "staffId": 9,
+    "date": "2025-07-09",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 9
+  },
+  {
+    "staffId": 9,
+    "date": "2025-07-23",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 9
+  },
+  {
+    "staffId": 10,
+    "date": "2025-07-08",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|ドック休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 10
+  },
+  {
+    "staffId": 10,
+    "date": "2025-07-11",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 10
+  },
+  {
+    "staffId": 10,
+    "date": "2025-07-24",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 10
+  },
+  {
+    "staffId": 10,
+    "date": "2025-07-29",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 10
+  },
+  {
+    "staffId": 10,
+    "date": "2025-07-31",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 10
+  },
+  {
+    "staffId": 11,
+    "date": "2025-07-04",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|15:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 11
+  },
+  {
+    "staffId": 12,
+    "date": "2025-07-02",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|ドック",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 12
+  },
+  {
+    "staffId": 12,
+    "date": "2025-07-04",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 12
+  },
+  {
+    "staffId": 12,
+    "date": "2025-07-07",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 12
+  },
+  {
+    "staffId": 12,
+    "date": "2025-07-11",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 12
+  },
+  {
+    "staffId": 12,
+    "date": "2025-07-17",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 12
+  },
+  {
+    "staffId": 12,
+    "date": "2025-07-18",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 12
+  },
+  {
+    "staffId": 12,
+    "date": "2025-07-25",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 12
+  },
+  {
+    "staffId": 13,
+    "date": "2025-07-16",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 13
+  },
+  {
+    "staffId": 13,
+    "date": "2025-07-17",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 13
+  },
+  {
+    "staffId": 13,
+    "date": "2025-07-25",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 13
+  },
+  {
+    "staffId": 13,
+    "date": "2025-07-29",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|ドック休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 13
+  },
+  {
+    "staffId": 14,
+    "date": "2025-07-14",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 14
+  },
+  {
+    "staffId": 14,
+    "date": "2025-07-30",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|ドック休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 14
+  },
+  {
+    "staffId": 15,
+    "date": "2025-07-09",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 15
+  },
+  {
+    "staffId": 15,
+    "date": "2025-07-16",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 15
+  },
+  {
+    "staffId": 15,
+    "date": "2025-07-22",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 15
+  },
+  {
+    "staffId": 17,
+    "date": "2025-07-02",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 17
+  },
+  {
+    "staffId": 17,
+    "date": "2025-07-04",
+    "presetId": "afternoon-half-day",
+    "memo": "preset:afternoon-half-day|13:00出社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 17
+  },
+  {
+    "staffId": 17,
+    "date": "2025-07-23",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|ドック休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 17
+  },
+  {
+    "staffId": 18,
+    "date": "2025-07-04",
+    "presetId": "late-arrival",
+    "memo": "preset:late-arrival|11:00出社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 18
+  },
+  {
+    "staffId": 18,
+    "date": "2025-07-10",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 18
+  },
+  {
+    "staffId": 18,
+    "date": "2025-07-18",
+    "presetId": "late-arrival",
+    "memo": "preset:late-arrival|11:00出社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 18
+  },
+  {
+    "staffId": 19,
+    "date": "2025-07-18",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 19
+  },
+  {
+    "staffId": 19,
+    "date": "2025-07-30",
+    "presetId": "late-arrival",
+    "memo": "preset:late-arrival|9:30出社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.198Z",
+    "submittedBy": 19
+  },
+  {
+    "staffId": 19,
+    "date": "2025-07-31",
+    "presetId": "late-arrival",
+    "memo": "preset:late-arrival|9:30出社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 19
+  },
+  {
+    "staffId": 20,
+    "date": "2025-07-30",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|11:30退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 20
+  },
+  {
+    "staffId": 20,
+    "date": "2025-07-31",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|11:30退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 20
+  },
+  {
+    "staffId": 21,
+    "date": "2025-07-01",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 21
+  },
+  {
+    "staffId": 21,
+    "date": "2025-07-08",
+    "presetId": "afternoon-half-day",
+    "memo": "preset:afternoon-half-day|13:00出社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 21
+  },
+  {
+    "staffId": 21,
+    "date": "2025-07-10",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 21
+  },
+  {
+    "staffId": 21,
+    "date": "2025-07-11",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 21
+  },
+  {
+    "staffId": 22,
+    "date": "2025-07-11",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 22
+  },
+  {
+    "staffId": 24,
+    "date": "2025-07-01",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|ドック休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 24
+  },
+  {
+    "staffId": 24,
+    "date": "2025-07-11",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 24
+  },
+  {
+    "staffId": 25,
+    "date": "2025-07-01",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 25
+  },
+  {
+    "staffId": 25,
+    "date": "2025-07-02",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 25
+  },
+  {
+    "staffId": 26,
+    "date": "2025-07-10",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 26
+  },
+  {
+    "staffId": 26,
+    "date": "2025-07-14",
+    "presetId": "vacation",
+    "memo": "preset:vacation|夏休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 26
+  },
+  {
+    "staffId": 26,
+    "date": "2025-07-15",
+    "presetId": "vacation",
+    "memo": "preset:vacation|夏休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 26
+  },
+  {
+    "staffId": 26,
+    "date": "2025-07-16",
+    "presetId": "vacation",
+    "memo": "preset:vacation|夏休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 26
+  },
+  {
+    "staffId": 26,
+    "date": "2025-07-17",
+    "presetId": "late-arrival",
+    "memo": "preset:late-arrival|10:00出社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 26
+  },
+  {
+    "staffId": 26,
+    "date": "2025-07-24",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 26
+  },
+  {
+    "staffId": 26,
+    "date": "2025-07-25",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 26
+  },
+  {
+    "staffId": 27,
+    "date": "2025-07-17",
+    "presetId": "vacation",
+    "memo": "preset:vacation|夏休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 27
+  },
+  {
+    "staffId": 27,
+    "date": "2025-07-18",
+    "presetId": "vacation",
+    "memo": "preset:vacation|夏休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 27
+  },
+  {
+    "staffId": 27,
+    "date": "2025-07-22",
+    "presetId": "vacation",
+    "memo": "preset:vacation|夏休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 27
+  },
+  {
+    "staffId": 28,
+    "date": "2025-07-18",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 28
+  },
+  {
+    "staffId": 29,
+    "date": "2025-07-11",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 29
+  },
+  {
+    "staffId": 29,
+    "date": "2025-07-22",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|チェック",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 29
+  },
+  {
+    "staffId": 29,
+    "date": "2025-07-23",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|ドック休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 29
+  },
+  {
+    "staffId": 29,
+    "date": "2025-07-29",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 29
+  },
+  {
+    "staffId": 30,
+    "date": "2025-07-14",
+    "presetId": "remote-work",
+    "memo": "preset:remote-work|在宅",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 30
+  },
+  {
+    "staffId": 31,
+    "date": "2025-07-14",
+    "presetId": "afternoon-half-day",
+    "memo": "preset:afternoon-half-day|14:00出社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 31
+  },
+  {
+    "staffId": 32,
+    "date": "2025-07-01",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|チェック",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 32
+  },
+  {
+    "staffId": 32,
+    "date": "2025-07-07",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 32
+  },
+  {
+    "staffId": 32,
+    "date": "2025-07-14",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 32
+  },
+  {
+    "staffId": 32,
+    "date": "2025-07-18",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 32
+  },
+  {
+    "staffId": 32,
+    "date": "2025-07-19",
+    "presetId": "makeup-work",
+    "memo": "preset:makeup-work|振出",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 32
+  },
+  {
+    "staffId": 32,
+    "date": "2025-07-22",
+    "presetId": "compensatory-leave",
+    "memo": "preset:compensatory-leave|振休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 32
+  },
+  {
+    "staffId": 32,
+    "date": "2025-07-24",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|ドック休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 32
+  },
+  {
+    "staffId": 32,
+    "date": "2025-07-25",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 32
+  },
+  {
+    "staffId": 32,
+    "date": "2025-07-29",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 32
+  },
+  {
+    "staffId": 33,
+    "date": "2025-07-11",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 33
+  },
+  {
+    "staffId": 35,
+    "date": "2025-07-01",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 35
+  },
+  {
+    "staffId": 35,
+    "date": "2025-07-10",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|ドック休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 35
+  },
+  {
+    "staffId": 36,
+    "date": "2025-07-18",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|ドック休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 36
+  },
+  {
+    "staffId": 37,
+    "date": "2025-07-02",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 37
+  },
+  {
+    "staffId": 37,
+    "date": "2025-07-09",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 37
+  },
+  {
+    "staffId": 37,
+    "date": "2025-07-16",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 37
+  },
+  {
+    "staffId": 37,
+    "date": "2025-07-23",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 37
+  },
+  {
+    "staffId": 37,
+    "date": "2025-07-30",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 37
+  },
+  {
+    "staffId": 38,
+    "date": "2025-07-01",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 38
+  },
+  {
+    "staffId": 38,
+    "date": "2025-07-22",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|ドック休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 38
+  },
+  {
+    "staffId": 39,
+    "date": "2025-07-09",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|ドック休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 39
+  },
+  {
+    "staffId": 39,
+    "date": "2025-07-10",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 39
+  },
+  {
+    "staffId": 39,
+    "date": "2025-07-24",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 39
+  },
+  {
+    "staffId": 40,
+    "date": "2025-07-04",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 40
+  },
+  {
+    "staffId": 40,
+    "date": "2025-07-11",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 40
+  },
+  {
+    "staffId": 40,
+    "date": "2025-07-17",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|ドック休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 40
+  },
+  {
+    "staffId": 41,
+    "date": "2025-07-18",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 41
+  },
+  {
+    "staffId": 42,
+    "date": "2025-07-04",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 42
+  },
+  {
+    "staffId": 42,
+    "date": "2025-07-11",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 42
+  },
+  {
+    "staffId": 42,
+    "date": "2025-07-25",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 42
+  },
+  {
+    "staffId": 42,
+    "date": "2025-07-29",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 42
+  },
+  {
+    "staffId": 42,
+    "date": "2025-07-31",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|ドック休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 42
+  },
+  {
+    "staffId": 43,
+    "date": "2025-07-02",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 43
+  },
+  {
+    "staffId": 44,
+    "date": "2025-07-08",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|チェック",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 44
+  },
+  {
+    "staffId": 44,
+    "date": "2025-07-12",
+    "presetId": "makeup-work",
+    "memo": "preset:makeup-work|振出",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 44
+  },
+  {
+    "staffId": 44,
+    "date": "2025-07-14",
+    "presetId": "compensatory-leave",
+    "memo": "preset:compensatory-leave|振休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 44
+  },
+  {
+    "staffId": 46,
+    "date": "2025-07-01",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|ドック休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 46
+  },
+  {
+    "staffId": 46,
+    "date": "2025-07-03",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 46
+  },
+  {
+    "staffId": 46,
+    "date": "2025-07-10",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 46
+  },
+  {
+    "staffId": 46,
+    "date": "2025-07-17",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 46
+  },
+  {
+    "staffId": 46,
+    "date": "2025-07-23",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 46
+  },
+  {
+    "staffId": 46,
+    "date": "2025-07-28",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 46
+  },
+  {
+    "staffId": 47,
+    "date": "2025-07-01",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 47
+  },
+  {
+    "staffId": 47,
+    "date": "2025-07-04",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 47
+  },
+  {
+    "staffId": 47,
+    "date": "2025-07-07",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 47
+  },
+  {
+    "staffId": 47,
+    "date": "2025-07-09",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 47
+  },
+  {
+    "staffId": 47,
+    "date": "2025-07-15",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 47
+  },
+  {
+    "staffId": 47,
+    "date": "2025-07-24",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 47
+  },
+  {
+    "staffId": 47,
+    "date": "2025-07-26",
+    "presetId": "makeup-work",
+    "memo": "preset:makeup-work|振出",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 47
+  },
+  {
+    "staffId": 47,
+    "date": "2025-07-28",
+    "presetId": "compensatory-leave",
+    "memo": "preset:compensatory-leave|振休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 47
+  },
+  {
+    "staffId": 47,
+    "date": "2025-07-29",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|ドック休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 47
+  },
+  {
+    "staffId": 47,
+    "date": "2025-07-31",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 47
+  },
+  {
+    "staffId": 49,
+    "date": "2025-07-10",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 49
+  },
+  {
+    "staffId": 49,
+    "date": "2025-07-22",
+    "presetId": "vacation",
+    "memo": "preset:vacation|夏休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 49
+  },
+  {
+    "staffId": 49,
+    "date": "2025-07-23",
+    "presetId": "vacation",
+    "memo": "preset:vacation|夏休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 49
+  },
+  {
+    "staffId": 49,
+    "date": "2025-07-24",
+    "presetId": "vacation",
+    "memo": "preset:vacation|夏休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 49
+  },
+  {
+    "staffId": 49,
+    "date": "2025-07-25",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|ドック休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 49
+  },
+  {
+    "staffId": 50,
+    "date": "2025-07-02",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 50
+  },
+  {
+    "staffId": 50,
+    "date": "2025-07-11",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|ドック休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 50
+  },
+  {
+    "staffId": 50,
+    "date": "2025-07-23",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 50
+  },
+  {
+    "staffId": 50,
+    "date": "2025-07-29",
+    "presetId": "vacation",
+    "memo": "preset:vacation|夏休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 50
+  },
+  {
+    "staffId": 50,
+    "date": "2025-07-30",
+    "presetId": "vacation",
+    "memo": "preset:vacation|夏休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 50
+  },
+  {
+    "staffId": 50,
+    "date": "2025-07-31",
+    "presetId": "vacation",
+    "memo": "preset:vacation|夏休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 50
+  },
+  {
+    "staffId": 51,
+    "date": "2025-07-01",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 51
+  },
+  {
+    "staffId": 52,
+    "date": "2025-07-02",
+    "presetId": "vacation",
+    "memo": "preset:vacation|夏休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 52
+  },
+  {
+    "staffId": 52,
+    "date": "2025-07-03",
+    "presetId": "vacation",
+    "memo": "preset:vacation|夏休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 52
+  },
+  {
+    "staffId": 52,
+    "date": "2025-07-04",
+    "presetId": "vacation",
+    "memo": "preset:vacation|夏休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 52
+  },
+  {
+    "staffId": 52,
+    "date": "2025-07-22",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|ドック休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 52
+  },
+  {
+    "staffId": 52,
+    "date": "2025-07-28",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 52
+  },
+  {
+    "staffId": 53,
+    "date": "2025-07-03",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 53
+  },
+  {
+    "staffId": 53,
+    "date": "2025-07-04",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 53
+  },
+  {
+    "staffId": 53,
+    "date": "2025-07-08",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 53
+  },
+  {
+    "staffId": 53,
+    "date": "2025-07-12",
+    "presetId": "makeup-work",
+    "memo": "preset:makeup-work|振出",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 53
+  },
+  {
+    "staffId": 53,
+    "date": "2025-07-16",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 53
+  },
+  {
+    "staffId": 53,
+    "date": "2025-07-22",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 53
+  },
+  {
+    "staffId": 53,
+    "date": "2025-07-28",
+    "presetId": "compensatory-leave",
+    "memo": "preset:compensatory-leave|振休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 53
+  },
+  {
+    "staffId": 53,
+    "date": "2025-07-31",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|チェック",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 53
+  },
+  {
+    "staffId": 54,
+    "date": "2025-07-01",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 54
+  },
+  {
+    "staffId": 54,
+    "date": "2025-07-04",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 54
+  },
+  {
+    "staffId": 54,
+    "date": "2025-07-05",
+    "presetId": "makeup-work",
+    "memo": "preset:makeup-work|振出",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 54
+  },
+  {
+    "staffId": 54,
+    "date": "2025-07-07",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 54
+  },
+  {
+    "staffId": 54,
+    "date": "2025-07-09",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|チェック",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 54
+  },
+  {
+    "staffId": 54,
+    "date": "2025-07-11",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 54
+  },
+  {
+    "staffId": 54,
+    "date": "2025-07-14",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 54
+  },
+  {
+    "staffId": 54,
+    "date": "2025-07-17",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 54
+  },
+  {
+    "staffId": 54,
+    "date": "2025-07-25",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 54
+  },
+  {
+    "staffId": 54,
+    "date": "2025-07-28",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 54
+  },
+  {
+    "staffId": 55,
+    "date": "2025-07-02",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 55
+  },
+  {
+    "staffId": 55,
+    "date": "2025-07-04",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 55
+  },
+  {
+    "staffId": 55,
+    "date": "2025-07-07",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 55
+  },
+  {
+    "staffId": 55,
+    "date": "2025-07-08",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|13:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 55
+  },
+  {
+    "staffId": 55,
+    "date": "2025-07-10",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 55
+  },
+  {
+    "staffId": 55,
+    "date": "2025-07-11",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 55
+  },
+  {
+    "staffId": 55,
+    "date": "2025-07-16",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 55
+  },
+  {
+    "staffId": 55,
+    "date": "2025-07-19",
+    "presetId": "makeup-work",
+    "memo": "preset:makeup-work|振出",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 55
+  },
+  {
+    "staffId": 55,
+    "date": "2025-07-22",
+    "presetId": "compensatory-leave",
+    "memo": "preset:compensatory-leave|振休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 55
+  },
+  {
+    "staffId": 55,
+    "date": "2025-07-30",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 55
+  },
+  {
+    "staffId": 57,
+    "date": "2025-07-01",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 57
+  },
+  {
+    "staffId": 57,
+    "date": "2025-07-03",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 57
+  },
+  {
+    "staffId": 57,
+    "date": "2025-07-04",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 57
+  },
+  {
+    "staffId": 57,
+    "date": "2025-07-23",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 57
+  },
+  {
+    "staffId": 59,
+    "date": "2025-07-01",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 59
+  },
+  {
+    "staffId": 59,
+    "date": "2025-07-04",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 59
+  },
+  {
+    "staffId": 59,
+    "date": "2025-07-07",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 59
+  },
+  {
+    "staffId": 59,
+    "date": "2025-07-11",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 59
+  },
+  {
+    "staffId": 59,
+    "date": "2025-07-15",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 59
+  },
+  {
+    "staffId": 59,
+    "date": "2025-07-18",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.199Z",
+    "submittedBy": 59
+  },
+  {
+    "staffId": 59,
+    "date": "2025-07-22",
+    "presetId": "compensatory-leave",
+    "memo": "preset:compensatory-leave|振休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 59
+  },
+  {
+    "staffId": 59,
+    "date": "2025-07-26",
+    "presetId": "makeup-work",
+    "memo": "preset:makeup-work|振出",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 59
+  },
+  {
+    "staffId": 59,
+    "date": "2025-07-28",
+    "presetId": "afternoon-half-day",
+    "memo": "preset:afternoon-half-day|14:00出社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 59
+  },
+  {
+    "staffId": 59,
+    "date": "2025-07-31",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 59
+  },
+  {
+    "staffId": 61,
+    "date": "2025-07-18",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 61
+  },
+  {
+    "staffId": 63,
+    "date": "2025-07-02",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 63
+  },
+  {
+    "staffId": 63,
+    "date": "2025-07-11",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 63
+  },
+  {
+    "staffId": 63,
+    "date": "2025-07-17",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 63
+  },
+  {
+    "staffId": 63,
+    "date": "2025-07-25",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 63
+  },
+  {
+    "staffId": 63,
+    "date": "2025-07-30",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 63
+  },
+  {
+    "staffId": 64,
+    "date": "2025-07-08",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|ドック休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 64
+  },
+  {
+    "staffId": 64,
+    "date": "2025-07-22",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 64
+  },
+  {
+    "staffId": 65,
+    "date": "2025-07-02",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 65
+  },
+  {
+    "staffId": 65,
+    "date": "2025-07-11",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 65
+  },
+  {
+    "staffId": 65,
+    "date": "2025-07-25",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 65
+  },
+  {
+    "staffId": 65,
+    "date": "2025-07-29",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 65
+  },
+  {
+    "staffId": 66,
+    "date": "2025-07-03",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 66
+  },
+  {
+    "staffId": 66,
+    "date": "2025-07-09",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 66
+  },
+  {
+    "staffId": 66,
+    "date": "2025-07-18",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 66
+  },
+  {
+    "staffId": 66,
+    "date": "2025-07-30",
+    "presetId": "vacation",
+    "memo": "preset:vacation|夏休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 66
+  },
+  {
+    "staffId": 66,
+    "date": "2025-07-31",
+    "presetId": "vacation",
+    "memo": "preset:vacation|夏休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 66
+  },
+  {
+    "staffId": 67,
+    "date": "2025-07-30",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|ドック休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 67
+  },
+  {
+    "staffId": 68,
+    "date": "2025-07-07",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 68
+  },
+  {
+    "staffId": 68,
+    "date": "2025-07-29",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|ドック休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 68
+  },
+  {
+    "staffId": 69,
+    "date": "2025-07-01",
+    "presetId": "late-arrival",
+    "memo": "preset:late-arrival|11:00出社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 69
+  },
+  {
+    "staffId": 69,
+    "date": "2025-07-10",
+    "presetId": "late-arrival",
+    "memo": "preset:late-arrival|10:30出社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 69
+  },
+  {
+    "staffId": 69,
+    "date": "2025-07-17",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 69
+  },
+  {
+    "staffId": 69,
+    "date": "2025-07-28",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 69
+  },
+  {
+    "staffId": 70,
+    "date": "2025-07-23",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|ドック休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 70
+  },
+  {
+    "staffId": 71,
+    "date": "2025-07-07",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 71
+  },
+  {
+    "staffId": 71,
+    "date": "2025-07-09",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 71
+  },
+  {
+    "staffId": 71,
+    "date": "2025-07-23",
+    "presetId": "vacation",
+    "memo": "preset:vacation|夏休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 71
+  },
+  {
+    "staffId": 71,
+    "date": "2025-07-24",
+    "presetId": "vacation",
+    "memo": "preset:vacation|夏休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 71
+  },
+  {
+    "staffId": 71,
+    "date": "2025-07-25",
+    "presetId": "vacation",
+    "memo": "preset:vacation|夏休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 71
+  },
+  {
+    "staffId": 73,
+    "date": "2025-07-02",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 73
+  },
+  {
+    "staffId": 73,
+    "date": "2025-07-18",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 73
+  },
+  {
+    "staffId": 73,
+    "date": "2025-07-23",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 73
+  },
+  {
+    "staffId": 74,
+    "date": "2025-07-01",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|14:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 74
+  },
+  {
+    "staffId": 74,
+    "date": "2025-07-08",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|14:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 74
+  },
+  {
+    "staffId": 74,
+    "date": "2025-07-15",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|14:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 74
+  },
+  {
+    "staffId": 74,
+    "date": "2025-07-22",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|14:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 74
+  },
+  {
+    "staffId": 74,
+    "date": "2025-07-29",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|14:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 74
+  },
+  {
+    "staffId": 75,
+    "date": "2025-07-23",
+    "presetId": "vacation",
+    "memo": "preset:vacation|夏休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 75
+  },
+  {
+    "staffId": 75,
+    "date": "2025-07-24",
+    "presetId": "vacation",
+    "memo": "preset:vacation|夏休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 75
+  },
+  {
+    "staffId": 75,
+    "date": "2025-07-25",
+    "presetId": "vacation",
+    "memo": "preset:vacation|夏休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 75
+  },
+  {
+    "staffId": 77,
+    "date": "2025-07-02",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|チェック",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 77
+  },
+  {
+    "staffId": 78,
+    "date": "2025-07-01",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 78
+  },
+  {
+    "staffId": 78,
+    "date": "2025-07-02",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 78
+  },
+  {
+    "staffId": 78,
+    "date": "2025-07-03",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 78
+  },
+  {
+    "staffId": 78,
+    "date": "2025-07-04",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 78
+  },
+  {
+    "staffId": 78,
+    "date": "2025-07-07",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 78
+  },
+  {
+    "staffId": 78,
+    "date": "2025-07-08",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 78
+  },
+  {
+    "staffId": 78,
+    "date": "2025-07-09",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 78
+  },
+  {
+    "staffId": 78,
+    "date": "2025-07-10",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 78
+  },
+  {
+    "staffId": 78,
+    "date": "2025-07-11",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 78
+  },
+  {
+    "staffId": 78,
+    "date": "2025-07-14",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 78
+  },
+  {
+    "staffId": 78,
+    "date": "2025-07-16",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 78
+  },
+  {
+    "staffId": 78,
+    "date": "2025-07-17",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|チェック",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 78
+  },
+  {
+    "staffId": 78,
+    "date": "2025-07-24",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 78
+  },
+  {
+    "staffId": 78,
+    "date": "2025-07-28",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 78
+  },
+  {
+    "staffId": 78,
+    "date": "2025-07-29",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 78
+  },
+  {
+    "staffId": 78,
+    "date": "2025-07-30",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 78
+  },
+  {
+    "staffId": 78,
+    "date": "2025-07-31",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 78
+  },
+  {
+    "staffId": 79,
+    "date": "2025-07-01",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 79
+  },
+  {
+    "staffId": 79,
+    "date": "2025-07-02",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 79
+  },
+  {
+    "staffId": 79,
+    "date": "2025-07-03",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 79
+  },
+  {
+    "staffId": 79,
+    "date": "2025-07-04",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 79
+  },
+  {
+    "staffId": 79,
+    "date": "2025-07-07",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 79
+  },
+  {
+    "staffId": 79,
+    "date": "2025-07-08",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 79
+  },
+  {
+    "staffId": 79,
+    "date": "2025-07-09",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 79
+  },
+  {
+    "staffId": 79,
+    "date": "2025-07-11",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 79
+  },
+  {
+    "staffId": 79,
+    "date": "2025-07-15",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 79
+  },
+  {
+    "staffId": 79,
+    "date": "2025-07-16",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 79
+  },
+  {
+    "staffId": 79,
+    "date": "2025-07-17",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 79
+  },
+  {
+    "staffId": 79,
+    "date": "2025-07-18",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 79
+  },
+  {
+    "staffId": 79,
+    "date": "2025-07-22",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 79
+  },
+  {
+    "staffId": 79,
+    "date": "2025-07-23",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 79
+  },
+  {
+    "staffId": 79,
+    "date": "2025-07-25",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|ドック休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 79
+  },
+  {
+    "staffId": 79,
+    "date": "2025-07-28",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 79
+  },
+  {
+    "staffId": 79,
+    "date": "2025-07-29",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 79
+  },
+  {
+    "staffId": 79,
+    "date": "2025-07-30",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 79
+  },
+  {
+    "staffId": 79,
+    "date": "2025-07-31",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 79
+  },
+  {
+    "staffId": 80,
+    "date": "2025-07-01",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 80
+  },
+  {
+    "staffId": 80,
+    "date": "2025-07-02",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 80
+  },
+  {
+    "staffId": 80,
+    "date": "2025-07-07",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 80
+  },
+  {
+    "staffId": 80,
+    "date": "2025-07-08",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 80
+  },
+  {
+    "staffId": 80,
+    "date": "2025-07-10",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|ドック休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 80
+  },
+  {
+    "staffId": 80,
+    "date": "2025-07-15",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 80
+  },
+  {
+    "staffId": 80,
+    "date": "2025-07-22",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 80
+  },
+  {
+    "staffId": 80,
+    "date": "2025-07-25",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|15:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 80
+  },
+  {
+    "staffId": 80,
+    "date": "2025-07-29",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 80
+  },
+  {
+    "staffId": 81,
+    "date": "2025-07-03",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|ドック",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 81
+  },
+  {
+    "staffId": 81,
+    "date": "2025-07-07",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|15:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 81
+  },
+  {
+    "staffId": 81,
+    "date": "2025-07-18",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 81
+  },
+  {
+    "staffId": 82,
+    "date": "2025-07-07",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 82
+  },
+  {
+    "staffId": 82,
+    "date": "2025-07-28",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 82
+  },
+  {
+    "staffId": 84,
+    "date": "2025-07-14",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 84
+  },
+  {
+    "staffId": 84,
+    "date": "2025-07-17",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|ドック休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 84
+  },
+  {
+    "staffId": 84,
+    "date": "2025-07-18",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 84
+  },
+  {
+    "staffId": 84,
+    "date": "2025-07-23",
+    "presetId": "medical-appointment",
+    "memo": "preset:medical-appointment|通院後出社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 84
+  },
+  {
+    "staffId": 84,
+    "date": "2025-07-25",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 84
+  },
+  {
+    "staffId": 85,
+    "date": "2025-07-07",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 85
+  },
+  {
+    "staffId": 85,
+    "date": "2025-07-14",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 85
+  },
+  {
+    "staffId": 87,
+    "date": "2025-07-25",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|ドック休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.200Z",
+    "submittedBy": 87
+  },
+  {
+    "staffId": 89,
+    "date": "2025-07-02",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 89
+  },
+  {
+    "staffId": 89,
+    "date": "2025-07-08",
+    "presetId": "afternoon-half-day",
+    "memo": "preset:afternoon-half-day|13:00出社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 89
+  },
+  {
+    "staffId": 89,
+    "date": "2025-07-17",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 89
+  },
+  {
+    "staffId": 89,
+    "date": "2025-07-28",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 89
+  },
+  {
+    "staffId": 90,
+    "date": "2025-07-07",
+    "presetId": "afternoon-half-day",
+    "memo": "preset:afternoon-half-day|13:00出社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 90
+  },
+  {
+    "staffId": 90,
+    "date": "2025-07-11",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|14:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 90
+  },
+  {
+    "staffId": 90,
+    "date": "2025-07-16",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 90
+  },
+  {
+    "staffId": 91,
+    "date": "2025-07-04",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 91
+  },
+  {
+    "staffId": 91,
+    "date": "2025-07-09",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|ドック休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 91
+  },
+  {
+    "staffId": 91,
+    "date": "2025-07-24",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 91
+  },
+  {
+    "staffId": 91,
+    "date": "2025-07-25",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 91
+  },
+  {
+    "staffId": 93,
+    "date": "2025-07-25",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 93
+  },
+  {
+    "staffId": 94,
+    "date": "2025-07-02",
+    "presetId": "remote-work",
+    "memo": "preset:remote-work|在宅",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 94
+  },
+  {
+    "staffId": 94,
+    "date": "2025-07-04",
+    "presetId": "remote-work",
+    "memo": "preset:remote-work|在宅",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 94
+  },
+  {
+    "staffId": 94,
+    "date": "2025-07-10",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|チェック",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 94
+  },
+  {
+    "staffId": 94,
+    "date": "2025-07-18",
+    "presetId": "remote-work",
+    "memo": "preset:remote-work|在宅",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 94
+  },
+  {
+    "staffId": 94,
+    "date": "2025-07-23",
+    "presetId": "remote-work",
+    "memo": "preset:remote-work|在宅",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 94
+  },
+  {
+    "staffId": 94,
+    "date": "2025-07-30",
+    "presetId": "remote-work",
+    "memo": "preset:remote-work|在宅",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 94
+  },
+  {
+    "staffId": 94,
+    "date": "2025-07-31",
+    "presetId": "remote-work",
+    "memo": "preset:remote-work|在宅",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 94
+  },
+  {
+    "staffId": 95,
+    "date": "2025-07-02",
+    "presetId": "early-leave",
+    "memo": "preset:early-leave|18:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 95
+  },
+  {
+    "staffId": 95,
+    "date": "2025-07-18",
+    "presetId": "early-leave",
+    "memo": "preset:early-leave|17:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 95
+  },
+  {
+    "staffId": 95,
+    "date": "2025-07-23",
+    "presetId": "early-leave",
+    "memo": "preset:early-leave|17:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 95
+  },
+  {
+    "staffId": 95,
+    "date": "2025-07-30",
+    "presetId": "early-leave",
+    "memo": "preset:early-leave|17:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 95
+  },
+  {
+    "staffId": 95,
+    "date": "2025-07-31",
+    "presetId": "early-leave",
+    "memo": "preset:early-leave|17:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 95
+  },
+  {
+    "staffId": 96,
+    "date": "2025-07-28",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 96
+  },
+  {
+    "staffId": 97,
+    "date": "2025-07-03",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|チェック",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 97
+  },
+  {
+    "staffId": 97,
+    "date": "2025-07-04",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 97
+  },
+  {
+    "staffId": 97,
+    "date": "2025-07-11",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 97
+  },
+  {
+    "staffId": 97,
+    "date": "2025-07-22",
+    "presetId": "vacation",
+    "memo": "preset:vacation|夏休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 97
+  },
+  {
+    "staffId": 97,
+    "date": "2025-07-23",
+    "presetId": "vacation",
+    "memo": "preset:vacation|夏休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 97
+  },
+  {
+    "staffId": 97,
+    "date": "2025-07-24",
+    "presetId": "vacation",
+    "memo": "preset:vacation|夏休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 97
+  },
+  {
+    "staffId": 97,
+    "date": "2025-07-25",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 97
+  },
+  {
+    "staffId": 97,
+    "date": "2025-07-28",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 97
+  },
+  {
+    "staffId": 97,
+    "date": "2025-07-29",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 97
+  },
+  {
+    "staffId": 97,
+    "date": "2025-07-30",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 97
+  },
+  {
+    "staffId": 97,
+    "date": "2025-07-31",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 97
+  },
+  {
+    "staffId": 98,
+    "date": "2025-07-01",
+    "presetId": "remote-work",
+    "memo": "preset:remote-work|在宅",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 98
+  },
+  {
+    "staffId": 98,
+    "date": "2025-07-03",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 98
+  },
+  {
+    "staffId": 98,
+    "date": "2025-07-05",
+    "presetId": "makeup-work",
+    "memo": "preset:makeup-work|振出",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 98
+  },
+  {
+    "staffId": 98,
+    "date": "2025-07-07",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 98
+  },
+  {
+    "staffId": 98,
+    "date": "2025-07-08",
+    "presetId": "compensatory-leave",
+    "memo": "preset:compensatory-leave|振休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 98
+  },
+  {
+    "staffId": 98,
+    "date": "2025-07-11",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 98
+  },
+  {
+    "staffId": 98,
+    "date": "2025-07-14",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 98
+  },
+  {
+    "staffId": 98,
+    "date": "2025-07-16",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|チェック",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 98
+  },
+  {
+    "staffId": 98,
+    "date": "2025-07-18",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 98
+  },
+  {
+    "staffId": 98,
+    "date": "2025-07-19",
+    "presetId": "makeup-work",
+    "memo": "preset:makeup-work|振出",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 98
+  },
+  {
+    "staffId": 98,
+    "date": "2025-07-22",
+    "presetId": "compensatory-leave",
+    "memo": "preset:compensatory-leave|振休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 98
+  },
+  {
+    "staffId": 98,
+    "date": "2025-07-28",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 98
+  },
+  {
+    "staffId": 98,
+    "date": "2025-07-29",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 98
+  },
+  {
+    "staffId": 98,
+    "date": "2025-07-30",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 98
+  },
+  {
+    "staffId": 98,
+    "date": "2025-07-31",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 98
+  },
+  {
+    "staffId": 99,
+    "date": "2025-07-03",
+    "presetId": "compensatory-leave",
+    "memo": "preset:compensatory-leave|振休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 99
+  },
+  {
+    "staffId": 99,
+    "date": "2025-07-04",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 99
+  },
+  {
+    "staffId": 99,
+    "date": "2025-07-07",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 99
+  },
+  {
+    "staffId": 99,
+    "date": "2025-07-08",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 99
+  },
+  {
+    "staffId": 99,
+    "date": "2025-07-09",
+    "presetId": "remote-work",
+    "memo": "preset:remote-work|在宅",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 99
+  },
+  {
+    "staffId": 99,
+    "date": "2025-07-10",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 99
+  },
+  {
+    "staffId": 99,
+    "date": "2025-07-14",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 99
+  },
+  {
+    "staffId": 99,
+    "date": "2025-07-16",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 99
+  },
+  {
+    "staffId": 99,
+    "date": "2025-07-22",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 99
+  },
+  {
+    "staffId": 99,
+    "date": "2025-07-24",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 99
+  },
+  {
+    "staffId": 99,
+    "date": "2025-07-26",
+    "presetId": "makeup-work",
+    "memo": "preset:makeup-work|振出",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 99
+  },
+  {
+    "staffId": 99,
+    "date": "2025-07-31",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 99
+  },
+  {
+    "staffId": 100,
+    "date": "2025-07-04",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 100
+  },
+  {
+    "staffId": 100,
+    "date": "2025-07-10",
+    "presetId": "remote-work",
+    "memo": "preset:remote-work|在宅",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 100
+  },
+  {
+    "staffId": 1,
+    "date": "2025-08-08",
+    "presetId": "business-trip",
+    "memo": "preset:business-trip|出張",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 1
+  },
+  {
+    "staffId": 1,
+    "date": "2025-08-11",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 1
+  },
+  {
+    "staffId": 2,
+    "date": "2025-08-08",
+    "presetId": "business-trip",
+    "memo": "preset:business-trip|出張",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 2
+  },
+  {
+    "staffId": 2,
+    "date": "2025-08-15",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|チェック",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 2
+  },
+  {
+    "staffId": 3,
+    "date": "2025-08-01",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 3
+  },
+  {
+    "staffId": 3,
+    "date": "2025-08-04",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 3
+  },
+  {
+    "staffId": 3,
+    "date": "2025-08-07",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 3
+  },
+  {
+    "staffId": 3,
+    "date": "2025-08-08",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 3
+  },
+  {
+    "staffId": 3,
+    "date": "2025-08-09",
+    "presetId": "vacation",
+    "memo": "preset:vacation|夏休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 3
+  },
+  {
+    "staffId": 3,
+    "date": "2025-08-10",
+    "presetId": "vacation",
+    "memo": "preset:vacation|夏休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 3
+  },
+  {
+    "staffId": 3,
+    "date": "2025-08-11",
+    "presetId": "vacation",
+    "memo": "preset:vacation|夏休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 3
+  },
+  {
+    "staffId": 3,
+    "date": "2025-08-14",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 3
+  },
+  {
+    "staffId": 3,
+    "date": "2025-08-16",
+    "presetId": "compensatory-leave",
+    "memo": "preset:compensatory-leave|振休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 3
+  },
+  {
+    "staffId": 3,
+    "date": "2025-08-17",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 3
+  },
+  {
+    "staffId": 3,
+    "date": "2025-08-19",
+    "presetId": "makeup-work",
+    "memo": "preset:makeup-work|振出",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 3
+  },
+  {
+    "staffId": 3,
+    "date": "2025-08-23",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|チェック",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 3
+  },
+  {
+    "staffId": 3,
+    "date": "2025-08-25",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 3
+  },
+  {
+    "staffId": 3,
+    "date": "2025-08-28",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 3
+  },
+  {
+    "staffId": 3,
+    "date": "2025-08-29",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|ドック休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 3
+  },
+  {
+    "staffId": 3,
+    "date": "2025-08-31",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 3
+  },
+  {
+    "staffId": 4,
+    "date": "2025-08-04",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 4
+  },
+  {
+    "staffId": 4,
+    "date": "2025-08-09",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 4
+  },
+  {
+    "staffId": 4,
+    "date": "2025-08-12",
+    "presetId": "makeup-work",
+    "memo": "preset:makeup-work|振出",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 4
+  },
+  {
+    "staffId": 4,
+    "date": "2025-08-14",
+    "presetId": "compensatory-leave",
+    "memo": "preset:compensatory-leave|振休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 4
+  },
+  {
+    "staffId": 4,
+    "date": "2025-08-15",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 4
+  },
+  {
+    "staffId": 4,
+    "date": "2025-08-18",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 4
+  },
+  {
+    "staffId": 4,
+    "date": "2025-08-24",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 4
+  },
+  {
+    "staffId": 4,
+    "date": "2025-08-28",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 4
+  },
+  {
+    "staffId": 5,
+    "date": "2025-08-02",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 5
+  },
+  {
+    "staffId": 5,
+    "date": "2025-08-08",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 5
+  },
+  {
+    "staffId": 5,
+    "date": "2025-08-11",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 5
+  },
+  {
+    "staffId": 5,
+    "date": "2025-08-14",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 5
+  },
+  {
+    "staffId": 5,
+    "date": "2025-08-15",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 5
+  },
+  {
+    "staffId": 5,
+    "date": "2025-08-16",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 5
+  },
+  {
+    "staffId": 5,
+    "date": "2025-08-22",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 5
+  },
+  {
+    "staffId": 5,
+    "date": "2025-08-25",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 5
+  },
+  {
+    "staffId": 5,
+    "date": "2025-08-26",
+    "presetId": "makeup-work",
+    "memo": "preset:makeup-work|振出",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.202Z",
+    "submittedBy": 5
+  },
+  {
+    "staffId": 5,
+    "date": "2025-08-28",
+    "presetId": "compensatory-leave",
+    "memo": "preset:compensatory-leave|振休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 5
+  },
+  {
+    "staffId": 5,
+    "date": "2025-08-30",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 5
+  },
+  {
+    "staffId": 6,
+    "date": "2025-08-03",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 6
+  },
+  {
+    "staffId": 6,
+    "date": "2025-08-05",
+    "presetId": "makeup-work",
+    "memo": "preset:makeup-work|振出",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 6
+  },
+  {
+    "staffId": 6,
+    "date": "2025-08-07",
+    "presetId": "compensatory-leave",
+    "memo": "preset:compensatory-leave|振休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 6
+  },
+  {
+    "staffId": 6,
+    "date": "2025-08-10",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 6
+  },
+  {
+    "staffId": 6,
+    "date": "2025-08-18",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 6
+  },
+  {
+    "staffId": 6,
+    "date": "2025-08-22",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|ドック休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 6
+  },
+  {
+    "staffId": 6,
+    "date": "2025-08-23",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 6
+  },
+  {
+    "staffId": 6,
+    "date": "2025-08-29",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 6
+  },
+  {
+    "staffId": 7,
+    "date": "2025-08-02",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 7
+  },
+  {
+    "staffId": 7,
+    "date": "2025-08-05",
+    "presetId": "makeup-work",
+    "memo": "preset:makeup-work|振出",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 7
+  },
+  {
+    "staffId": 7,
+    "date": "2025-08-07",
+    "presetId": "compensatory-leave",
+    "memo": "preset:compensatory-leave|振休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 7
+  },
+  {
+    "staffId": 7,
+    "date": "2025-08-08",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 7
+  },
+  {
+    "staffId": 7,
+    "date": "2025-08-11",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 7
+  },
+  {
+    "staffId": 7,
+    "date": "2025-08-16",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 7
+  },
+  {
+    "staffId": 7,
+    "date": "2025-08-22",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 7
+  },
+  {
+    "staffId": 7,
+    "date": "2025-08-24",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|チェック",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 7
+  },
+  {
+    "staffId": 7,
+    "date": "2025-08-30",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 7
+  },
+  {
+    "staffId": 7,
+    "date": "2025-08-31",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|ドック休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 7
+  },
+  {
+    "staffId": 8,
+    "date": "2025-08-17",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|ドック休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 8
+  },
+  {
+    "staffId": 8,
+    "date": "2025-08-18",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|チェック",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 8
+  },
+  {
+    "staffId": 9,
+    "date": "2025-08-09",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 9
+  },
+  {
+    "staffId": 9,
+    "date": "2025-08-23",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 9
+  },
+  {
+    "staffId": 10,
+    "date": "2025-08-08",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|ドック休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 10
+  },
+  {
+    "staffId": 10,
+    "date": "2025-08-11",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 10
+  },
+  {
+    "staffId": 10,
+    "date": "2025-08-24",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 10
+  },
+  {
+    "staffId": 10,
+    "date": "2025-08-29",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 10
+  },
+  {
+    "staffId": 10,
+    "date": "2025-08-31",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 10
+  },
+  {
+    "staffId": 11,
+    "date": "2025-08-04",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|15:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 11
+  },
+  {
+    "staffId": 12,
+    "date": "2025-08-02",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|ドック",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 12
+  },
+  {
+    "staffId": 12,
+    "date": "2025-08-04",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 12
+  },
+  {
+    "staffId": 12,
+    "date": "2025-08-07",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 12
+  },
+  {
+    "staffId": 12,
+    "date": "2025-08-11",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 12
+  },
+  {
+    "staffId": 12,
+    "date": "2025-08-17",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 12
+  },
+  {
+    "staffId": 12,
+    "date": "2025-08-18",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 12
+  },
+  {
+    "staffId": 12,
+    "date": "2025-08-25",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 12
+  },
+  {
+    "staffId": 13,
+    "date": "2025-08-16",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 13
+  },
+  {
+    "staffId": 13,
+    "date": "2025-08-17",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 13
+  },
+  {
+    "staffId": 13,
+    "date": "2025-08-25",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 13
+  },
+  {
+    "staffId": 13,
+    "date": "2025-08-29",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|ドック休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 13
+  },
+  {
+    "staffId": 14,
+    "date": "2025-08-14",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 14
+  },
+  {
+    "staffId": 14,
+    "date": "2025-08-30",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|ドック休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 14
+  },
+  {
+    "staffId": 15,
+    "date": "2025-08-09",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 15
+  },
+  {
+    "staffId": 15,
+    "date": "2025-08-16",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 15
+  },
+  {
+    "staffId": 15,
+    "date": "2025-08-22",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 15
+  },
+  {
+    "staffId": 17,
+    "date": "2025-08-02",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 17
+  },
+  {
+    "staffId": 17,
+    "date": "2025-08-04",
+    "presetId": "afternoon-half-day",
+    "memo": "preset:afternoon-half-day|13:00出社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 17
+  },
+  {
+    "staffId": 17,
+    "date": "2025-08-23",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|ドック休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 17
+  },
+  {
+    "staffId": 18,
+    "date": "2025-08-04",
+    "presetId": "late-arrival",
+    "memo": "preset:late-arrival|11:00出社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 18
+  },
+  {
+    "staffId": 18,
+    "date": "2025-08-10",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 18
+  },
+  {
+    "staffId": 18,
+    "date": "2025-08-18",
+    "presetId": "late-arrival",
+    "memo": "preset:late-arrival|11:00出社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 18
+  },
+  {
+    "staffId": 19,
+    "date": "2025-08-18",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 19
+  },
+  {
+    "staffId": 19,
+    "date": "2025-08-30",
+    "presetId": "late-arrival",
+    "memo": "preset:late-arrival|9:30出社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 19
+  },
+  {
+    "staffId": 19,
+    "date": "2025-08-31",
+    "presetId": "late-arrival",
+    "memo": "preset:late-arrival|9:30出社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 19
+  },
+  {
+    "staffId": 20,
+    "date": "2025-08-30",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|11:30退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 20
+  },
+  {
+    "staffId": 20,
+    "date": "2025-08-31",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|11:30退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 20
+  },
+  {
+    "staffId": 21,
+    "date": "2025-08-01",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 21
+  },
+  {
+    "staffId": 21,
+    "date": "2025-08-08",
+    "presetId": "afternoon-half-day",
+    "memo": "preset:afternoon-half-day|13:00出社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 21
+  },
+  {
+    "staffId": 21,
+    "date": "2025-08-10",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 21
+  },
+  {
+    "staffId": 21,
+    "date": "2025-08-11",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 21
+  },
+  {
+    "staffId": 22,
+    "date": "2025-08-11",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 22
+  },
+  {
+    "staffId": 24,
+    "date": "2025-08-01",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|ドック休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 24
+  },
+  {
+    "staffId": 24,
+    "date": "2025-08-11",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 24
+  },
+  {
+    "staffId": 25,
+    "date": "2025-08-01",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 25
+  },
+  {
+    "staffId": 25,
+    "date": "2025-08-02",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 25
+  },
+  {
+    "staffId": 26,
+    "date": "2025-08-10",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 26
+  },
+  {
+    "staffId": 26,
+    "date": "2025-08-14",
+    "presetId": "vacation",
+    "memo": "preset:vacation|夏休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 26
+  },
+  {
+    "staffId": 26,
+    "date": "2025-08-15",
+    "presetId": "vacation",
+    "memo": "preset:vacation|夏休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 26
+  },
+  {
+    "staffId": 26,
+    "date": "2025-08-16",
+    "presetId": "vacation",
+    "memo": "preset:vacation|夏休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 26
+  },
+  {
+    "staffId": 26,
+    "date": "2025-08-17",
+    "presetId": "late-arrival",
+    "memo": "preset:late-arrival|10:00出社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 26
+  },
+  {
+    "staffId": 26,
+    "date": "2025-08-24",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 26
+  },
+  {
+    "staffId": 26,
+    "date": "2025-08-25",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 26
+  },
+  {
+    "staffId": 27,
+    "date": "2025-08-17",
+    "presetId": "vacation",
+    "memo": "preset:vacation|夏休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 27
+  },
+  {
+    "staffId": 27,
+    "date": "2025-08-18",
+    "presetId": "vacation",
+    "memo": "preset:vacation|夏休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 27
+  },
+  {
+    "staffId": 27,
+    "date": "2025-08-22",
+    "presetId": "vacation",
+    "memo": "preset:vacation|夏休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 27
+  },
+  {
+    "staffId": 28,
+    "date": "2025-08-18",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 28
+  },
+  {
+    "staffId": 29,
+    "date": "2025-08-11",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 29
+  },
+  {
+    "staffId": 29,
+    "date": "2025-08-22",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|チェック",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 29
+  },
+  {
+    "staffId": 29,
+    "date": "2025-08-23",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|ドック休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 29
+  },
+  {
+    "staffId": 29,
+    "date": "2025-08-29",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 29
+  },
+  {
+    "staffId": 30,
+    "date": "2025-08-14",
+    "presetId": "remote-work",
+    "memo": "preset:remote-work|在宅",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 30
+  },
+  {
+    "staffId": 31,
+    "date": "2025-08-14",
+    "presetId": "afternoon-half-day",
+    "memo": "preset:afternoon-half-day|14:00出社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 31
+  },
+  {
+    "staffId": 32,
+    "date": "2025-08-01",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|チェック",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 32
+  },
+  {
+    "staffId": 32,
+    "date": "2025-08-07",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 32
+  },
+  {
+    "staffId": 32,
+    "date": "2025-08-14",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 32
+  },
+  {
+    "staffId": 32,
+    "date": "2025-08-18",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 32
+  },
+  {
+    "staffId": 32,
+    "date": "2025-08-19",
+    "presetId": "makeup-work",
+    "memo": "preset:makeup-work|振出",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 32
+  },
+  {
+    "staffId": 32,
+    "date": "2025-08-22",
+    "presetId": "compensatory-leave",
+    "memo": "preset:compensatory-leave|振休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 32
+  },
+  {
+    "staffId": 32,
+    "date": "2025-08-24",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|ドック休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 32
+  },
+  {
+    "staffId": 32,
+    "date": "2025-08-25",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 32
+  },
+  {
+    "staffId": 32,
+    "date": "2025-08-29",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 32
+  },
+  {
+    "staffId": 33,
+    "date": "2025-08-11",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 33
+  },
+  {
+    "staffId": 35,
+    "date": "2025-08-01",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 35
+  },
+  {
+    "staffId": 35,
+    "date": "2025-08-10",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|ドック休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.203Z",
+    "submittedBy": 35
+  },
+  {
+    "staffId": 36,
+    "date": "2025-08-18",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|ドック休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 36
+  },
+  {
+    "staffId": 37,
+    "date": "2025-08-02",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 37
+  },
+  {
+    "staffId": 37,
+    "date": "2025-08-09",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 37
+  },
+  {
+    "staffId": 37,
+    "date": "2025-08-16",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 37
+  },
+  {
+    "staffId": 37,
+    "date": "2025-08-23",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 37
+  },
+  {
+    "staffId": 37,
+    "date": "2025-08-30",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 37
+  },
+  {
+    "staffId": 38,
+    "date": "2025-08-01",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 38
+  },
+  {
+    "staffId": 38,
+    "date": "2025-08-22",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|ドック休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 38
+  },
+  {
+    "staffId": 39,
+    "date": "2025-08-09",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|ドック休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 39
+  },
+  {
+    "staffId": 39,
+    "date": "2025-08-10",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 39
+  },
+  {
+    "staffId": 39,
+    "date": "2025-08-24",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 39
+  },
+  {
+    "staffId": 40,
+    "date": "2025-08-04",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 40
+  },
+  {
+    "staffId": 40,
+    "date": "2025-08-11",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 40
+  },
+  {
+    "staffId": 40,
+    "date": "2025-08-17",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|ドック休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 40
+  },
+  {
+    "staffId": 41,
+    "date": "2025-08-18",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 41
+  },
+  {
+    "staffId": 42,
+    "date": "2025-08-04",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 42
+  },
+  {
+    "staffId": 42,
+    "date": "2025-08-11",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 42
+  },
+  {
+    "staffId": 42,
+    "date": "2025-08-25",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 42
+  },
+  {
+    "staffId": 42,
+    "date": "2025-08-29",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 42
+  },
+  {
+    "staffId": 42,
+    "date": "2025-08-31",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|ドック休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 42
+  },
+  {
+    "staffId": 43,
+    "date": "2025-08-02",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 43
+  },
+  {
+    "staffId": 44,
+    "date": "2025-08-08",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|チェック",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 44
+  },
+  {
+    "staffId": 44,
+    "date": "2025-08-12",
+    "presetId": "makeup-work",
+    "memo": "preset:makeup-work|振出",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 44
+  },
+  {
+    "staffId": 44,
+    "date": "2025-08-14",
+    "presetId": "compensatory-leave",
+    "memo": "preset:compensatory-leave|振休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 44
+  },
+  {
+    "staffId": 46,
+    "date": "2025-08-01",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|ドック休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 46
+  },
+  {
+    "staffId": 46,
+    "date": "2025-08-03",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 46
+  },
+  {
+    "staffId": 46,
+    "date": "2025-08-10",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 46
+  },
+  {
+    "staffId": 46,
+    "date": "2025-08-17",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 46
+  },
+  {
+    "staffId": 46,
+    "date": "2025-08-23",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 46
+  },
+  {
+    "staffId": 46,
+    "date": "2025-08-28",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 46
+  },
+  {
+    "staffId": 47,
+    "date": "2025-08-01",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 47
+  },
+  {
+    "staffId": 47,
+    "date": "2025-08-04",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 47
+  },
+  {
+    "staffId": 47,
+    "date": "2025-08-07",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 47
+  },
+  {
+    "staffId": 47,
+    "date": "2025-08-09",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 47
+  },
+  {
+    "staffId": 47,
+    "date": "2025-08-15",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 47
+  },
+  {
+    "staffId": 47,
+    "date": "2025-08-24",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 47
+  },
+  {
+    "staffId": 47,
+    "date": "2025-08-26",
+    "presetId": "makeup-work",
+    "memo": "preset:makeup-work|振出",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 47
+  },
+  {
+    "staffId": 47,
+    "date": "2025-08-28",
+    "presetId": "compensatory-leave",
+    "memo": "preset:compensatory-leave|振休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 47
+  },
+  {
+    "staffId": 47,
+    "date": "2025-08-29",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|ドック休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 47
+  },
+  {
+    "staffId": 47,
+    "date": "2025-08-31",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 47
+  },
+  {
+    "staffId": 49,
+    "date": "2025-08-10",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 49
+  },
+  {
+    "staffId": 49,
+    "date": "2025-08-22",
+    "presetId": "vacation",
+    "memo": "preset:vacation|夏休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 49
+  },
+  {
+    "staffId": 49,
+    "date": "2025-08-23",
+    "presetId": "vacation",
+    "memo": "preset:vacation|夏休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 49
+  },
+  {
+    "staffId": 49,
+    "date": "2025-08-24",
+    "presetId": "vacation",
+    "memo": "preset:vacation|夏休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 49
+  },
+  {
+    "staffId": 49,
+    "date": "2025-08-25",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|ドック休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 49
+  },
+  {
+    "staffId": 50,
+    "date": "2025-08-02",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 50
+  },
+  {
+    "staffId": 50,
+    "date": "2025-08-11",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|ドック休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 50
+  },
+  {
+    "staffId": 50,
+    "date": "2025-08-23",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 50
+  },
+  {
+    "staffId": 50,
+    "date": "2025-08-29",
+    "presetId": "vacation",
+    "memo": "preset:vacation|夏休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 50
+  },
+  {
+    "staffId": 50,
+    "date": "2025-08-30",
+    "presetId": "vacation",
+    "memo": "preset:vacation|夏休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 50
+  },
+  {
+    "staffId": 50,
+    "date": "2025-08-31",
+    "presetId": "vacation",
+    "memo": "preset:vacation|夏休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 50
+  },
+  {
+    "staffId": 51,
+    "date": "2025-08-01",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 51
+  },
+  {
+    "staffId": 52,
+    "date": "2025-08-02",
+    "presetId": "vacation",
+    "memo": "preset:vacation|夏休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 52
+  },
+  {
+    "staffId": 52,
+    "date": "2025-08-03",
+    "presetId": "vacation",
+    "memo": "preset:vacation|夏休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 52
+  },
+  {
+    "staffId": 52,
+    "date": "2025-08-04",
+    "presetId": "vacation",
+    "memo": "preset:vacation|夏休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 52
+  },
+  {
+    "staffId": 52,
+    "date": "2025-08-22",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|ドック休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 52
+  },
+  {
+    "staffId": 52,
+    "date": "2025-08-28",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 52
+  },
+  {
+    "staffId": 53,
+    "date": "2025-08-03",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 53
+  },
+  {
+    "staffId": 53,
+    "date": "2025-08-04",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 53
+  },
+  {
+    "staffId": 53,
+    "date": "2025-08-08",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 53
+  },
+  {
+    "staffId": 53,
+    "date": "2025-08-12",
+    "presetId": "makeup-work",
+    "memo": "preset:makeup-work|振出",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 53
+  },
+  {
+    "staffId": 53,
+    "date": "2025-08-16",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 53
+  },
+  {
+    "staffId": 53,
+    "date": "2025-08-22",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 53
+  },
+  {
+    "staffId": 53,
+    "date": "2025-08-28",
+    "presetId": "compensatory-leave",
+    "memo": "preset:compensatory-leave|振休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 53
+  },
+  {
+    "staffId": 53,
+    "date": "2025-08-31",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|チェック",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 53
+  },
+  {
+    "staffId": 54,
+    "date": "2025-08-01",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 54
+  },
+  {
+    "staffId": 54,
+    "date": "2025-08-04",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 54
+  },
+  {
+    "staffId": 54,
+    "date": "2025-08-05",
+    "presetId": "makeup-work",
+    "memo": "preset:makeup-work|振出",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 54
+  },
+  {
+    "staffId": 54,
+    "date": "2025-08-07",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 54
+  },
+  {
+    "staffId": 54,
+    "date": "2025-08-09",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|チェック",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 54
+  },
+  {
+    "staffId": 54,
+    "date": "2025-08-11",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 54
+  },
+  {
+    "staffId": 54,
+    "date": "2025-08-14",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 54
+  },
+  {
+    "staffId": 54,
+    "date": "2025-08-17",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 54
+  },
+  {
+    "staffId": 54,
+    "date": "2025-08-25",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 54
+  },
+  {
+    "staffId": 54,
+    "date": "2025-08-28",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 54
+  },
+  {
+    "staffId": 55,
+    "date": "2025-08-02",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 55
+  },
+  {
+    "staffId": 55,
+    "date": "2025-08-04",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 55
+  },
+  {
+    "staffId": 55,
+    "date": "2025-08-07",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 55
+  },
+  {
+    "staffId": 55,
+    "date": "2025-08-08",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|13:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 55
+  },
+  {
+    "staffId": 55,
+    "date": "2025-08-10",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 55
+  },
+  {
+    "staffId": 55,
+    "date": "2025-08-11",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 55
+  },
+  {
+    "staffId": 55,
+    "date": "2025-08-16",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 55
+  },
+  {
+    "staffId": 55,
+    "date": "2025-08-19",
+    "presetId": "makeup-work",
+    "memo": "preset:makeup-work|振出",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 55
+  },
+  {
+    "staffId": 55,
+    "date": "2025-08-22",
+    "presetId": "compensatory-leave",
+    "memo": "preset:compensatory-leave|振休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 55
+  },
+  {
+    "staffId": 55,
+    "date": "2025-08-30",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 55
+  },
+  {
+    "staffId": 57,
+    "date": "2025-08-01",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 57
+  },
+  {
+    "staffId": 57,
+    "date": "2025-08-03",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 57
+  },
+  {
+    "staffId": 57,
+    "date": "2025-08-04",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 57
+  },
+  {
+    "staffId": 57,
+    "date": "2025-08-23",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 57
+  },
+  {
+    "staffId": 59,
+    "date": "2025-08-01",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 59
+  },
+  {
+    "staffId": 59,
+    "date": "2025-08-04",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 59
+  },
+  {
+    "staffId": 59,
+    "date": "2025-08-07",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 59
+  },
+  {
+    "staffId": 59,
+    "date": "2025-08-11",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 59
+  },
+  {
+    "staffId": 59,
+    "date": "2025-08-15",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 59
+  },
+  {
+    "staffId": 59,
+    "date": "2025-08-18",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 59
+  },
+  {
+    "staffId": 59,
+    "date": "2025-08-22",
+    "presetId": "compensatory-leave",
+    "memo": "preset:compensatory-leave|振休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 59
+  },
+  {
+    "staffId": 59,
+    "date": "2025-08-26",
+    "presetId": "makeup-work",
+    "memo": "preset:makeup-work|振出",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 59
+  },
+  {
+    "staffId": 59,
+    "date": "2025-08-28",
+    "presetId": "afternoon-half-day",
+    "memo": "preset:afternoon-half-day|14:00出社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 59
+  },
+  {
+    "staffId": 59,
+    "date": "2025-08-31",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 59
+  },
+  {
+    "staffId": 61,
+    "date": "2025-08-18",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 61
+  },
+  {
+    "staffId": 63,
+    "date": "2025-08-02",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 63
+  },
+  {
+    "staffId": 63,
+    "date": "2025-08-11",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 63
+  },
+  {
+    "staffId": 63,
+    "date": "2025-08-17",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 63
+  },
+  {
+    "staffId": 63,
+    "date": "2025-08-25",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 63
+  },
+  {
+    "staffId": 63,
+    "date": "2025-08-30",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 63
+  },
+  {
+    "staffId": 64,
+    "date": "2025-08-08",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|ドック休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 64
+  },
+  {
+    "staffId": 64,
+    "date": "2025-08-22",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 64
+  },
+  {
+    "staffId": 65,
+    "date": "2025-08-02",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 65
+  },
+  {
+    "staffId": 65,
+    "date": "2025-08-11",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 65
+  },
+  {
+    "staffId": 65,
+    "date": "2025-08-25",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 65
+  },
+  {
+    "staffId": 65,
+    "date": "2025-08-29",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 65
+  },
+  {
+    "staffId": 66,
+    "date": "2025-08-03",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 66
+  },
+  {
+    "staffId": 66,
+    "date": "2025-08-09",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 66
+  },
+  {
+    "staffId": 66,
+    "date": "2025-08-18",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 66
+  },
+  {
+    "staffId": 66,
+    "date": "2025-08-30",
+    "presetId": "vacation",
+    "memo": "preset:vacation|夏休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 66
+  },
+  {
+    "staffId": 66,
+    "date": "2025-08-31",
+    "presetId": "vacation",
+    "memo": "preset:vacation|夏休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 66
+  },
+  {
+    "staffId": 67,
+    "date": "2025-08-30",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|ドック休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 67
+  },
+  {
+    "staffId": 68,
+    "date": "2025-08-07",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 68
+  },
+  {
+    "staffId": 68,
+    "date": "2025-08-29",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|ドック休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 68
+  },
+  {
+    "staffId": 69,
+    "date": "2025-08-01",
+    "presetId": "late-arrival",
+    "memo": "preset:late-arrival|11:00出社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.204Z",
+    "submittedBy": 69
+  },
+  {
+    "staffId": 69,
+    "date": "2025-08-10",
+    "presetId": "late-arrival",
+    "memo": "preset:late-arrival|10:30出社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 69
+  },
+  {
+    "staffId": 69,
+    "date": "2025-08-17",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 69
+  },
+  {
+    "staffId": 69,
+    "date": "2025-08-28",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 69
+  },
+  {
+    "staffId": 70,
+    "date": "2025-08-23",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|ドック休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 70
+  },
+  {
+    "staffId": 71,
+    "date": "2025-08-07",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 71
+  },
+  {
+    "staffId": 71,
+    "date": "2025-08-09",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 71
+  },
+  {
+    "staffId": 71,
+    "date": "2025-08-23",
+    "presetId": "vacation",
+    "memo": "preset:vacation|夏休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 71
+  },
+  {
+    "staffId": 71,
+    "date": "2025-08-24",
+    "presetId": "vacation",
+    "memo": "preset:vacation|夏休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 71
+  },
+  {
+    "staffId": 71,
+    "date": "2025-08-25",
+    "presetId": "vacation",
+    "memo": "preset:vacation|夏休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 71
+  },
+  {
+    "staffId": 73,
+    "date": "2025-08-02",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 73
+  },
+  {
+    "staffId": 73,
+    "date": "2025-08-18",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 73
+  },
+  {
+    "staffId": 73,
+    "date": "2025-08-23",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 73
+  },
+  {
+    "staffId": 74,
+    "date": "2025-08-01",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|14:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 74
+  },
+  {
+    "staffId": 74,
+    "date": "2025-08-08",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|14:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 74
+  },
+  {
+    "staffId": 74,
+    "date": "2025-08-15",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|14:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 74
+  },
+  {
+    "staffId": 74,
+    "date": "2025-08-22",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|14:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 74
+  },
+  {
+    "staffId": 74,
+    "date": "2025-08-29",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|14:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 74
+  },
+  {
+    "staffId": 75,
+    "date": "2025-08-23",
+    "presetId": "vacation",
+    "memo": "preset:vacation|夏休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 75
+  },
+  {
+    "staffId": 75,
+    "date": "2025-08-24",
+    "presetId": "vacation",
+    "memo": "preset:vacation|夏休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 75
+  },
+  {
+    "staffId": 75,
+    "date": "2025-08-25",
+    "presetId": "vacation",
+    "memo": "preset:vacation|夏休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 75
+  },
+  {
+    "staffId": 77,
+    "date": "2025-08-02",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|チェック",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 77
+  },
+  {
+    "staffId": 78,
+    "date": "2025-08-01",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 78
+  },
+  {
+    "staffId": 78,
+    "date": "2025-08-02",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 78
+  },
+  {
+    "staffId": 78,
+    "date": "2025-08-03",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 78
+  },
+  {
+    "staffId": 78,
+    "date": "2025-08-04",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 78
+  },
+  {
+    "staffId": 78,
+    "date": "2025-08-07",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 78
+  },
+  {
+    "staffId": 78,
+    "date": "2025-08-08",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 78
+  },
+  {
+    "staffId": 78,
+    "date": "2025-08-09",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 78
+  },
+  {
+    "staffId": 78,
+    "date": "2025-08-10",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 78
+  },
+  {
+    "staffId": 78,
+    "date": "2025-08-11",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 78
+  },
+  {
+    "staffId": 78,
+    "date": "2025-08-14",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 78
+  },
+  {
+    "staffId": 78,
+    "date": "2025-08-16",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 78
+  },
+  {
+    "staffId": 78,
+    "date": "2025-08-17",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|チェック",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 78
+  },
+  {
+    "staffId": 78,
+    "date": "2025-08-24",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 78
+  },
+  {
+    "staffId": 78,
+    "date": "2025-08-28",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 78
+  },
+  {
+    "staffId": 78,
+    "date": "2025-08-29",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 78
+  },
+  {
+    "staffId": 78,
+    "date": "2025-08-30",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 78
+  },
+  {
+    "staffId": 78,
+    "date": "2025-08-31",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 78
+  },
+  {
+    "staffId": 79,
+    "date": "2025-08-01",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 79
+  },
+  {
+    "staffId": 79,
+    "date": "2025-08-02",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 79
+  },
+  {
+    "staffId": 79,
+    "date": "2025-08-03",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 79
+  },
+  {
+    "staffId": 79,
+    "date": "2025-08-04",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 79
+  },
+  {
+    "staffId": 79,
+    "date": "2025-08-07",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 79
+  },
+  {
+    "staffId": 79,
+    "date": "2025-08-08",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 79
+  },
+  {
+    "staffId": 79,
+    "date": "2025-08-09",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 79
+  },
+  {
+    "staffId": 79,
+    "date": "2025-08-11",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 79
+  },
+  {
+    "staffId": 79,
+    "date": "2025-08-15",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 79
+  },
+  {
+    "staffId": 79,
+    "date": "2025-08-16",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 79
+  },
+  {
+    "staffId": 79,
+    "date": "2025-08-17",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 79
+  },
+  {
+    "staffId": 79,
+    "date": "2025-08-18",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 79
+  },
+  {
+    "staffId": 79,
+    "date": "2025-08-22",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 79
+  },
+  {
+    "staffId": 79,
+    "date": "2025-08-23",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 79
+  },
+  {
+    "staffId": 79,
+    "date": "2025-08-25",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|ドック休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 79
+  },
+  {
+    "staffId": 79,
+    "date": "2025-08-28",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 79
+  },
+  {
+    "staffId": 79,
+    "date": "2025-08-29",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 79
+  },
+  {
+    "staffId": 79,
+    "date": "2025-08-30",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 79
+  },
+  {
+    "staffId": 79,
+    "date": "2025-08-31",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 79
+  },
+  {
+    "staffId": 80,
+    "date": "2025-08-01",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 80
+  },
+  {
+    "staffId": 80,
+    "date": "2025-08-02",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 80
+  },
+  {
+    "staffId": 80,
+    "date": "2025-08-07",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 80
+  },
+  {
+    "staffId": 80,
+    "date": "2025-08-08",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 80
+  },
+  {
+    "staffId": 80,
+    "date": "2025-08-10",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|ドック休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 80
+  },
+  {
+    "staffId": 80,
+    "date": "2025-08-15",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 80
+  },
+  {
+    "staffId": 80,
+    "date": "2025-08-22",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 80
+  },
+  {
+    "staffId": 80,
+    "date": "2025-08-25",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|15:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 80
+  },
+  {
+    "staffId": 80,
+    "date": "2025-08-29",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 80
+  },
+  {
+    "staffId": 81,
+    "date": "2025-08-03",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|ドック",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 81
+  },
+  {
+    "staffId": 81,
+    "date": "2025-08-07",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|15:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 81
+  },
+  {
+    "staffId": 81,
+    "date": "2025-08-18",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 81
+  },
+  {
+    "staffId": 82,
+    "date": "2025-08-07",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 82
+  },
+  {
+    "staffId": 82,
+    "date": "2025-08-28",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 82
+  },
+  {
+    "staffId": 84,
+    "date": "2025-08-14",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 84
+  },
+  {
+    "staffId": 84,
+    "date": "2025-08-17",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|ドック休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 84
+  },
+  {
+    "staffId": 84,
+    "date": "2025-08-18",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 84
+  },
+  {
+    "staffId": 84,
+    "date": "2025-08-23",
+    "presetId": "medical-appointment",
+    "memo": "preset:medical-appointment|通院後出社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 84
+  },
+  {
+    "staffId": 84,
+    "date": "2025-08-25",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 84
+  },
+  {
+    "staffId": 85,
+    "date": "2025-08-07",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 85
+  },
+  {
+    "staffId": 85,
+    "date": "2025-08-14",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 85
+  },
+  {
+    "staffId": 87,
+    "date": "2025-08-25",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|ドック休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 87
+  },
+  {
+    "staffId": 89,
+    "date": "2025-08-02",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 89
+  },
+  {
+    "staffId": 89,
+    "date": "2025-08-08",
+    "presetId": "afternoon-half-day",
+    "memo": "preset:afternoon-half-day|13:00出社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 89
+  },
+  {
+    "staffId": 89,
+    "date": "2025-08-17",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 89
+  },
+  {
+    "staffId": 89,
+    "date": "2025-08-28",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 89
+  },
+  {
+    "staffId": 90,
+    "date": "2025-08-07",
+    "presetId": "afternoon-half-day",
+    "memo": "preset:afternoon-half-day|13:00出社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 90
+  },
+  {
+    "staffId": 90,
+    "date": "2025-08-11",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|14:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 90
+  },
+  {
+    "staffId": 90,
+    "date": "2025-08-16",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 90
+  },
+  {
+    "staffId": 91,
+    "date": "2025-08-04",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 91
+  },
+  {
+    "staffId": 91,
+    "date": "2025-08-09",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|ドック休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 91
+  },
+  {
+    "staffId": 91,
+    "date": "2025-08-24",
+    "presetId": "morning-half-day",
+    "memo": "preset:morning-half-day|12:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 91
+  },
+  {
+    "staffId": 91,
+    "date": "2025-08-25",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 91
+  },
+  {
+    "staffId": 93,
+    "date": "2025-08-25",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 93
+  },
+  {
+    "staffId": 94,
+    "date": "2025-08-02",
+    "presetId": "remote-work",
+    "memo": "preset:remote-work|在宅",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 94
+  },
+  {
+    "staffId": 94,
+    "date": "2025-08-04",
+    "presetId": "remote-work",
+    "memo": "preset:remote-work|在宅",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 94
+  },
+  {
+    "staffId": 94,
+    "date": "2025-08-10",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|チェック",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 94
+  },
+  {
+    "staffId": 94,
+    "date": "2025-08-18",
+    "presetId": "remote-work",
+    "memo": "preset:remote-work|在宅",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 94
+  },
+  {
+    "staffId": 94,
+    "date": "2025-08-23",
+    "presetId": "remote-work",
+    "memo": "preset:remote-work|在宅",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.205Z",
+    "submittedBy": 94
+  },
+  {
+    "staffId": 94,
+    "date": "2025-08-30",
+    "presetId": "remote-work",
+    "memo": "preset:remote-work|在宅",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.206Z",
+    "submittedBy": 94
+  },
+  {
+    "staffId": 94,
+    "date": "2025-08-31",
+    "presetId": "remote-work",
+    "memo": "preset:remote-work|在宅",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.206Z",
+    "submittedBy": 94
+  },
+  {
+    "staffId": 95,
+    "date": "2025-08-02",
+    "presetId": "early-leave",
+    "memo": "preset:early-leave|18:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.206Z",
+    "submittedBy": 95
+  },
+  {
+    "staffId": 95,
+    "date": "2025-08-18",
+    "presetId": "early-leave",
+    "memo": "preset:early-leave|17:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.206Z",
+    "submittedBy": 95
+  },
+  {
+    "staffId": 95,
+    "date": "2025-08-23",
+    "presetId": "early-leave",
+    "memo": "preset:early-leave|17:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.206Z",
+    "submittedBy": 95
+  },
+  {
+    "staffId": 95,
+    "date": "2025-08-30",
+    "presetId": "early-leave",
+    "memo": "preset:early-leave|17:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.206Z",
+    "submittedBy": 95
+  },
+  {
+    "staffId": 95,
+    "date": "2025-08-31",
+    "presetId": "early-leave",
+    "memo": "preset:early-leave|17:00退社",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.206Z",
+    "submittedBy": 95
+  },
+  {
+    "staffId": 96,
+    "date": "2025-08-28",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.206Z",
+    "submittedBy": 96
+  },
+  {
+    "staffId": 97,
+    "date": "2025-08-03",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|チェック",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.206Z",
+    "submittedBy": 97
+  },
+  {
+    "staffId": 97,
+    "date": "2025-08-04",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.206Z",
+    "submittedBy": 97
+  },
+  {
+    "staffId": 97,
+    "date": "2025-08-11",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.206Z",
+    "submittedBy": 97
+  },
+  {
+    "staffId": 97,
+    "date": "2025-08-22",
+    "presetId": "vacation",
+    "memo": "preset:vacation|夏休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.206Z",
+    "submittedBy": 97
+  },
+  {
+    "staffId": 97,
+    "date": "2025-08-23",
+    "presetId": "vacation",
+    "memo": "preset:vacation|夏休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.206Z",
+    "submittedBy": 97
+  },
+  {
+    "staffId": 97,
+    "date": "2025-08-24",
+    "presetId": "vacation",
+    "memo": "preset:vacation|夏休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.206Z",
+    "submittedBy": 97
+  },
+  {
+    "staffId": 97,
+    "date": "2025-08-25",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.206Z",
+    "submittedBy": 97
+  },
+  {
+    "staffId": 97,
+    "date": "2025-08-28",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.206Z",
+    "submittedBy": 97
+  },
+  {
+    "staffId": 97,
+    "date": "2025-08-29",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.206Z",
+    "submittedBy": 97
+  },
+  {
+    "staffId": 97,
+    "date": "2025-08-30",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.206Z",
+    "submittedBy": 97
+  },
+  {
+    "staffId": 97,
+    "date": "2025-08-31",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.206Z",
+    "submittedBy": 97
+  },
+  {
+    "staffId": 98,
+    "date": "2025-08-01",
+    "presetId": "remote-work",
+    "memo": "preset:remote-work|在宅",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.206Z",
+    "submittedBy": 98
+  },
+  {
+    "staffId": 98,
+    "date": "2025-08-03",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.206Z",
+    "submittedBy": 98
+  },
+  {
+    "staffId": 98,
+    "date": "2025-08-05",
+    "presetId": "makeup-work",
+    "memo": "preset:makeup-work|振出",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.206Z",
+    "submittedBy": 98
+  },
+  {
+    "staffId": 98,
+    "date": "2025-08-07",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.206Z",
+    "submittedBy": 98
+  },
+  {
+    "staffId": 98,
+    "date": "2025-08-08",
+    "presetId": "compensatory-leave",
+    "memo": "preset:compensatory-leave|振休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.206Z",
+    "submittedBy": 98
+  },
+  {
+    "staffId": 98,
+    "date": "2025-08-11",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.206Z",
+    "submittedBy": 98
+  },
+  {
+    "staffId": 98,
+    "date": "2025-08-14",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.206Z",
+    "submittedBy": 98
+  },
+  {
+    "staffId": 98,
+    "date": "2025-08-16",
+    "presetId": "medical-checkup",
+    "memo": "preset:medical-checkup|チェック",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.206Z",
+    "submittedBy": 98
+  },
+  {
+    "staffId": 98,
+    "date": "2025-08-18",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.206Z",
+    "submittedBy": 98
+  },
+  {
+    "staffId": 98,
+    "date": "2025-08-19",
+    "presetId": "makeup-work",
+    "memo": "preset:makeup-work|振出",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.206Z",
+    "submittedBy": 98
+  },
+  {
+    "staffId": 98,
+    "date": "2025-08-22",
+    "presetId": "compensatory-leave",
+    "memo": "preset:compensatory-leave|振休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.206Z",
+    "submittedBy": 98
+  },
+  {
+    "staffId": 98,
+    "date": "2025-08-28",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.206Z",
+    "submittedBy": 98
+  },
+  {
+    "staffId": 98,
+    "date": "2025-08-29",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.206Z",
+    "submittedBy": 98
+  },
+  {
+    "staffId": 98,
+    "date": "2025-08-30",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.206Z",
+    "submittedBy": 98
+  },
+  {
+    "staffId": 98,
+    "date": "2025-08-31",
+    "presetId": "external-event",
+    "memo": "preset:external-event|9月18日",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.206Z",
+    "submittedBy": 98
+  },
+  {
+    "staffId": 99,
+    "date": "2025-08-03",
+    "presetId": "compensatory-leave",
+    "memo": "preset:compensatory-leave|振休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.206Z",
+    "submittedBy": 99
+  },
+  {
+    "staffId": 99,
+    "date": "2025-08-04",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.206Z",
+    "submittedBy": 99
+  },
+  {
+    "staffId": 99,
+    "date": "2025-08-07",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.206Z",
+    "submittedBy": 99
+  },
+  {
+    "staffId": 99,
+    "date": "2025-08-08",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.206Z",
+    "submittedBy": 99
+  },
+  {
+    "staffId": 99,
+    "date": "2025-08-09",
+    "presetId": "remote-work",
+    "memo": "preset:remote-work|在宅",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.206Z",
+    "submittedBy": 99
+  },
+  {
+    "staffId": 99,
+    "date": "2025-08-10",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.206Z",
+    "submittedBy": 99
+  },
+  {
+    "staffId": 99,
+    "date": "2025-08-14",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.206Z",
+    "submittedBy": 99
+  },
+  {
+    "staffId": 99,
+    "date": "2025-08-16",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.206Z",
+    "submittedBy": 99
+  },
+  {
+    "staffId": 99,
+    "date": "2025-08-22",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.206Z",
+    "submittedBy": 99
+  },
+  {
+    "staffId": 99,
+    "date": "2025-08-24",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.206Z",
+    "submittedBy": 99
+  },
+  {
+    "staffId": 99,
+    "date": "2025-08-26",
+    "presetId": "makeup-work",
+    "memo": "preset:makeup-work|振出",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.206Z",
+    "submittedBy": 99
+  },
+  {
+    "staffId": 99,
+    "date": "2025-08-31",
+    "presetId": "meeting",
+    "memo": "preset:meeting|21時の会議",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.206Z",
+    "submittedBy": 99
+  },
+  {
+    "staffId": 100,
+    "date": "2025-08-04",
+    "presetId": "day-off",
+    "memo": "preset:day-off|全休",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.206Z",
+    "submittedBy": 100
+  },
+  {
+    "staffId": 100,
+    "date": "2025-08-10",
+    "presetId": "remote-work",
+    "memo": "preset:remote-work|在宅",
+    "isPending": true,
+    "submittedAt": "2025-07-02T07:06:51.206Z",
+    "submittedBy": 100
+  }
+];
+    
+    try {
+      const insertResponse = await axios.post(`${baseURL}/pending-schedules/bulk`, {
+        schedules: schedules
+      });
+      
+      console.log('✅ 挿入完了:', insertResponse.data);
+      console.log(`📊 処理件数: ${schedules.length}件`);
+    } catch (error) {
+      console.error('❌ 挿入エラー:', error.response?.data || error.message);
+      console.log('📝 代替として個別挿入を試行中...');
+      
+      // 個別挿入のフォールバック
+      let successCount = 0;
+      for (const schedule of schedules) {
+        try {
+          await axios.post(`${baseURL}/pending-schedules`, schedule);
+          successCount++;
+        } catch (individualError) {
+          console.error(`❌ 個別挿入失敗 (${schedule.staffId}, ${schedule.date}):`, individualError.response?.data || individualError.message);
+        }
+      }
+      console.log(`📊 個別挿入完了: ${successCount}/${schedules.length}件`);
+    }
+    
+  } catch (error) {
+    console.error('❌ 全体エラー:', error.response?.data || error.message);
+  }
+}
+
+insertPendingSchedulesWithPresets();

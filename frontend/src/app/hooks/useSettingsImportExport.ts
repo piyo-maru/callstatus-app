@@ -140,7 +140,6 @@ export function useSettingsImportExport(): UseSettingsImportExportReturn {
     });
     
     const display: DisplaySettings = {
-      viewMode: (localStorage.getItem('callstatus-viewMode') as 'normal' | 'compact') || 'normal',
       maskingEnabled: localStorage.getItem('callstatus-maskingEnabled') === 'true',
       timeRange: (localStorage.getItem('callstatus-timeRange') as 'standard' | 'extended') || 'standard',
       customStatusColors: completeStatusColors,
@@ -338,7 +337,6 @@ export function useSettingsImportExport(): UseSettingsImportExportReturn {
         console.log('表示設定インポート開始:', settings.settings.display);
         try {
           const display = settings.settings.display;
-          localStorage.setItem('callstatus-viewMode', display.viewMode);
           localStorage.setItem('callstatus-maskingEnabled', display.maskingEnabled.toString());
           localStorage.setItem('callstatus-timeRange', display.timeRange);
           

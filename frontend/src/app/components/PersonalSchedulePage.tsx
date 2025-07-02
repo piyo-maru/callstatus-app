@@ -349,23 +349,31 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
   } | null>(null);
   const [dragOffset, setDragOffset] = useState<number>(0); // ドラッグオフセット（メイン画面と同じ）
 
-  // プリセット予定（統一プリセットシステムから取得）
+  // プリセット予定（統一プリセットシステムから取得、月次プランナーと同じ変換処理を使用）
   const presetSchedules: PresetSchedule[] = useMemo(() => {
     const unifiedPresets = getPresetsForPage('personalPage');
-    return unifiedPresets.map(preset => ({
-      id: preset.id,
-      name: preset.name,
-      displayName: preset.displayName,
-      timeDisplay: preset.schedules.length === 1 
-        ? `${preset.schedules[0].startTime.toString().padStart(2, '0')}:00-${preset.schedules[0].endTime.toString().padStart(2, '0')}:00`
-        : `${preset.schedules[0].startTime.toString().padStart(2, '0')}:00-${preset.schedules[preset.schedules.length - 1].endTime.toString().padStart(2, '0')}:00 + 調整`,
-      schedules: preset.schedules.map(schedule => ({
-        status: schedule.status,
-        startTime: schedule.startTime,
-        endTime: schedule.endTime,
-        memo: schedule.memo
-      }))
-    }));
+    return unifiedPresets.map(preset => {
+      // 代表色選択を考慮してスケジュールを決定（月次プランナーと同じロジック）
+      const representativeIndex = preset.representativeScheduleIndex ?? 0;
+      const representativeSchedule = preset.schedules[representativeIndex] || preset.schedules[0];
+      
+      return {
+        id: preset.id,
+        name: preset.name,
+        displayName: preset.displayName,
+        timeDisplay: preset.schedules.length === 1 
+          ? `${preset.schedules[0].startTime.toString().padStart(2, '0')}:00-${preset.schedules[0].endTime.toString().padStart(2, '0')}:00`
+          : `${preset.schedules[0].startTime.toString().padStart(2, '0')}:00-${preset.schedules[preset.schedules.length - 1].endTime.toString().padStart(2, '0')}:00 + 調整`,
+        schedules: preset.schedules.map(schedule => ({
+          status: schedule.status,
+          startTime: schedule.startTime,
+          endTime: schedule.endTime,
+          memo: schedule.memo
+        })),
+        // 代表スケジュールの情報を追加
+        representativeScheduleIndex: preset.representativeScheduleIndex
+      };
+    });
   }, [getPresetsForPage]);
   
   // 元のプリセットデータも保持（詳細表示用）
@@ -1029,6 +1037,23 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
     
     setResponsibilityData(responsibilityMap);
   }, [currentStaff, monthDays, authenticatedFetch, getApiUrl]);
+
+  // 設定変更後のデータ再取得・再レンダリング
+  const handleSettingsChange = useCallback(async (settings: any) => {
+    // スタッフデータの再取得
+    await fetchCurrentStaff();
+    
+    // スケジュールデータの再取得
+    if (currentStaff) {
+      await fetchSchedules();
+      // 担当設定データの再取得
+      await loadResponsibilityData();
+    }
+    
+    // 表示設定の変更を反映するため、強制的に再レンダリングをトリガー
+    // ステータス色や表示名の変更がすぐに反映されるようにする
+    setSelectedDate(prev => new Date(prev)); // 同じ日付で再セットしてre-render
+  }, [fetchCurrentStaff, currentStaff, fetchSchedules, loadResponsibilityData]);
 
   useEffect(() => {
     if (currentStaff) {
@@ -2137,7 +2162,9 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
             {presetSchedules.map((preset) => {
-              const status = preset.schedules[0]?.status || 'online';
+              // 代表色用のスケジュールを取得（プリセット変換時に既に決定済み）
+              const representativeIndex = preset.representativeScheduleIndex ?? 0;
+              const status = preset.schedules[representativeIndex]?.status || preset.schedules[0]?.status || 'online';
               
               // 現在有効な色を取得（カスタム設定を含む）
               const originalColor = getEffectiveStatusColor(status);
@@ -2629,6 +2656,7 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
       <UnifiedSettingsModal
         isOpen={isUnifiedSettingsOpen}
         onClose={() => setIsUnifiedSettingsOpen(false)}
+        onSettingsChange={handleSettingsChange}
         setIsCsvUploadModalOpen={setIsCsvUploadModalOpen}
         setIsJsonUploadModalOpen={setIsJsonUploadModalOpen}
         setIsImportHistoryModalOpen={setIsImportHistoryModalOpen}

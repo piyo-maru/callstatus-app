@@ -17,10 +17,11 @@ export class ResponsibilitiesService {
   constructor(private prisma: PrismaService) {}
 
   async getResponsibilitiesByDate(date: string) {
-    console.log(`Getting responsibilities for date: ${date}`);
-    
-    // 指定日付のDailyAssignmentレコードを取得
-    const assignments = await this.prisma.dailyAssignment.findMany({
+    try {
+      console.log(`Getting responsibilities for date: ${date}`);
+      
+      // 指定日付のDailyAssignmentレコードを取得
+      const assignments = await this.prisma.dailyAssignment.findMany({
       where: {
         date: new Date(date)
       },
@@ -86,6 +87,10 @@ export class ResponsibilitiesService {
     return {
       responsibilities: Array.from(staffResponsibilities.values())
     };
+    } catch (error) {
+      console.error('Error in getResponsibilitiesByDate:', error);
+      throw error;
+    }
   }
 
   async saveResponsibilities(staffId: number, date: string, responsibilities: ResponsibilityData) {

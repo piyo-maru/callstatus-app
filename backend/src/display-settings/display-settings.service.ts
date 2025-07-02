@@ -3,7 +3,6 @@ import { PrismaService } from '../prisma.service';
 import { GlobalDisplaySettings } from '@prisma/client';
 
 export interface DisplaySettingsDto {
-  viewMode: string;
   maskingEnabled: boolean;
   timeRange: string;
   customStatusColors: Record<string, string>;
@@ -29,7 +28,6 @@ export class DisplaySettingsService {
     }
 
     return {
-      viewMode: settings.viewMode,
       maskingEnabled: settings.maskingEnabled,
       timeRange: settings.timeRange,
       customStatusColors: settings.customStatusColors as Record<string, string>,
@@ -50,7 +48,6 @@ export class DisplaySettingsService {
     const settings = await this.prisma.globalDisplaySettings.upsert({
       where: { id: 1 },
       update: {
-        ...(updateData.viewMode !== undefined && { viewMode: updateData.viewMode }),
         ...(updateData.maskingEnabled !== undefined && { maskingEnabled: updateData.maskingEnabled }),
         ...(updateData.timeRange !== undefined && { timeRange: updateData.timeRange }),
         ...(updateData.customStatusColors !== undefined && { customStatusColors: updateData.customStatusColors }),
@@ -59,7 +56,6 @@ export class DisplaySettingsService {
       },
       create: {
         id: 1,
-        viewMode: updateData.viewMode || 'normal',
         maskingEnabled: updateData.maskingEnabled || false,
         timeRange: updateData.timeRange || 'standard',
         customStatusColors: updateData.customStatusColors || {},
@@ -69,7 +65,6 @@ export class DisplaySettingsService {
     });
 
     return {
-      viewMode: settings.viewMode,
       maskingEnabled: settings.maskingEnabled,
       timeRange: settings.timeRange,
       customStatusColors: settings.customStatusColors as Record<string, string>,
@@ -84,7 +79,6 @@ export class DisplaySettingsService {
     return this.prisma.globalDisplaySettings.create({
       data: {
         id: 1,
-        viewMode: 'normal',
         maskingEnabled: false,
         timeRange: 'standard',
         customStatusColors: {},
@@ -114,7 +108,6 @@ export class DisplaySettingsService {
       const defaultSettings = await this.initializeDefaultSettings();
       return {
         settings: {
-          viewMode: defaultSettings.viewMode,
           maskingEnabled: defaultSettings.maskingEnabled,
           timeRange: defaultSettings.timeRange,
           customStatusColors: defaultSettings.customStatusColors as Record<string, string>,
@@ -127,7 +120,6 @@ export class DisplaySettingsService {
 
     return {
       settings: {
-        viewMode: settings.viewMode,
         maskingEnabled: settings.maskingEnabled,
         timeRange: settings.timeRange,
         customStatusColors: settings.customStatusColors as Record<string, string>,

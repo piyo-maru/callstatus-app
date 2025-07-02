@@ -17,11 +17,33 @@ export class ResponsibilitiesController {
   constructor(private readonly responsibilitiesService: ResponsibilitiesService) {}
 
   @Get()
-  async getResponsibilities(@Query('date') date: string) {
-    if (!date) {
-      throw new Error('date parameter is required');
+  async getResponsibilities(
+    @Query('date') date?: string,
+    @Query('year') year?: string,
+    @Query('month') month?: string
+  ) {
+    try {
+      let targetDate: string;
+      
+      console.log('Responsibilities request:', { date, year, month });
+      
+      if (date) {
+        targetDate = date;
+      } else if (year && month) {
+        // year=2025&month=8 の形式を 2025-08-01 に変換
+        const paddedMonth = month.padStart(2, '0');
+        targetDate = `${year}-${paddedMonth}-01`;
+      } else {
+        throw new Error('Either date parameter or year/month parameters are required');
+      }
+      
+      console.log('Target date:', targetDate);
+      
+      return await this.responsibilitiesService.getResponsibilitiesByDate(targetDate);
+    } catch (error) {
+      console.error('Error in getResponsibilities:', error);
+      throw error;
     }
-    return this.responsibilitiesService.getResponsibilitiesByDate(date);
   }
 
   @Post()

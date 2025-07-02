@@ -454,10 +454,25 @@ export const usePresetSettings = (): UsePresetSettingsReturn => {
         mergedPresets = globalSettings.presets;
       }
 
-      // ページ別設定のマージ
+      // ページ別設定のマージ（安全性チェック付き）
       let mergedPageSettings = currentPageSettings;
-      if (GLOBAL_INTEGRATION_CONFIG.preferGlobal) {
-        mergedPageSettings = globalSettings.pagePresetSettings;
+      if (GLOBAL_INTEGRATION_CONFIG.preferGlobal && globalSettings.pagePresetSettings) {
+        // グローバル設定が有効でかつ正しい構造を持つ場合のみマージ
+        const globalPageSettings = globalSettings.pagePresetSettings;
+        if (globalPageSettings.monthlyPlanner && globalPageSettings.personalPage) {
+          mergedPageSettings = {
+            monthlyPlanner: {
+              enabledPresetIds: globalPageSettings.monthlyPlanner.enabledPresetIds || currentPageSettings.monthlyPlanner.enabledPresetIds,
+              defaultPresetId: globalPageSettings.monthlyPlanner.defaultPresetId || currentPageSettings.monthlyPlanner.defaultPresetId,
+              presetDisplayOrder: globalPageSettings.monthlyPlanner.presetDisplayOrder || currentPageSettings.monthlyPlanner.enabledPresetIds
+            },
+            personalPage: {
+              enabledPresetIds: globalPageSettings.personalPage.enabledPresetIds || currentPageSettings.personalPage.enabledPresetIds,
+              defaultPresetId: globalPageSettings.personalPage.defaultPresetId || currentPageSettings.personalPage.defaultPresetId,
+              presetDisplayOrder: globalPageSettings.personalPage.presetDisplayOrder || currentPageSettings.personalPage.enabledPresetIds
+            }
+          };
+        }
       }
 
       if (isDebugEnabled()) {
@@ -697,8 +712,15 @@ export const usePresetSettings = (): UsePresetSettingsReturn => {
     return pagePresetSettings[page];
   }, [pagePresetSettings]);
 
-  // 設定保存（API連携対応）
+  // 設定保存（楽観的ロック対応）
   const saveSettings = useCallback(async () => {
+    if (isDebugEnabled()) {
+      console.log('[PresetSettings] 保存開始:', {
+        globalEnabled: GLOBAL_INTEGRATION_CONFIG.enabled,
+        globalVersion: globalPresetHook.globalSettings?.version,
+        presetsCount: presets.length
+      });
+    }
     setIsLoading(true);
     try {
       const settings: UserPresetSettings = {
@@ -710,8 +732,58 @@ export const usePresetSettings = (): UsePresetSettingsReturn => {
 
       let apiSaveSuccessful = false;
       
-      // API連携が有効な場合、APIに保存を試行
-      if (API_INTEGRATION_CONFIG.enabled) {
+      // グローバルプリセット設定に保存を試行（楽観的ロック）
+      if (GLOBAL_INTEGRATION_CONFIG.enabled) {
+        const currentVersion = globalPresetHook.globalSettings?.version;
+        if (isDebugEnabled()) {
+          console.log('[PresetSettings] グローバル保存開始、バージョン:', currentVersion);
+        }
+        try {
+          const apiUrl = getApiBaseUrlSync();
+          const response = await fetch(`${apiUrl}/api/admin/global-preset-settings`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              presets: presets,
+              categories: categories,
+              pagePresetSettings: pagePresetSettings,
+              expectedVersion: currentVersion
+            })
+          });
+          
+          if (response.status === 409) {
+            // 競合検出
+            const conflictData = await response.json();
+            console.warn('[PresetSettings] 設定競合を検出:', conflictData);
+            
+            // グローバル設定を強制リフレッシュして最新データを取得
+            await globalPresetHook.refreshSettings();
+            
+            throw new Error('CONFLICT_DETECTED');
+          }
+          
+          if (response.ok) {
+            apiSaveSuccessful = true;
+            if (isDebugEnabled()) {
+              console.log('[PresetSettings] グローバルプリセット設定を保存しました');
+            }
+            // グローバル設定を強制リフレッシュ
+            await globalPresetHook.refreshSettings();
+          } else {
+            console.error('[PresetSettings] 保存失敗:', response.status, await response.text());
+          }
+        } catch (apiError) {
+          if (apiError.message === 'CONFLICT_DETECTED') {
+            throw apiError;
+          }
+          console.error('[PresetSettings] グローバルプリセット設定保存失敗:', apiError);
+        }
+      }
+      
+      // 従来のAPI連携（フォールバック）
+      if (!apiSaveSuccessful && API_INTEGRATION_CONFIG.enabled) {
         try {
           // ページ別プリセット設定をAPIに保存
           const pageSettingsSaved = await apiClient.updatePagePresetSettings(pagePresetSettings);
@@ -750,12 +822,19 @@ export const usePresetSettings = (): UsePresetSettingsReturn => {
         }
       }
       
-    } catch (error) {
-      console.error('[PresetSettings] プリセット設定の保存に失敗しました:', error);
+    } catch (error: any) {
+      if (error.message === 'CONFLICT_DETECTED') {
+        // 競合エラーの場合、UIに通知（ここではコンソールログのみ）
+        console.warn('[PresetSettings] 競合により保存失敗 - 他のユーザーが設定を変更しました');
+        // TODO: 実際のUIでは通知バナーやモーダルで表示
+        alert('他のユーザーが設定を変更しました。最新の設定を確認してから再度保存してください。');
+      } else {
+        console.error('[PresetSettings] プリセット設定の保存に失敗しました:', error);
+      }
     } finally {
       setIsLoading(false);
     }
-  }, [presets, categories, pagePresetSettings, apiClient]);
+  }, [presets, categories, pagePresetSettings, apiClient, globalPresetHook]);
 
   // 設定読み込み（API連携対応）
   const loadSettings = useCallback(async () => {
@@ -935,8 +1014,9 @@ export const usePresetSettings = (): UsePresetSettingsReturn => {
       isAvailable: !!globalPresetHook.globalSettings,
       isLoading: globalPresetHook.isLoading,
       version: globalPresetHook.globalSettings?.version || '',
-      lastSyncTime: globalPresetHook.lastSyncTime
-    },
+      lastSyncTime: globalPresetHook.lastSyncTime,
+      isOutdated: globalPresetHook.isOutdated()
+    } as any,
     refreshGlobalSettings: globalPresetHook.refreshSettings,
     isUsingGlobalSettings
   };

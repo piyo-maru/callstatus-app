@@ -5,7 +5,6 @@ import { DepartmentGroupSetting } from './MainAppTypes';
 
 // 表示設定
 export interface DisplaySettings {
-  viewMode: 'normal' | 'compact';
   maskingEnabled: boolean;
   timeRange: 'standard' | 'extended';
   customStatusColors: { [key: string]: string };

@@ -42,6 +42,33 @@ export interface GlobalPresetSettingsDto {
       presetDisplayOrder?: string[];
     };
   };
+  // 表示設定（組織統一）
+  displaySettings: {
+    customStatusColors: Record<string, string>;
+    customStatusDisplayNames: Record<string, string>;
+    hideEmptyDepartments: boolean;
+    compactMode: boolean;
+    showTimeLabels: boolean;
+    highlightCurrentTime: boolean;
+    use24HourFormat: boolean;
+  };
+  // 部署・グループ設定（組織統一）
+  departmentSettings: Array<{
+    id: string;
+    name: string;
+    description?: string;
+    color: string;
+    displayOrder: number;
+    isActive: boolean;
+    groups?: Array<{
+      id: string;
+      name: string;
+      departmentId: string;
+      color?: string;
+      displayOrder: number;
+      isActive: boolean;
+    }>;
+  }>;
   version: string;
   lastModified: string;
 }
@@ -147,7 +174,55 @@ const DEFAULT_GLOBAL_PRESET_SETTINGS: Omit<GlobalPresetSettingsDto, 'version' | 
       defaultPresetId: 'standard-work',
       presetDisplayOrder: ['standard-work', 'early-shift', 'late-shift', 'paid-leave', 'night-duty']
     }
-  }
+  },
+  // 表示設定のデフォルト値
+  displaySettings: {
+    customStatusColors: {},
+    customStatusDisplayNames: {},
+    hideEmptyDepartments: false,
+    compactMode: false,
+    showTimeLabels: true,
+    highlightCurrentTime: true,
+    use24HourFormat: true
+  },
+  // 部署・グループ設定のデフォルト値
+  departmentSettings: [
+    {
+      id: 'general',
+      name: '一般',
+      description: '一般スタッフ',
+      color: '#3B82F6',
+      displayOrder: 0,
+      isActive: true,
+      groups: [
+        {
+          id: 'group-a',
+          name: 'グループA',
+          departmentId: 'general',
+          color: '#3B82F6',
+          displayOrder: 0,
+          isActive: true
+        },
+        {
+          id: 'group-b',
+          name: 'グループB',
+          departmentId: 'general',
+          color: '#10B981',
+          displayOrder: 1,
+          isActive: true
+        }
+      ]
+    },
+    {
+      id: 'management',
+      name: '管理職',
+      description: '管理職・責任者',
+      color: '#8B5CF6',
+      displayOrder: 1,
+      isActive: true,
+      groups: []
+    }
+  ]
 };
 
 @Injectable()
@@ -172,51 +247,92 @@ export class GlobalPresetSettingsService {
       presets: Array.isArray(settings.presets) ? settings.presets as any[] : [],
       categories: Array.isArray(settings.categories) ? settings.categories as any[] : [],
       pagePresetSettings: (settings.pagePresetSettings as any) || DEFAULT_GLOBAL_PRESET_SETTINGS.pagePresetSettings,
+      displaySettings: (settings.displaySettings as any) || DEFAULT_GLOBAL_PRESET_SETTINGS.displaySettings,
+      departmentSettings: Array.isArray(settings.departmentSettings) ? settings.departmentSettings as any[] : DEFAULT_GLOBAL_PRESET_SETTINGS.departmentSettings,
       version: settings.version,
       lastModified: settings.updatedAt.toISOString(),
     };
   }
 
   /**
-   * グローバルプリセット設定を更新
+   * グローバルプリセット設定を更新（楽観的ロック対応）
    */
   async updateSettings(
     updateData: Partial<GlobalPresetSettingsDto>,
+    expectedVersion?: string,
     updatedByStaffId?: number
-  ): Promise<GlobalPresetSettingsDto> {
-    // まず現在の設定を取得（存在しない場合は初期化）
-    await this.getSettings();
+  ): Promise<{ success: boolean; settings?: GlobalPresetSettingsDto; error?: string; conflictData?: GlobalPresetSettingsDto }> {
+    return this.prisma.$transaction(async (prisma) => {
+      // 1. 現在の設定を取得
+      let currentSettings = await prisma.globalPresetSettings.findFirst({
+        where: { id: 1 }
+      });
 
-    // バージョンを自動インクリメント
-    const currentVersion = await this.getCurrentVersion();
-    const newVersion = this.incrementVersion(currentVersion);
+      // 設定が存在しない場合は初期化
+      if (!currentSettings) {
+        currentSettings = await prisma.globalPresetSettings.create({
+          data: {
+            id: 1,
+            presets: DEFAULT_GLOBAL_PRESET_SETTINGS.presets,
+            categories: DEFAULT_GLOBAL_PRESET_SETTINGS.categories,
+            pagePresetSettings: DEFAULT_GLOBAL_PRESET_SETTINGS.pagePresetSettings,
+            displaySettings: DEFAULT_GLOBAL_PRESET_SETTINGS.displaySettings,
+            departmentSettings: DEFAULT_GLOBAL_PRESET_SETTINGS.departmentSettings,
+            version: '1.0.0',
+          },
+        });
+      }
 
-    const settings = await this.prisma.globalPresetSettings.upsert({
-      where: { id: 1 },
-      update: {
-        ...(updateData.presets !== undefined && { presets: updateData.presets }),
-        ...(updateData.categories !== undefined && { categories: updateData.categories }),
-        ...(updateData.pagePresetSettings !== undefined && { pagePresetSettings: updateData.pagePresetSettings }),
-        version: newVersion,
-        updatedBy: updatedByStaffId || null,
-      },
-      create: {
-        id: 1,
-        presets: updateData.presets || DEFAULT_GLOBAL_PRESET_SETTINGS.presets,
-        categories: updateData.categories || DEFAULT_GLOBAL_PRESET_SETTINGS.categories,
-        pagePresetSettings: updateData.pagePresetSettings || DEFAULT_GLOBAL_PRESET_SETTINGS.pagePresetSettings,
-        version: newVersion,
-        updatedBy: updatedByStaffId || null,
-      },
+      // 2. バージョン競合チェック（楽観的ロック）
+      if (expectedVersion && currentSettings.version !== expectedVersion) {
+        const conflictData: GlobalPresetSettingsDto = {
+          presets: Array.isArray(currentSettings.presets) ? currentSettings.presets as any[] : [],
+          categories: Array.isArray(currentSettings.categories) ? currentSettings.categories as any[] : [],
+          pagePresetSettings: (currentSettings.pagePresetSettings as any) || DEFAULT_GLOBAL_PRESET_SETTINGS.pagePresetSettings,
+          displaySettings: (currentSettings.displaySettings as any) || DEFAULT_GLOBAL_PRESET_SETTINGS.displaySettings,
+          departmentSettings: Array.isArray(currentSettings.departmentSettings) ? currentSettings.departmentSettings as any[] : DEFAULT_GLOBAL_PRESET_SETTINGS.departmentSettings,
+          version: currentSettings.version,
+          lastModified: currentSettings.updatedAt.toISOString(),
+        };
+
+        return {
+          success: false,
+          error: 'VERSION_CONFLICT',
+          conflictData
+        };
+      }
+
+      // 3. バージョンをインクリメントして更新
+      const newVersion = this.incrementVersion(currentSettings.version);
+      
+      const updatedSettings = await prisma.globalPresetSettings.update({
+        where: { id: 1 },
+        data: {
+          ...(updateData.presets !== undefined && { presets: updateData.presets }),
+          ...(updateData.categories !== undefined && { categories: updateData.categories }),
+          ...(updateData.pagePresetSettings !== undefined && { pagePresetSettings: updateData.pagePresetSettings }),
+          ...(updateData.displaySettings !== undefined && { displaySettings: updateData.displaySettings }),
+          ...(updateData.departmentSettings !== undefined && { departmentSettings: updateData.departmentSettings }),
+          version: newVersion,
+          updatedBy: updatedByStaffId || null,
+        },
+      });
+
+      const settings: GlobalPresetSettingsDto = {
+        presets: Array.isArray(updatedSettings.presets) ? updatedSettings.presets as any[] : [],
+        categories: Array.isArray(updatedSettings.categories) ? updatedSettings.categories as any[] : [],
+        pagePresetSettings: (updatedSettings.pagePresetSettings as any) || DEFAULT_GLOBAL_PRESET_SETTINGS.pagePresetSettings,
+        displaySettings: (updatedSettings.displaySettings as any) || DEFAULT_GLOBAL_PRESET_SETTINGS.displaySettings,
+        departmentSettings: Array.isArray(updatedSettings.departmentSettings) ? updatedSettings.departmentSettings as any[] : DEFAULT_GLOBAL_PRESET_SETTINGS.departmentSettings,
+        version: updatedSettings.version,
+        lastModified: updatedSettings.updatedAt.toISOString(),
+      };
+
+      return {
+        success: true,
+        settings
+      };
     });
-
-    return {
-      presets: Array.isArray(settings.presets) ? settings.presets as any[] : [],
-      categories: Array.isArray(settings.categories) ? settings.categories as any[] : [],
-      pagePresetSettings: (settings.pagePresetSettings as any) || DEFAULT_GLOBAL_PRESET_SETTINGS.pagePresetSettings,
-      version: settings.version,
-      lastModified: settings.updatedAt.toISOString(),
-    };
   }
 
   /**
@@ -253,6 +369,8 @@ export class GlobalPresetSettingsService {
         presets: DEFAULT_GLOBAL_PRESET_SETTINGS.presets,
         categories: DEFAULT_GLOBAL_PRESET_SETTINGS.categories,
         pagePresetSettings: DEFAULT_GLOBAL_PRESET_SETTINGS.pagePresetSettings,
+        displaySettings: DEFAULT_GLOBAL_PRESET_SETTINGS.displaySettings,
+        departmentSettings: DEFAULT_GLOBAL_PRESET_SETTINGS.departmentSettings,
         version: '1.0.0',
       },
     });
@@ -302,6 +420,8 @@ export class GlobalPresetSettingsService {
           presets: DEFAULT_GLOBAL_PRESET_SETTINGS.presets,
           categories: DEFAULT_GLOBAL_PRESET_SETTINGS.categories,
           pagePresetSettings: DEFAULT_GLOBAL_PRESET_SETTINGS.pagePresetSettings,
+          displaySettings: DEFAULT_GLOBAL_PRESET_SETTINGS.displaySettings,
+          departmentSettings: DEFAULT_GLOBAL_PRESET_SETTINGS.departmentSettings,
           version: defaultSettings.version,
           lastModified: defaultSettings.updatedAt.toISOString(),
         },
@@ -315,6 +435,8 @@ export class GlobalPresetSettingsService {
         presets: Array.isArray(settings.presets) ? settings.presets as any[] : [],
         categories: Array.isArray(settings.categories) ? settings.categories as any[] : [],
         pagePresetSettings: (settings.pagePresetSettings as any) || DEFAULT_GLOBAL_PRESET_SETTINGS.pagePresetSettings,
+        displaySettings: (settings.displaySettings as any) || DEFAULT_GLOBAL_PRESET_SETTINGS.displaySettings,
+        departmentSettings: Array.isArray(settings.departmentSettings) ? settings.departmentSettings as any[] : DEFAULT_GLOBAL_PRESET_SETTINGS.departmentSettings,
         version: settings.version,
         lastModified: settings.updatedAt.toISOString(),
       },

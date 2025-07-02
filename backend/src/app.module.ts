@@ -9,6 +9,7 @@ import { DailyAssignmentsModule } from './daily-assignments/daily-assignments.mo
 import { ResponsibilitiesModule } from './responsibilities/responsibilities.module';
 import { DepartmentSettingsModule } from './department-settings/department-settings.module';
 import { DisplaySettingsModule } from './display-settings/display-settings.module';
+import { GlobalPresetSettingsModule } from './global-preset-settings/global-preset-settings.module';
 import { SnapshotsModule } from './snapshots/snapshots.module';
 import { PendingModule } from './pending/pending.module';
 import { ContractsModule } from './contracts/contracts.module';
@@ -31,6 +32,7 @@ import { MonthlyPlannerModule } from './monthly-planner/monthly-planner.module';
     ResponsibilitiesModule,
     DepartmentSettingsModule,
     DisplaySettingsModule,
+    GlobalPresetSettingsModule,
     SnapshotsModule,
     PendingModule,
     ContractsModule,

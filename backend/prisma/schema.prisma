@@ -149,6 +149,7 @@ model Staff {
   user_auth            user_auth?
   UserPresetSettings   UserPresetSettings?
   GlobalDisplaySettings GlobalDisplaySettings[]
+  GlobalPresetSettings GlobalPresetSettings[] @relation("GlobalPresetUpdates")
 }
 
 model TemporaryAssignment {
@@ -474,7 +475,6 @@ enum ManagerPermission {
 
 model GlobalDisplaySettings {
   id                          Int      @id @default(1)
-  viewMode                    String   @default("normal")
   maskingEnabled              Boolean  @default(false)
   timeRange                   String   @default("standard")
   customStatusColors          Json     @default("{}")
@@ -485,4 +485,20 @@ model GlobalDisplaySettings {
   UpdatedByStaff              Staff?   @relation(fields: [updatedBy], references: [id])
 
   @@map("global_display_settings")
+}
+
+model GlobalPresetSettings {
+  id                          Int      @id @default(1)
+  presets                     Json     @default("[]")
+  categories                  Json     @default("[]")
+  pagePresetSettings          Json     @default("{}")
+  displaySettings             Json     @default("{}")
+  departmentSettings          Json     @default("[]")
+  version                     String   @default("1.0.0")
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
+  updatedBy                   Int?
+  UpdatedByStaff              Staff?   @relation("GlobalPresetUpdates", fields: [updatedBy], references: [id])
+
+  @@map("global_preset_settings")
 }

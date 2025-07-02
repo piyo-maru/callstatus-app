@@ -1806,6 +1806,26 @@ function MonthlyPlannerPageContent() {
     }
   }, [currentMonth, staffList, fetchPendingSchedules, fetchResponsibilityData, fetchDisplayCache]);
 
+  // 設定変更後のデータ再取得
+  const handleSettingsChange = useCallback(async (settings: any) => {
+    // スタッフデータの再取得
+    await fetchStaffData();
+    
+    // 部署・グループ設定の再取得
+    await fetchDepartmentSettings();
+    
+    // pending予定の再取得
+    await fetchPendingSchedules();
+    
+    // 担当設定データの再取得
+    await fetchResponsibilityData();
+    
+    // 契約表示キャッシュの再取得
+    const year = currentMonth.getFullYear();
+    const month = currentMonth.getMonth() + 1;
+    await fetchDisplayCache(year, month);
+  }, [fetchStaffData, fetchDepartmentSettings, fetchPendingSchedules, fetchResponsibilityData, fetchDisplayCache, currentMonth]);
+
   // インポート関連の処理関数
   const handleJsonUpload = async (file: File) => {
     setIsImporting(true);
@@ -2919,6 +2939,7 @@ function MonthlyPlannerPageContent() {
       <UnifiedSettingsModal
         isOpen={isSettingsModalOpen}
         onClose={() => setIsSettingsModalOpen(false)}
+        onSettingsChange={handleSettingsChange}
         setIsCsvUploadModalOpen={setIsCsvUploadModalOpen}
         setIsJsonUploadModalOpen={setIsJsonUploadModalOpen}
         setIsImportHistoryModalOpen={setIsImportHistoryModalOpen}

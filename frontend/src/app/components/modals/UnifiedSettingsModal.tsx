@@ -159,7 +159,6 @@ export function UnifiedSettingsModal({
   const [activeTab, setActiveTab] = useState<TabType>('display');
   
   // 表示設定の状態
-  const [viewMode, setViewMode] = useState<'normal' | 'compact'>('normal');
   const [maskingEnabled, setMaskingEnabled] = useState(false);
   const [timeRange, setTimeRange] = useState<'standard' | 'extended'>('standard');
   
@@ -274,14 +273,27 @@ export function UnifiedSettingsModal({
     const monthlySettings = getPagePresetSettings('monthlyPlanner');
     const personalSettings = getPagePresetSettings('personalPage');
     
+    // 安全性チェック：設定が未定義の場合はデフォルト値を使用
+    if (!monthlySettings) {
+      console.warn('[UnifiedSettingsModal] 月次プランナー設定が未初期化');
+      setMonthlyPlannerOrder([]);
+      return;
+    }
+    
+    if (!personalSettings) {
+      console.warn('[UnifiedSettingsModal] 個人ページ設定が未初期化');
+      setPersonalPageOrder([]);
+      return;
+    }
+    
     // 現在の表示順序を取得、なければ有効なプリセットIDをそのまま使用
-    const monthlyOrder = (monthlySettings as any).presetDisplayOrder || monthlySettings.enabledPresetIds;
-    const personalOrder = (personalSettings as any).presetDisplayOrder || personalSettings.enabledPresetIds;
+    const monthlyOrder = (monthlySettings as any)?.presetDisplayOrder || monthlySettings?.enabledPresetIds || [];
+    const personalOrder = (personalSettings as any)?.presetDisplayOrder || personalSettings?.enabledPresetIds || [];
     
     // モーダルを開いた時に一度だけ初期化
     setMonthlyPlannerOrder(monthlyOrder);
     setPersonalPageOrder(personalOrder);
-  }, [isOpen]); // モーダルが開かれた時のみ実行
+  }, [isOpen, getPagePresetSettings]); // 依存関係を追加
 
   // ドラッグ&ドロップ用の移動ハンドラー
   const handleMovePreset = useCallback((
@@ -326,6 +338,12 @@ export function UnifiedSettingsModal({
 
   // 設定保存とモーダルクローズ
   const handleSaveAndClose = useCallback(async () => {
+    console.log('[Debug] 保存して閉じる実行中...', {
+      customStatusColors,
+      customStatusDisplayNames,
+      isDirty
+    });
+    
     if (isDirty) {
       await saveSettings();
     }
@@ -334,12 +352,16 @@ export function UnifiedSettingsModal({
     if (onSettingsChange) {
       onSettingsChange({
         displaySettings: {
-          viewMode,
           maskingEnabled,
-          timeRange
+          timeRange,
+          customStatusColors,
+          customStatusDisplayNames
         },
         presets: filteredPresets,
-        departmentGroups: departments
+        departmentGroups: departments,
+        // ステータス設定も個別に渡す（互換性のため）
+        statusColors: customStatusColors,
+        statusDisplayNames: customStatusDisplayNames
       });
     }
     
@@ -353,7 +375,7 @@ export function UnifiedSettingsModal({
     }
     
     onClose();
-  }, [isDirty, saveSettings, onSettingsChange, viewMode, maskingEnabled, timeRange, filteredPresets, departments, onSave, onClose]);
+  }, [isDirty, saveSettings, onSettingsChange, maskingEnabled, timeRange, filteredPresets, departments, onSave, onClose]);
 
   // サーバーから設定を読み込み
   useEffect(() => {
@@ -365,7 +387,6 @@ export function UnifiedSettingsModal({
         
         if (response.ok) {
           const settings = await response.json();
-          setViewMode(settings.viewMode || 'normal');
           setMaskingEnabled(settings.maskingEnabled || false);
           setTimeRange(settings.timeRange || 'standard');
           setCustomStatusColors(settings.customStatusColors || {});
@@ -382,13 +403,11 @@ export function UnifiedSettingsModal({
     };
 
     const loadLocalStorageSettings = () => {
-      const savedViewMode = localStorage.getItem('callstatus-viewMode') as 'normal' | 'compact' || 'normal';
       const savedMaskingEnabled = localStorage.getItem('callstatus-maskingEnabled') === 'true';
       const savedTimeRange = localStorage.getItem('callstatus-timeRange') as 'standard' | 'extended' || 'standard';
       const savedStatusColors = localStorage.getItem('callstatus-statusColors');
       const savedStatusDisplayNames = localStorage.getItem('callstatus-statusDisplayNames');
       
-      setViewMode(savedViewMode);
       setMaskingEnabled(savedMaskingEnabled);
       setTimeRange(savedTimeRange);
       
@@ -420,7 +439,6 @@ export function UnifiedSettingsModal({
 
   // サーバーに設定を保存する共通関数
   const saveSettingsToServer = useCallback(async (updates: Partial<{
-    viewMode: string;
     maskingEnabled: boolean;
     timeRange: string;
     customStatusColors: Record<string, string>;
@@ -449,16 +467,6 @@ export function UnifiedSettingsModal({
   }, [authenticatedFetch]);
 
   // 設定変更時にサーバーに保存
-  const handleViewModeChange = useCallback(async (newViewMode: 'normal' | 'compact') => {
-    setViewMode(newViewMode);
-    
-    // サーバーに保存、失敗時はローカルストレージにフォールバック
-    const success = await saveSettingsToServer({ viewMode: newViewMode });
-    if (!success) {
-      localStorage.setItem('callstatus-viewMode', newViewMode);
-    }
-  }, [saveSettingsToServer]);
-
   const handleMaskingToggle = useCallback(async () => {
     const newMaskingEnabled = !maskingEnabled;
     setMaskingEnabled(newMaskingEnabled);
@@ -472,9 +480,11 @@ export function UnifiedSettingsModal({
 
   // ステータス色変更ハンドラー
   const handleStatusColorChange = useCallback(async (status: string, color: string) => {
+    console.log('[Debug] ステータス色変更:', { status, color, customStatusColors });
     const newColors = { ...customStatusColors, [status]: color };
     setCustomStatusColors(newColors);
     setIsStatusColorsModified(true);
+    console.log('[Debug] isStatusColorsModified を true に設定しました');
     
     // サーバーに保存、失敗時はローカルストレージにフォールバック
     const success = await saveSettingsToServer({ customStatusColors: newColors });
@@ -492,14 +502,17 @@ export function UnifiedSettingsModal({
 
   // ステータス色をデフォルトに戻す
   const handleResetStatusColors = useCallback(async () => {
+    console.log('[Debug] ステータス色をリセット中...');
     setCustomStatusColors({});
     setIsStatusColorsModified(false);
     
-    // サーバーに保存、失敗時はローカルストレージにフォールバック
+    // サーバーに保存
     const success = await saveSettingsToServer({ customStatusColors: {} });
-    if (!success) {
-      localStorage.removeItem('callstatus-statusColors');
-    }
+    
+    // 成功・失敗に関わらず、ローカルストレージもクリア
+    localStorage.removeItem('callstatus-statusColors');
+    
+    console.log('[Debug] ステータス色リセット完了:', { success });
     
     if (onSettingsChange) {
       onSettingsChange({
@@ -578,14 +591,17 @@ export function UnifiedSettingsModal({
 
   // ステータス表示名をデフォルトに戻す
   const handleResetStatusDisplayNames = useCallback(async () => {
+    console.log('[Debug] ステータス表示名をリセット中...');
     setCustomStatusDisplayNames({});
     setIsStatusDisplayNamesModified(false);
     
-    // サーバーに保存、失敗時はローカルストレージにフォールバック
+    // サーバーに保存
     const success = await saveSettingsToServer({ customStatusDisplayNames: {} });
-    if (!success) {
-      localStorage.removeItem('callstatus-statusDisplayNames');
-    }
+    
+    // 成功・失敗に関わらず、ローカルストレージもクリア
+    localStorage.removeItem('callstatus-statusDisplayNames');
+    
+    console.log('[Debug] ステータス表示名リセット完了:', { success });
     
     if (onSettingsChange) {
       onSettingsChange({
@@ -1064,36 +1080,6 @@ export function UnifiedSettingsModal({
               <div>
                 <h3 className="text-lg font-medium text-gray-900 mb-4">表示設定</h3>
                 
-                {/* ビューモード設定 */}
-                <div className="mb-6">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    ビューモード
-                  </label>
-                  <div className="flex space-x-4">
-                    <label className="flex items-center">
-                      <input
-                        type="radio"
-                        name="viewMode"
-                        value="normal"
-                        checked={viewMode === 'normal'}
-                        onChange={(e) => handleViewModeChange(e.target.value as 'normal' | 'compact')}
-                        className="mr-2"
-                      />
-                      通常表示
-                    </label>
-                    <label className="flex items-center">
-                      <input
-                        type="radio"
-                        name="viewMode"
-                        value="compact"
-                        checked={viewMode === 'compact'}
-                        onChange={(e) => handleViewModeChange(e.target.value as 'normal' | 'compact')}
-                        className="mr-2"
-                      />
-                      コンパクト表示
-                    </label>
-                  </div>
-                </div>
 
                 {/* マスキング設定 */}
                 <div className="mb-6">
@@ -1129,7 +1115,10 @@ export function UnifiedSettingsModal({
                         表示名リセット
                       </button>
                       <button
-                        onClick={handleResetStatusColors}
+                        onClick={() => {
+                          console.log('[Debug] 色リセットボタンがクリックされました', { isStatusColorsModified, customStatusColors });
+                          handleResetStatusColors();
+                        }}
                         className="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded hover:bg-gray-200 transition-colors"
                         disabled={!isStatusColorsModified}
                       >
@@ -1163,12 +1152,31 @@ export function UnifiedSettingsModal({
                         <div className="w-5 flex justify-center flex-shrink-0">
                           {customStatusColors[status] && (
                             <button
-                              onClick={() => {
+                              onClick={async () => {
+                                console.log('[Debug] 個別色リセットボタンがクリックされました:', status);
                                 const newColors = { ...customStatusColors };
                                 delete newColors[status];
                                 setCustomStatusColors(newColors);
-                                localStorage.setItem('callstatus-statusColors', JSON.stringify(newColors));
                                 setIsStatusColorsModified(Object.keys(newColors).length > 0);
+                                
+                                // サーバーに保存
+                                const success = await saveSettingsToServer({ customStatusColors: newColors });
+                                
+                                // ローカルストレージにも保存（フォールバック）
+                                if (Object.keys(newColors).length > 0) {
+                                  localStorage.setItem('callstatus-statusColors', JSON.stringify(newColors));
+                                } else {
+                                  localStorage.removeItem('callstatus-statusColors');
+                                }
+                                
+                                console.log('[Debug] 個別色リセット完了:', { status, success, newColors });
+                                
+                                // 親コンポーネントに変更を通知
+                                if (onSettingsChange) {
+                                  onSettingsChange({
+                                    statusColors: newColors
+                                  });
+                                }
                               }}
                               className="text-xs text-gray-400 hover:text-red-600 transition-colors w-4 h-4 flex items-center justify-center"
                               title="色をデフォルトに戻す"
@@ -1196,12 +1204,31 @@ export function UnifiedSettingsModal({
                         <div className="w-5 flex justify-center flex-shrink-0">
                           {customStatusDisplayNames[status] && (
                             <button
-                              onClick={() => {
+                              onClick={async () => {
+                                console.log('[Debug] 個別表示名リセットボタンがクリックされました:', status);
                                 const newDisplayNames = { ...customStatusDisplayNames };
                                 delete newDisplayNames[status];
                                 setCustomStatusDisplayNames(newDisplayNames);
-                                localStorage.setItem('callstatus-statusDisplayNames', JSON.stringify(newDisplayNames));
                                 setIsStatusDisplayNamesModified(Object.keys(newDisplayNames).length > 0);
+                                
+                                // サーバーに保存
+                                const success = await saveSettingsToServer({ customStatusDisplayNames: newDisplayNames });
+                                
+                                // ローカルストレージにも保存（フォールバック）
+                                if (Object.keys(newDisplayNames).length > 0) {
+                                  localStorage.setItem('callstatus-statusDisplayNames', JSON.stringify(newDisplayNames));
+                                } else {
+                                  localStorage.removeItem('callstatus-statusDisplayNames');
+                                }
+                                
+                                console.log('[Debug] 個別表示名リセット完了:', { status, success, newDisplayNames });
+                                
+                                // 親コンポーネントに変更を通知
+                                if (onSettingsChange) {
+                                  onSettingsChange({
+                                    statusDisplayNames: newDisplayNames
+                                  });
+                                }
                               }}
                               className="text-xs text-gray-400 hover:text-red-600 transition-colors w-4 h-4 flex items-center justify-center"
                               title="表示名をデフォルトに戻す"
@@ -1254,88 +1281,6 @@ export function UnifiedSettingsModal({
                 </div>
               </div>
 
-              {/* グローバルプリセット設定セクション */}
-              <div className="border rounded-lg p-4 bg-blue-50 border-blue-200">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h4 className="font-medium text-gray-900 mb-1 flex items-center">
-                      🌐 グローバルプリセット設定
-                      <span className="ml-2 text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
-                        組織共通
-                      </span>
-                    </h4>
-                    <p className="text-sm text-gray-600 mb-3">
-                      組織全体で共有されるプリセット設定です。管理者により管理されています。
-                    </p>
-                    
-                    {/* グローバル設定状態表示 */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
-                      <div>
-                        <span className="text-gray-500">状態:</span>
-                        <span className={`ml-1 ${globalSettings.isAvailable ? 'text-green-600' : 'text-red-600'}`}>
-                          {globalSettings.isAvailable ? '✅ 利用可能' : '❌ 未接続'}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-gray-500">バージョン:</span>
-                        <span className="ml-1 text-gray-700 font-mono">
-                          {globalSettings.version || 'N/A'}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-gray-500">最終同期:</span>
-                        <span className="ml-1 text-gray-700">
-                          {globalSettings.lastSyncTime || 'なし'}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-gray-500">統合:</span>
-                        <span className={`ml-1 ${isUsingGlobalSettings ? 'text-green-600' : 'text-orange-600'}`}>
-                          {isUsingGlobalSettings ? '✅ 有効' : '⚠️ 無効'}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="flex space-x-2">
-                    <button
-                      onClick={refreshGlobalSettings}
-                      className="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
-                      disabled={globalSettings.isLoading}
-                    >
-                      {globalSettings.isLoading ? '同期中...' : '🔄 再同期'}
-                    </button>
-                    {/* 管理者のみ表示予定（認証システム有効化後） */}
-                    <button
-                      onClick={() => alert('グローバル設定管理画面（準備中）')}
-                      className="px-3 py-1 text-sm bg-purple-500 text-white rounded hover:bg-purple-600 transition-colors"
-                      title="管理者のみ利用可能（準備中）"
-                    >
-                      ⚙️ グローバル管理
-                    </button>
-                  </div>
-                </div>
-                
-                {/* グローバル設定が利用可能な場合の統合状況表示 */}
-                {globalSettings.isAvailable && (
-                  <div className="mt-4 pt-4 border-t border-blue-200">
-                    <p className="text-sm text-blue-700">
-                      📊 グローバル設定が適用されています。下記のプリセットには組織共通の設定が含まれています。
-                      個人的なカスタマイズも可能です。
-                    </p>
-                  </div>
-                )}
-                
-                {/* グローバル設定が利用不可の場合の説明 */}
-                {!globalSettings.isAvailable && (
-                  <div className="mt-4 pt-4 border-t border-blue-200">
-                    <p className="text-sm text-orange-700">
-                      ⚠️ グローバル設定に接続できませんでした。ローカル設定のみで動作しています。
-                      ネットワーク接続を確認して「再同期」をお試しください。
-                    </p>
-                  </div>
-                )}
-              </div>
 
               {/* カテゴリ別プリセット表示 */}
               {categories.map((category) => {
@@ -1721,6 +1666,37 @@ export function UnifiedSettingsModal({
           {/* 設定管理タブ */}
           {activeTab === 'settings-management' && (
             <div className="space-y-6">
+              {/* 組織共通設定状態（設定管理タブに移動） */}
+              {globalSettings.isAvailable && (
+                <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <p className="text-sm text-blue-700">
+                        📋 組織共通プリセット設定
+                      </p>
+                      <p className="text-xs text-blue-600 mt-1">
+                        最終同期: {globalSettings.lastSyncTime}
+                      </p>
+                    </div>
+                    <button
+                      onClick={refreshGlobalSettings}
+                      disabled={globalSettings.isLoading}
+                      className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex items-center gap-1"
+                    >
+                      {globalSettings.isLoading ? '同期中...' : '🔄 再同期'}
+                    </button>
+                  </div>
+                </div>
+              )}
+              
+              {!globalSettings.isAvailable && (
+                <div className="p-3 bg-orange-50 rounded-lg border border-orange-200">
+                  <p className="text-sm text-orange-700">
+                    ⚠️ 組織設定に接続できません。ローカル設定で動作中
+                  </p>
+                </div>
+              )}
+
               <div>
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="text-lg font-medium text-gray-900">💾 設定管理</h3>
