@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '../components/AuthProvider';
 import AuthGuard from '../components/AuthGuard';
 import { createPortal } from 'react-dom';
-import { STATUS_COLORS, capitalizeStatus, getEffectiveStatusColor, getDepartmentGroupStyle, BUTTON_STYLES } from '../components/timeline/TimelineUtils';
+import { STATUS_COLORS, capitalizeStatus, getEffectiveStatusColor, getDepartmentGroupStyle, BUTTON_STYLES, ALL_STATUSES, parseTimeString, formatDecimalTime } from '../components/timeline/TimelineUtils';
 import { registerLocale } from 'react-datepicker';
 import { ja } from 'date-fns/locale/ja';
 import { format } from 'date-fns';
@@ -701,6 +701,13 @@ function MonthlyPlannerPageContent() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedPendingForEdit, setSelectedPendingForEdit] = useState<PendingSchedule | null>(null);
   
+  // カスタム予定モーダル状態
+  const [showCustomScheduleModal, setShowCustomScheduleModal] = useState(false);
+  const [customScheduleStatus, setCustomScheduleStatus] = useState('off');
+  const [customScheduleStart, setCustomScheduleStart] = useState('09:00');
+  const [customScheduleEnd, setCustomScheduleEnd] = useState('18:00');
+  const [customScheduleMemo, setCustomScheduleMemo] = useState('');
+  
   // 担当設定関連の状態
   const [responsibilityData, setResponsibilityData] = useState<{ [key: string]: ResponsibilityData }>({});
   
@@ -998,10 +1005,15 @@ function MonthlyPlannerPageContent() {
         const data = await response.json();
         const responsibilityMap: { [key: string]: ResponsibilityData } = {};
         
-        data.forEach((item: any) => {
-          const key = `${item.staffId}-${item.date}`;
-          responsibilityMap[key] = item.responsibilities;
-        });
+        // APIレスポンスが { responsibilities: [...] } 形式の場合の対応
+        const responsibilityList = data.responsibilities || data;
+        
+        if (Array.isArray(responsibilityList)) {
+          responsibilityList.forEach((item: any) => {
+            const key = `${item.staffId}-${item.date}`;
+            responsibilityMap[key] = item.responsibilities;
+          });
+        }
         
         setResponsibilityData(responsibilityMap);
       }
@@ -2427,6 +2439,26 @@ function MonthlyPlannerPageContent() {
                     </div>
                   </button>
                 ))}
+                
+                {/* カスタム予定ボタン */}
+                <button
+                  onClick={() => {
+                    // モーダル開く前にスクロール位置をキャプチャ
+                    captureScrollPosition();
+                    setShowCustomScheduleModal(true);
+                  }}
+                  className="w-full text-left px-3 py-2 border-2 border-dashed border-blue-300 rounded-md hover:bg-blue-50 hover:border-blue-400 flex items-center relative"
+                >
+                  <div className="w-4 h-4 rounded mr-3 bg-blue-400 flex items-center justify-center">
+                    <span className="text-white text-xs font-bold">+</span>
+                  </div>
+                  <div className="flex-1">
+                    <span className="font-medium text-blue-600">カスタム予定</span>
+                    <span className="text-sm text-blue-500 ml-2">
+                      ステータス・時間・メモを自由設定
+                    </span>
+                  </div>
+                </button>
               </div>
 
               <div className="flex space-x-3">
@@ -2440,6 +2472,228 @@ function MonthlyPlannerPageContent() {
                   onClick={() => {
                     setShowModal(false);
                     setSelectedCellForHighlight(null);
+                  }}
+                  className="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 flex items-center justify-center"
+                >
+                  キャンセル
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* カスタム予定設定モーダル */}
+      {showCustomScheduleModal && selectedCell && typeof window !== 'undefined' && createPortal(
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-bold text-gray-800">カスタム予定設定</h3>
+                <button
+                  onClick={() => {
+                    setShowCustomScheduleModal(false);
+                    setCustomScheduleStatus('off');
+                    setCustomScheduleStart('09:00');
+                    setCustomScheduleEnd('18:00');
+                    setCustomScheduleMemo('');
+                  }}
+                  className="text-gray-400 hover:text-gray-600 text-2xl font-bold"
+                >
+                  ×
+                </button>
+              </div>
+
+              <div className="mb-6">
+                <p className="text-sm text-gray-600 mb-2">
+                  <span className="font-medium">{selectedCell.staffName}</span> の
+                  <span className="font-medium">{selectedCell.day}日</span> の予定設定
+                </p>
+              </div>
+
+              <div className="space-y-4 mb-6">
+                {/* ステータス選択 */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    ステータス
+                  </label>
+                  <select
+                    value={customScheduleStatus}
+                    onChange={(e) => setCustomScheduleStatus(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    {ALL_STATUSES.map(status => (
+                      <option key={status} value={status}>
+                        {capitalizeStatus(status)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* 時刻設定 */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      開始時刻
+                    </label>
+                    <input
+                      type="time"
+                      value={customScheduleStart}
+                      onChange={(e) => setCustomScheduleStart(e.target.value)}
+                      min="08:00"
+                      max="21:00"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      終了時刻
+                    </label>
+                    <input
+                      type="time"
+                      value={customScheduleEnd}
+                      onChange={(e) => setCustomScheduleEnd(e.target.value)}
+                      min="08:00"
+                      max="21:00"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+
+                {/* メモ入力（全ステータス対応） */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    メモ（任意）
+                  </label>
+                  <textarea
+                    value={customScheduleMemo}
+                    onChange={(e) => setCustomScheduleMemo(e.target.value)}
+                    placeholder="予定の詳細や備考を入力..."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+                    rows={3}
+                    maxLength={200}
+                  />
+                  <div className="text-xs text-gray-500 mt-1">
+                    {customScheduleMemo.length}/200文字
+                  </div>
+                </div>
+
+                {/* バリデーションエラー表示 */}
+                {parseTimeString(customScheduleStart) >= parseTimeString(customScheduleEnd) && (
+                  <div className="text-red-600 text-sm">
+                    終了時刻は開始時刻より後に設定してください
+                  </div>
+                )}
+              </div>
+
+              <div className="flex space-x-3">
+                <button
+                  onClick={async () => {
+                    // バリデーション
+                    const startDecimal = parseTimeString(customScheduleStart);
+                    const endDecimal = parseTimeString(customScheduleEnd);
+                    
+                    if (startDecimal >= endDecimal) {
+                      alert('終了時刻は開始時刻より後に設定してください');
+                      return;
+                    }
+
+                    // 該当セルに既存のpending予定があるかチェック
+                    const cellPendings = pendingScheduleMap.get(`${selectedCell.staffId}-${selectedCell.dateString}`) || [];
+                    
+                    // 承認済み予定があるかチェック
+                    const approvedPending = cellPendings.find(pending => pending.approvedAt);
+                    if (approvedPending) {
+                      alert('承認済み予定があるため編集できません。');
+                      return;
+                    }
+
+                    // 未承認のpending予定があるかチェック
+                    const existingPending = cellPendings.find(pending => 
+                      !pending.approvedAt && !pending.rejectedAt
+                    );
+                    if (existingPending) {
+                      alert('このマスには既にpending予定が設定されています。先に既存の予定を削除してください。');
+                      return;
+                    }
+
+                    try {
+                      const currentApiUrl = getApiUrl();
+                      
+                      const pendingData = {
+                        staffId: selectedCell.staffId,
+                        date: selectedCell.dateString,
+                        status: customScheduleStatus,
+                        start: startDecimal,
+                        end: endDecimal,
+                        memo: customScheduleMemo || `月次プランナー: ${capitalizeStatus(customScheduleStatus)}`,
+                        pendingType: 'monthly-planner' as const
+                      };
+
+                      const response = await fetch(`${currentApiUrl}/api/schedules/pending`, {
+                        method: 'POST',
+                        headers: { 
+                          'Content-Type': 'application/json' 
+                        },
+                        body: JSON.stringify(pendingData)
+                      });
+
+                      if (response.ok) {
+                        alert(`${capitalizeStatus(customScheduleStatus)}のPending予定を作成しました（承認待ち）`);
+                        await fetchPendingSchedules();
+                        
+                        // データ更新後、保存した位置に復元
+                        const restoreScroll = () => {
+                          // window全体の横スクロール復元
+                          if (savedScrollPosition.x > 0) {
+                            window.scrollTo(savedScrollPosition.x, savedScrollPosition.y || 0);
+                          } else if (savedScrollPosition.y >= 0) {
+                            window.scrollTo(0, savedScrollPosition.y);
+                          }
+                          
+                          // 内部要素の横スクロール復元（念のため）
+                          if (topScrollRef.current && headerScrollRef.current && bottomScrollRef.current && savedScrollPosition.x > 0) {
+                            topScrollRef.current.scrollLeft = savedScrollPosition.x;
+                            headerScrollRef.current.scrollLeft = savedScrollPosition.x;
+                            bottomScrollRef.current.scrollLeft = savedScrollPosition.x;
+                          }
+                        };
+                        
+                        // 複数回復元を試行（DOM更新タイミングの違いに対応）
+                        setTimeout(restoreScroll, 50);
+                        setTimeout(restoreScroll, 200);
+                        setTimeout(restoreScroll, 500);
+                        
+                        // モーダルを閉じる
+                        setShowCustomScheduleModal(false);
+                        setShowModal(false);
+                        setSelectedCellForHighlight(null);
+                        setCustomScheduleStatus('off');
+                        setCustomScheduleStart('09:00');
+                        setCustomScheduleEnd('18:00');
+                        setCustomScheduleMemo('');
+                      } else {
+                        const errorData = await response.json();
+                        alert(`カスタム予定の作成に失敗しました: ${errorData.message || '不明なエラー'}`);
+                      }
+                    } catch (error) {
+                      console.error('Failed to create custom schedule:', error);
+                      alert('カスタム予定の作成に失敗しました');
+                    }
+                  }}
+                  disabled={parseTimeString(customScheduleStart) >= parseTimeString(customScheduleEnd)}
+                  className="flex-1 px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center"
+                >
+                  申請する
+                </button>
+                <button
+                  onClick={() => {
+                    setShowCustomScheduleModal(false);
+                    setCustomScheduleStatus('off');
+                    setCustomScheduleStart('09:00');
+                    setCustomScheduleEnd('18:00');
+                    setCustomScheduleMemo('');
                   }}
                   className="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 flex items-center justify-center"
                 >

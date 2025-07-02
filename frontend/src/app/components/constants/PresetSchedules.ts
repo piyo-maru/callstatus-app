@@ -375,33 +375,66 @@ export const convertToLegacyFormat = (preset: UnifiedPreset) => {
   };
 };
 
-// デフォルト設定
+// デフォルト設定（実際のプリセットIDに基づく）
 export const DEFAULT_PRESET_SETTINGS = {
   pagePresetSettings: {
     monthlyPlanner: {
       enabledPresetIds: [
-        'standard-work',
-        'early-work', 
-        'late-work',
-        'short-time-work',
+        'full-time-employee',
+        'part-time-employee',
+        'remote-full-time',
+        'remote-part-time',
         'full-day-off',
-        'morning-off',
-        'afternoon-off'
-      ],
-      defaultPresetId: 'standard-work'
-    },
-    personalPage: {
-      enabledPresetIds: [
-        'standard-work',
-        'remote-work',
-        'meeting-block',
-        'training',
-        'full-day-off',
+        'sudden-off',
         'morning-off',
         'afternoon-off',
         'night-duty'
       ],
-      defaultPresetId: 'standard-work'
+      defaultPresetId: 'full-time-employee',
+      presetDisplayOrder: [
+        'full-time-employee',
+        'part-time-employee', 
+        'remote-full-time',
+        'remote-part-time',
+        'full-day-off',
+        'sudden-off',
+        'morning-off',
+        'afternoon-off',
+        'night-duty'
+      ]
+    },
+    personalPage: {
+      enabledPresetIds: [
+        'full-time-employee',
+        'part-time-employee',
+        'remote-full-time',
+        'remote-part-time',
+        'meeting-block',
+        'training',
+        'full-day-off',
+        'sudden-off',
+        'morning-off',
+        'afternoon-off',
+        'lunch-break',
+        'night-duty',
+        'night-duty-extended'
+      ],
+      defaultPresetId: 'full-time-employee',
+      presetDisplayOrder: [
+        'full-time-employee',
+        'part-time-employee',
+        'remote-full-time',
+        'remote-part-time',
+        'meeting-block',
+        'training',
+        'full-day-off',
+        'sudden-off',
+        'morning-off',
+        'afternoon-off',
+        'lunch-break',
+        'night-duty',
+        'night-duty-extended'
+      ]
     }
   }
 };

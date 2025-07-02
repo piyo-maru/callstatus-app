@@ -326,7 +326,7 @@ export const ALL_STATUSES = [
 
 // === ステータス日本語表示名マッピング ===
 export const STATUS_DISPLAY_NAMES: { [key: string]: string } = {
-  'online': '在社',
+  'online': '出社',
   'remote': 'リモート',
   'meeting': '会議',
   'training': '研修',

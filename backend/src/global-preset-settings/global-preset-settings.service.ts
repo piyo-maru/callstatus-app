@@ -73,17 +73,91 @@ export interface GlobalPresetSettingsDto {
   lastModified: string;
 }
 
-// デフォルトのグローバルプリセット設定
+// デフォルトのグローバルプリセット設定（フロントエンドのDEFAULT_UNIFIED_PRESETSと同期）
 const DEFAULT_GLOBAL_PRESET_SETTINGS: Omit<GlobalPresetSettingsDto, 'version' | 'lastModified'> = {
   presets: [
+    // 一般勤務カテゴリ
     {
-      id: 'standard-work',
-      name: 'standardWork',
-      displayName: '通常勤務',
-      description: '標準的な勤務時間のプリセット',
+      id: 'full-time-employee',
+      name: 'full-time-employee',
+      displayName: '正社員',
+      description: '9:00-12:00 + 昼休み + 13:00-18:00の正社員勤務',
       category: 'general',
       schedules: [
-        { status: '出社', startTime: 9, endTime: 18, memo: '通常勤務' }
+        { status: 'online', startTime: 9, endTime: 12, memo: '' },
+        { status: 'break', startTime: 12, endTime: 13, memo: '' },
+        { status: 'online', startTime: 13, endTime: 18, memo: '' }
+      ],
+      representativeScheduleIndex: 0,
+      isActive: true,
+      customizable: true,
+      isDefault: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    },
+    {
+      id: 'part-time-employee',
+      name: 'part-time-employee',
+      displayName: 'パートタイマー',
+      description: '9:00-12:00 + 昼休み + 13:00-16:00のパートタイム勤務',
+      category: 'general',
+      schedules: [
+        { status: 'online', startTime: 9, endTime: 12, memo: '' },
+        { status: 'break', startTime: 12, endTime: 13, memo: '' },
+        { status: 'online', startTime: 13, endTime: 16, memo: '' }
+      ],
+      representativeScheduleIndex: 0,
+      isActive: true,
+      customizable: true,
+      isDefault: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    },
+    {
+      id: 'remote-full-time',
+      name: 'remote-full-time',
+      displayName: '在宅勤務（正社員）',
+      description: '9:00-12:00 + 昼休み + 13:00-18:00の在宅正社員勤務',
+      category: 'general',
+      schedules: [
+        { status: 'remote', startTime: 9, endTime: 12, memo: '' },
+        { status: 'break', startTime: 12, endTime: 13, memo: '' },
+        { status: 'remote', startTime: 13, endTime: 18, memo: '' }
+      ],
+      representativeScheduleIndex: 0,
+      isActive: true,
+      customizable: true,
+      isDefault: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    },
+    {
+      id: 'remote-part-time',
+      name: 'remote-part-time',
+      displayName: '在宅勤務（パートタイマー）',
+      description: '9:00-12:00 + 昼休み + 13:00-16:00の在宅パートタイム勤務',
+      category: 'general',
+      schedules: [
+        { status: 'remote', startTime: 9, endTime: 12, memo: '' },
+        { status: 'break', startTime: 12, endTime: 13, memo: '' },
+        { status: 'remote', startTime: 13, endTime: 16, memo: '' }
+      ],
+      representativeScheduleIndex: 0,
+      isActive: true,
+      customizable: true,
+      isDefault: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    },
+    // 休暇カテゴリ
+    {
+      id: 'full-day-off',
+      name: 'full-day-off',
+      displayName: '終日休み',
+      description: '一日中休暇',
+      category: 'time-off',
+      schedules: [
+        { status: 'off', startTime: 9, endTime: 18, memo: '終日休暇' }
       ],
       representativeScheduleIndex: 0,
       isActive: true,
@@ -93,66 +167,132 @@ const DEFAULT_GLOBAL_PRESET_SETTINGS: Omit<GlobalPresetSettingsDto, 'version' | 
       updatedAt: new Date().toISOString()
     },
     {
-      id: 'early-shift',
-      name: 'earlyShift',
-      displayName: '早番',
-      description: '早番勤務のプリセット',
-      category: 'general',
-      schedules: [
-        { status: '出社', startTime: 8, endTime: 17, memo: '早番' }
-      ],
-      representativeScheduleIndex: 0,
-      isActive: true,
-      customizable: true,
-      isDefault: false,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    },
-    {
-      id: 'late-shift',
-      name: 'lateShift',
-      displayName: '遅番',
-      description: '遅番勤務のプリセット',
-      category: 'general',
-      schedules: [
-        { status: '出社', startTime: 10, endTime: 19, memo: '遅番' }
-      ],
-      representativeScheduleIndex: 0,
-      isActive: true,
-      customizable: true,
-      isDefault: false,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    },
-    {
-      id: 'paid-leave',
-      name: 'paidLeave',
-      displayName: '有給休暇',
-      description: '有給休暇のプリセット',
+      id: 'sudden-off',
+      name: 'sudden-off',
+      displayName: '突発休',
+      description: '突発的な休暇',
       category: 'time-off',
       schedules: [
-        { status: '有給', startTime: 0, endTime: 24, memo: '有給休暇' }
+        { status: 'off', startTime: 9, endTime: 18, memo: '突発休' }
       ],
       representativeScheduleIndex: 0,
       isActive: true,
       customizable: false,
-      isDefault: false,
+      isDefault: true,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     },
     {
+      id: 'morning-off',
+      name: 'morning-off',
+      displayName: '午前休',
+      description: '午前中休暇',
+      category: 'time-off',
+      schedules: [
+        { status: 'off', startTime: 9, endTime: 13, memo: '午前休' }
+      ],
+      representativeScheduleIndex: 0,
+      isActive: true,
+      customizable: false,
+      isDefault: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    },
+    {
+      id: 'afternoon-off',
+      name: 'afternoon-off',
+      displayName: '午後休',
+      description: '午後休暇',
+      category: 'time-off',
+      schedules: [
+        { status: 'off', startTime: 13, endTime: 18, memo: '午後休' }
+      ],
+      representativeScheduleIndex: 0,
+      isActive: true,
+      customizable: false,
+      isDefault: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    },
+    {
+      id: 'lunch-break',
+      name: 'lunch-break',
+      displayName: '昼休み',
+      description: '12:00-13:00の昼休憩',
+      category: 'time-off',
+      schedules: [
+        { status: 'break', startTime: 12, endTime: 13, memo: '昼休憩' }
+      ],
+      representativeScheduleIndex: 0,
+      isActive: true,
+      customizable: false,
+      isDefault: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    },
+    // 夜間担当カテゴリ
+    {
       id: 'night-duty',
-      name: 'nightDuty',
+      name: 'night-duty',
       displayName: '夜間担当',
-      description: '夜間担当のプリセット',
+      description: '18:00-21:00の夜間担当',
       category: 'night-duty',
       schedules: [
-        { status: '夜間担当', startTime: 17, endTime: 21, memo: '夜間担当' }
+        { status: 'night duty', startTime: 18, endTime: 21, memo: '夜間担当' }
       ],
       representativeScheduleIndex: 0,
       isActive: true,
       customizable: true,
-      isDefault: false,
+      isDefault: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    },
+    {
+      id: 'night-duty-extended',
+      name: 'night-duty-extended',
+      displayName: '夜間担当(延長)',
+      description: '17:00-21:00の夜間担当(延長)',
+      category: 'night-duty',
+      schedules: [
+        { status: 'night duty', startTime: 17, endTime: 21, memo: '夜間担当(延長)' }
+      ],
+      representativeScheduleIndex: 0,
+      isActive: true,
+      customizable: true,
+      isDefault: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    },
+    // その他カテゴリ
+    {
+      id: 'meeting-block',
+      name: 'meeting-block',
+      displayName: '会議ブロック',
+      description: '14:00-15:00の会議時間',
+      category: 'special',
+      schedules: [
+        { status: 'meeting', startTime: 14, endTime: 15, memo: '定例会議' }
+      ],
+      representativeScheduleIndex: 0,
+      isActive: true,
+      customizable: true,
+      isDefault: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    },
+    {
+      id: 'training',
+      name: 'training',
+      displayName: '研修・トレーニング',
+      description: '10:00-16:00の研修時間',
+      category: 'special',
+      schedules: [
+        { status: 'training', startTime: 10, endTime: 16, memo: '研修・トレーニング' }
+      ],
+      representativeScheduleIndex: 0,
+      isActive: true,
+      customizable: true,
+      isDefault: true,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     }
@@ -165,14 +305,62 @@ const DEFAULT_GLOBAL_PRESET_SETTINGS: Omit<GlobalPresetSettingsDto, 'version' | 
   ],
   pagePresetSettings: {
     monthlyPlanner: {
-      enabledPresetIds: ['standard-work', 'early-shift', 'late-shift', 'paid-leave', 'night-duty'],
-      defaultPresetId: 'standard-work',
-      presetDisplayOrder: ['standard-work', 'early-shift', 'late-shift', 'paid-leave', 'night-duty']
+      enabledPresetIds: [
+        'full-time-employee',
+        'part-time-employee',
+        'remote-full-time',
+        'remote-part-time',
+        'full-day-off',
+        'sudden-off',
+        'morning-off',
+        'afternoon-off',
+        'night-duty'
+      ],
+      defaultPresetId: 'full-time-employee',
+      presetDisplayOrder: [
+        'full-time-employee',
+        'part-time-employee', 
+        'remote-full-time',
+        'remote-part-time',
+        'full-day-off',
+        'sudden-off',
+        'morning-off',
+        'afternoon-off',
+        'night-duty'
+      ]
     },
     personalPage: {
-      enabledPresetIds: ['standard-work', 'early-shift', 'late-shift', 'paid-leave', 'night-duty'],
-      defaultPresetId: 'standard-work',
-      presetDisplayOrder: ['standard-work', 'early-shift', 'late-shift', 'paid-leave', 'night-duty']
+      enabledPresetIds: [
+        'full-time-employee',
+        'part-time-employee',
+        'remote-full-time',
+        'remote-part-time',
+        'meeting-block',
+        'training',
+        'full-day-off',
+        'sudden-off',
+        'morning-off',
+        'afternoon-off',
+        'lunch-break',
+        'night-duty',
+        'night-duty-extended'
+      ],
+      defaultPresetId: 'full-time-employee',
+      presetDisplayOrder: [
+        'full-time-employee',
+        'part-time-employee',
+        'remote-full-time',
+        'remote-part-time',
+        'meeting-block',
+        'training',
+        'full-day-off',
+        'sudden-off',
+        'morning-off',
+        'afternoon-off',
+        'lunch-break',
+        'night-duty',
+        'night-duty-extended'
+      ]
     }
   },
   // 表示設定のデフォルト値
