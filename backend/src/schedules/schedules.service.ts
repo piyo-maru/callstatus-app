@@ -55,7 +55,9 @@ export class SchedulesService {
           memo: ls.memo || null,
           editable: ls.layer === 'adjustment', // 調整レイヤーのみ編集可能
           layer: ls.layer, // レイヤー情報を追加
-          isApprovedPending: ls.isApprovedPending || false // 承認済みpending情報を追加
+          isApprovedPending: ls.isApprovedPending || false, // 承認済みpending情報を追加
+          createdAt: ls.createdAt.toISOString(),
+          updatedAt: ls.updatedAt.toISOString()
         };
       });
 

@@ -16,7 +16,7 @@ model Adjustment {
   memo            String?
   reason          String?
   createdAt       DateTime             @default(now())
-  updatedAt       DateTime
+  updatedAt       DateTime             @updatedAt
   staffId         Int
   batchId         String?
   approvedAt      DateTime?
@@ -77,7 +77,7 @@ model DailyAssignment {
   assignmentType String   @db.VarChar(20)
   customLabel    String?  @db.VarChar(50)
   createdAt      DateTime @default(now())
-  updatedAt      DateTime
+  updatedAt      DateTime @updatedAt
   Staff          Staff    @relation(fields: [staffId], references: [id])
 }
 
@@ -90,7 +90,7 @@ model MonthlySchedule {
   memo      String?
   source    String   @default("csv")
   createdAt DateTime @default(now())
-  updatedAt DateTime
+  updatedAt DateTime @updatedAt
   staffId   Int
   Staff     Staff    @relation(fields: [staffId], references: [id])
 
@@ -162,7 +162,7 @@ model TemporaryAssignment {
   reason    String   @default("支援")
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
-  updatedAt DateTime
+  updatedAt DateTime @updatedAt
   Staff     Staff    @relation(fields: [staffId], references: [id])
 
   @@unique([staffId, startDate, endDate])
@@ -251,7 +251,7 @@ model user_auth {
   externalId            String?
   metadata              Json?
   createdAt             DateTime                @default(now())
-  updatedAt             DateTime
+  updatedAt             DateTime                @updatedAt
   deletedAt             DateTime?
   audit_logs            audit_logs[]
   auth_audit_logs       auth_audit_logs[]

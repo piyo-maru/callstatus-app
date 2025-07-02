@@ -2379,12 +2379,12 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
                       const layerDiff = layerOrder[aLayer] - layerOrder[bLayer];
                       if (layerDiff !== 0) return layerDiff;
                       
-                      // 第2優先: 同一調整レイヤー内では後勝ち（IDまたは作成時刻順）
+                      // 第2優先: 同一調整レイヤー内では後勝ち（updatedAt時刻順）
                       if (aLayer === 'adjustment' && bLayer === 'adjustment') {
-                        // IDが数値の場合は数値比較、文字列の場合は文字列比較で後勝ち
-                        const aId = typeof a.id === 'number' ? a.id : parseInt(String(a.id)) || 0;
-                        const bId = typeof b.id === 'number' ? b.id : parseInt(String(b.id)) || 0;
-                        return aId - bId; // 小さいIDから大きいIDへ（後から作成されたものが後に描画される）
+                        // updatedAtによる真の「後勝ち」ソート（最後に更新されたものが後に描画される）
+                        const aUpdated = new Date((a as any).updatedAt || 0);
+                        const bUpdated = new Date((b as any).updatedAt || 0);
+                        return aUpdated.getTime() - bUpdated.getTime(); // 古い更新から新しい更新へ
                       }
                       
                       return 0;

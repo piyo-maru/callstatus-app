@@ -11,6 +11,8 @@ export interface LayeredSchedule {
   layer: 'contract' | 'adjustment';
   priority: number;
   isApprovedPending?: boolean; // 承認済みpendingスケジュールフラグ
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 @Injectable()
@@ -125,7 +127,9 @@ export class LayerManagerService {
       end: endUtc,
       memo: '契約による基本勤務時間',
       layer: 'contract',
-      priority: 1 // 契約レイヤーは最低優先度
+      priority: 1, // 契約レイヤーは最低優先度
+      createdAt: startUtc, // 契約スケジュールは当日作成として扱う
+      updatedAt: startUtc  // 契約スケジュールは基本的に更新されない
     };
   }
 
@@ -163,7 +167,9 @@ export class LayerManagerService {
         memo: adj.memo || undefined,
         layer: 'adjustment' as const,
         priority: 3, // 個別調整は最高優先度
-        isApprovedPending: adj.isPending && adj.approvedAt !== null // 承認済みpendingかどうか
+        isApprovedPending: adj.isPending && adj.approvedAt !== null, // 承認済みpendingかどうか
+        createdAt: adj.createdAt,
+        updatedAt: adj.updatedAt
       };
       return adjustmentSchedule;
     });
@@ -245,7 +251,9 @@ export class LayerManagerService {
         end: sch.end,
         memo: sch.memo || undefined,
         layer: 'adjustment' as const,
-        priority: 2 // 従来データは中間優先度
+        priority: 2, // 従来データは中間優先度
+        createdAt: sch.start, // ScheduleテーブルにはcreatedAtがないため、startを使用
+        updatedAt: sch.start  // ScheduleテーブルにはupdatedAtがないため、startを使用
       };
       return legacySchedule;
     });
