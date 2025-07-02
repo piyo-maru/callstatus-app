@@ -3,6 +3,11 @@
 import { useState, useCallback, useRef } from 'react';
 import { useAuth } from '../components/AuthProvider';
 import { SettingsValidator } from '../utils/SettingsValidator';
+
+// デバッグログ制御（統一）
+const isDebugEnabled = () => typeof window !== 'undefined' && 
+  process.env.NODE_ENV === 'development' && 
+  window.localStorage?.getItem('app-debug') === 'true';
 import { DEFAULT_PRESET_SETTINGS, DEFAULT_UNIFIED_PRESETS, PRESET_CATEGORIES } from '../components/constants/PresetSchedules';
 import { getApiUrl } from '../components/constants/MainAppConstants';
 import { ALL_STATUSES, STATUS_COLORS, STATUS_DISPLAY_NAMES } from '../components/timeline/TimelineUtils';
@@ -60,17 +65,23 @@ export function useSettingsImportExport(): UseSettingsImportExportReturn {
     try {
       const currentApiUrl = getApiUrl();
       const apiUrl = `${currentApiUrl}/api/department-settings`;
-      console.log('部署・グループ設定を取得中:', apiUrl);
+      if (isDebugEnabled()) {
+        console.log('部署・グループ設定を取得中:', apiUrl);
+      }
       
       // 認証付きfetchが利用可能な場合はそれを使用、そうでなければ通常のfetchを使用
       const fetchFunction = authenticatedFetch || fetch;
       const response = await fetchFunction(apiUrl);
-      console.log('API レスポンス:', response.status, response.ok);
+      if (isDebugEnabled()) {
+        console.log('API レスポンス:', response.status, response.ok);
+      }
       
       if (response.ok) {
         const data = await response.json();
-        console.log('取得されたデータ:', data);
-        console.log('部署数:', data.departments?.length, 'グループ数:', data.groups?.length);
+        if (isDebugEnabled()) {
+          console.log('取得されたデータ:', data);
+          console.log('部署数:', data.departments?.length, 'グループ数:', data.groups?.length);
+        }
         
         // エクスポート用に不要なフィールドを除外
         const cleanDepartments = (data.departments || []).map(dept => ({

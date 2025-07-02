@@ -47,7 +47,6 @@ test.describe('基本ワークフローテスト', () => {
     
     // システム部のグループが表示されることを確認
     const groupOptions = await groupSelect.locator('option').allTextContents();
-    console.log('利用可能なグループオプション:', groupOptions);
     
     // 利用可能なグループから確認（データによって変動する可能性がある）
     if (groupOptions.includes('開発グループ')) {
@@ -97,9 +96,6 @@ test.describe('基本ワークフローテスト', () => {
     
     if (scheduleCount > 0) {
       await expect(scheduleElements.first()).toBeVisible();
-      console.log(`スケジュール要素数: ${scheduleCount}`);
-    } else {
-      console.log('スケジュール要素が見つかりませんでした');
     }
     
     // 状態テキストの確認（より柔軟に）
@@ -108,7 +104,7 @@ test.describe('基本ワークフローテスト', () => {
       const statusElements = page.locator(`text=${status}`);
       const count = await statusElements.count();
       if (count > 0) {
-        console.log(`${status} ステータス: ${count}件`);
+        await expect(statusElements.first()).toBeVisible();
       }
     }
   });
@@ -127,10 +123,7 @@ test.describe('基本ワークフローテスト', () => {
     const timeAreaCount = await timeAreas.count();
     
     if (timeAreaCount > 0) {
-      console.log(`時間帯エリア数: ${timeAreaCount}`);
-    } else {
-      // 代替として時刻ヘッダーが表示されていることを確認
-      console.log('時間帯エリアの代わりにタイムライン表示を確認');
+      await expect(timeAreas.first()).toBeVisible();
     }
   });
 
@@ -157,7 +150,9 @@ test.describe('基本ワークフローテスト', () => {
     // 各フィールドの存在確認
     for (const [fieldName, locator] of Object.entries(modalFields)) {
       const count = await locator.count();
-      console.log(`${fieldName}フィールド: ${count}個`);
+      if (count > 0) {
+        await expect(locator.first()).toBeVisible();
+      }
     }
     
     // キャンセルボタンでモーダル閉じる

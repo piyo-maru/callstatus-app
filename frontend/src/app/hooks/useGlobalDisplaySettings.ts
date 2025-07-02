@@ -4,6 +4,11 @@ import { useState, useEffect, useCallback } from 'react';
 import { getApiUrl } from '../components/constants/MainAppConstants';
 import { updateGlobalDisplaySettingsCache, initializeCacheFromLocalStorage } from '../utils/globalDisplaySettingsCache';
 
+// デバッグログ制御（統一）
+const isDebugEnabled = () => typeof window !== 'undefined' && 
+  process.env.NODE_ENV === 'development' && 
+  window.localStorage?.getItem('app-debug') === 'true';
+
 export interface GlobalDisplaySettings {
   viewMode: 'normal' | 'compact';
   maskingEnabled: boolean;
@@ -105,7 +110,9 @@ export const useGlobalDisplaySettings = (authenticatedFetch?: (url: string, opti
           serverSettings.customStatusColors,
           serverSettings.customStatusDisplayNames
         );
-        console.log('サーバーからグローバル表示設定を読み込みました');
+        if (isDebugEnabled()) {
+          console.log('サーバーからグローバル表示設定を読み込みました');
+        }
       } else {
         // サーバーから取得できない場合はローカルストレージから取得
         const localSettings = loadSettingsFromLocalStorage();
@@ -115,7 +122,9 @@ export const useGlobalDisplaySettings = (authenticatedFetch?: (url: string, opti
           localSettings.customStatusColors,
           localSettings.customStatusDisplayNames
         );
-        console.log('ローカルストレージからグローバル表示設定を読み込みました');
+        if (isDebugEnabled()) {
+          console.log('ローカルストレージからグローバル表示設定を読み込みました');
+        }
         setError('サーバーからの設定取得に失敗しました。ローカル設定を使用しています。');
       }
     } catch (error) {

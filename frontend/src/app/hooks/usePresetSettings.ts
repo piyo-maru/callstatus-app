@@ -13,13 +13,25 @@ import {
 } from '../components/constants/PresetSchedules';
 import { useAuth } from '../components/AuthProvider';
 import { getApiBaseUrlSync } from '../../lib/api-config';
+import { useGlobalPresetSettings } from './useGlobalPresetSettings';
+
+// デバッグログ制御（統一）
+const isDebugEnabled = () => typeof window !== 'undefined' && 
+  process.env.NODE_ENV === 'development' && 
+  window.localStorage?.getItem('app-debug') === 'true';
 
 // API連携設定（段階的移行用）
 const API_INTEGRATION_CONFIG = {
   enabled: false, // API連携を無効にして手動保存モードに変更
   fallbackToLocalStorage: true, // API失敗時にLocalStorageにフォールバック
-  enableDebugLogging: true, // デバッグログを有効にする
   saveInterval: 5000 // 自動保存間隔（ミリ秒）
+};
+
+// グローバル設定統合設定
+const GLOBAL_INTEGRATION_CONFIG = {
+  enabled: true, // グローバル設定との統合を有効化
+  mergeWithLocal: true, // ローカル設定とマージ
+  preferGlobal: true // 競合時はグローバル設定を優先
 };
 
 // API連携用の型定義（バックエンドAPIとの互換性を保つ）
@@ -141,7 +153,7 @@ class PresetSettingsApiClient {
         lastModified: apiData.lastModified
       };
 
-      if (API_INTEGRATION_CONFIG.enableDebugLogging) {
+      if (isDebugEnabled()) {
         console.log('[PresetAPI] プリセット設定を取得:', userSettings);
       }
 
@@ -172,7 +184,7 @@ class PresetSettingsApiClient {
         throw new Error(`API request failed: ${response.status}`);
       }
 
-      if (API_INTEGRATION_CONFIG.enableDebugLogging) {
+      if (isDebugEnabled()) {
         console.log('[PresetAPI] ページ別プリセット設定を更新:', pageSettings);
       }
 
@@ -217,7 +229,7 @@ class PresetSettingsApiClient {
         throw new Error(`API request failed: ${response.status}`);
       }
 
-      if (API_INTEGRATION_CONFIG.enableDebugLogging) {
+      if (isDebugEnabled()) {
         console.log('[PresetAPI] プリセットを作成:', preset.id);
       }
 
@@ -261,7 +273,7 @@ class PresetSettingsApiClient {
         throw new Error(`API request failed: ${response.status}`);
       }
 
-      if (API_INTEGRATION_CONFIG.enableDebugLogging) {
+      if (isDebugEnabled()) {
         console.log('[PresetAPI] プリセットを更新:', preset.id);
       }
 
@@ -288,7 +300,7 @@ class PresetSettingsApiClient {
         throw new Error(`API request failed: ${response.status}`);
       }
 
-      if (API_INTEGRATION_CONFIG.enableDebugLogging) {
+      if (isDebugEnabled()) {
         console.log('[PresetAPI] プリセットを削除:', presetId);
       }
 
@@ -335,6 +347,16 @@ interface UsePresetSettingsReturn {
   // 状態管理
   isLoading: boolean;
   isDirty: boolean;
+  
+  // グローバル設定統合（新機能）
+  globalSettings: {
+    isAvailable: boolean;
+    isLoading: boolean;
+    version: string;
+    lastSyncTime: string;
+  };
+  refreshGlobalSettings: () => void;
+  isUsingGlobalSettings: boolean;
 }
 
 export const usePresetSettings = (): UsePresetSettingsReturn => {
@@ -348,13 +370,17 @@ export const usePresetSettings = (): UsePresetSettingsReturn => {
   const { user } = useAuth();
   const [apiClient] = useState(() => new PresetSettingsApiClient());
   
+  // グローバル設定統合（新機能）
+  const globalPresetHook = useGlobalPresetSettings();
+  const [isUsingGlobalSettings, setIsUsingGlobalSettings] = useState(GLOBAL_INTEGRATION_CONFIG.enabled);
+  
   // API連携を固定ID（999）で初期化（シンプル権限管理）
   useEffect(() => {
     // 設定を開けるなら全部設定できる、開けないなら全部使えない
     // 細かい権限設定は後で実装予定
     const ADMIN_STAFF_ID = 999;
     apiClient.setStaffId(ADMIN_STAFF_ID);
-    if (API_INTEGRATION_CONFIG.enableDebugLogging) {
+    if (isDebugEnabled()) {
       console.log('[PresetSettings] API連携を固定IDで初期化:', ADMIN_STAFF_ID);
     }
   }, [apiClient]);
@@ -385,6 +411,70 @@ export const usePresetSettings = (): UsePresetSettingsReturn => {
       }
     }
   });
+
+  // グローバル設定とローカル設定のマージ機能
+  // マージ済みフラグを追加してループを防止
+  const [isGlobalMerged, setIsGlobalMerged] = useState(false);
+  const [lastGlobalVersion, setLastGlobalVersion] = useState<string>('');
+
+  // グローバル設定とローカル設定のマージ機能（依存関係なし）
+  const mergeGlobalAndLocalSettings = (currentPresets: UnifiedPreset[], currentPageSettings: any, globalSettings: any, currentVersion: string) => {
+    if (!GLOBAL_INTEGRATION_CONFIG.enabled || !globalSettings) {
+      return { presets: currentPresets, pageSettings: currentPageSettings, merged: false };
+    }
+
+    try {
+      // バージョンが同じで既にマージ済みの場合はスキップ
+      if (isGlobalMerged && lastGlobalVersion === currentVersion) {
+        return { presets: currentPresets, pageSettings: currentPageSettings, merged: false };
+      }
+      
+      if (isDebugEnabled()) {
+        console.log('[PresetSettings] グローバル設定との統合を開始:', {
+          globalPresets: globalSettings.presets.length,
+          localPresets: currentPresets.length,
+          mergeStrategy: GLOBAL_INTEGRATION_CONFIG.preferGlobal ? 'グローバル優先' : 'ローカル優先',
+          version: currentVersion
+        });
+      }
+
+      // プリセットのマージ
+      let mergedPresets: UnifiedPreset[];
+      if (GLOBAL_INTEGRATION_CONFIG.mergeWithLocal) {
+        // グローバル設定をベースに、ローカル固有のプリセットを追加
+        const globalPresetIds = globalSettings.presets.map((p: any) => p.id);
+        const localOnlyPresets = currentPresets.filter(p => !globalPresetIds.includes(p.id) && !p.isDefault);
+        
+        mergedPresets = [
+          ...globalSettings.presets,
+          ...localOnlyPresets
+        ];
+      } else {
+        // グローバル設定のみ使用
+        mergedPresets = globalSettings.presets;
+      }
+
+      // ページ別設定のマージ
+      let mergedPageSettings = currentPageSettings;
+      if (GLOBAL_INTEGRATION_CONFIG.preferGlobal) {
+        mergedPageSettings = globalSettings.pagePresetSettings;
+      }
+
+      if (isDebugEnabled()) {
+        console.log('[PresetSettings] グローバル設定との統合完了:', {
+          totalPresets: mergedPresets.length,
+          globalPresets: globalSettings.presets.length,
+          localOnlyPresets: mergedPresets.length - globalSettings.presets.length
+        });
+      }
+
+      return { presets: mergedPresets, pageSettings: mergedPageSettings, merged: true };
+
+    } catch (error) {
+      console.error('[PresetSettings] グローバル設定統合エラー:', error);
+      return { presets: currentPresets, pageSettings: currentPageSettings, merged: false };
+    }
+  };
 
   // フィルタリング済みプリセット
   const filteredPresets = useMemo(() => {
@@ -432,7 +522,7 @@ export const usePresetSettings = (): UsePresetSettingsReturn => {
     if (API_INTEGRATION_CONFIG.enabled) {
       try {
         const apiCreateSuccessful = await apiClient.createPreset(newPreset);
-        if (apiCreateSuccessful) {
+        if (apiCreateSuccessful && isDebugEnabled()) {
           console.log('[PresetSettings] APIにプリセットを作成しました:', newPreset.id);
         }
       } catch (apiError) {
@@ -460,7 +550,7 @@ export const usePresetSettings = (): UsePresetSettingsReturn => {
     if (API_INTEGRATION_CONFIG.enabled && user?.staffId && fullUpdatedPreset) {
       try {
         const apiUpdateSuccessful = await apiClient.updatePreset(fullUpdatedPreset);
-        if (apiUpdateSuccessful) {
+        if (apiUpdateSuccessful && isDebugEnabled()) {
           console.log('[PresetSettings] APIのプリセットを更新しました:', id);
         }
       } catch (apiError) {
@@ -485,7 +575,7 @@ export const usePresetSettings = (): UsePresetSettingsReturn => {
     if (API_INTEGRATION_CONFIG.enabled) {
       try {
         const apiDeleteSuccessful = await apiClient.deletePreset(id);
-        if (apiDeleteSuccessful) {
+        if (apiDeleteSuccessful && isDebugEnabled()) {
           console.log('[PresetSettings] APIからプリセットを削除しました:', id);
         }
       } catch (apiError) {
@@ -558,7 +648,7 @@ export const usePresetSettings = (): UsePresetSettingsReturn => {
       try {
         // 更新された全体のページ別設定をAPIに送信
         const apiUpdateSuccessful = await apiClient.updatePagePresetSettings(updatedPagePresetSettings);
-        if (apiUpdateSuccessful) {
+        if (apiUpdateSuccessful && isDebugEnabled()) {
           console.log('[PresetSettings] APIのページ別プリセット設定を更新しました:', page);
         }
       } catch (apiError) {
@@ -592,7 +682,7 @@ export const usePresetSettings = (): UsePresetSettingsReturn => {
     if (API_INTEGRATION_CONFIG.enabled) {
       try {
         const apiUpdateSuccessful = await apiClient.updatePagePresetSettings(updatedPagePresetSettings);
-        if (apiUpdateSuccessful) {
+        if (apiUpdateSuccessful && isDebugEnabled()) {
           console.log('[PresetSettings] プリセット表示順序を更新しました:', page, newOrder);
         }
       } catch (apiError) {
@@ -627,7 +717,9 @@ export const usePresetSettings = (): UsePresetSettingsReturn => {
           const pageSettingsSaved = await apiClient.updatePagePresetSettings(pagePresetSettings);
           if (pageSettingsSaved) {
             apiSaveSuccessful = true;
-            console.log('[PresetSettings] APIにページ別プリセット設定を保存しました');
+            if (isDebugEnabled()) {
+              console.log('[PresetSettings] APIにページ別プリセット設定を保存しました');
+            }
           }
         } catch (apiError) {
           console.warn('[PresetSettings] API保存失敗、LocalStorageにフォールバック:', apiError);
@@ -637,7 +729,9 @@ export const usePresetSettings = (): UsePresetSettingsReturn => {
       // LocalStorageに保存（手動保存時のみ実行）
       if (!API_INTEGRATION_CONFIG.enabled || (API_INTEGRATION_CONFIG.fallbackToLocalStorage && !apiSaveSuccessful)) {
         localStorage.setItem('userPresetSettings', JSON.stringify(settings));
-        console.log('[PresetSettings] LocalStorageにプリセット設定を保存しました');
+        if (isDebugEnabled()) {
+          console.log('[PresetSettings] LocalStorageにプリセット設定を保存しました');
+        }
       }
       
       setIsDirty(false);
@@ -648,10 +742,12 @@ export const usePresetSettings = (): UsePresetSettingsReturn => {
         pagePresetSettings
       });
       
-      if (apiSaveSuccessful) {
-        console.log('[PresetSettings] プリセット設定をAPIに保存しました');
-      } else {
-        console.log('[PresetSettings] プリセット設定をLocalStorageに保存しました');
+      if (isDebugEnabled()) {
+        if (apiSaveSuccessful) {
+          console.log('[PresetSettings] プリセット設定をAPIに保存しました');
+        } else {
+          console.log('[PresetSettings] プリセット設定をLocalStorageに保存しました');
+        }
       }
       
     } catch (error) {
@@ -697,7 +793,9 @@ export const usePresetSettings = (): UsePresetSettingsReturn => {
             
             setIsDirty(false);
             settingsLoaded = true;
-            console.log('[PresetSettings] APIからプリセット設定を読み込みました');
+            if (isDebugEnabled()) {
+              console.log('[PresetSettings] APIからプリセット設定を読み込みました');
+            }
           }
         } catch (apiError) {
           console.warn('[PresetSettings] API読み込み失敗、LocalStorageにフォールバック:', apiError);
@@ -734,13 +832,17 @@ export const usePresetSettings = (): UsePresetSettingsReturn => {
           
           setIsDirty(false);
           settingsLoaded = true;
-          console.log('[PresetSettings] LocalStorageからプリセット設定を読み込みました');
+          if (isDebugEnabled()) {
+            console.log('[PresetSettings] LocalStorageからプリセット設定を読み込みました');
+          }
         }
       }
       
       // どちらからも読み込めなかった場合はデフォルト設定を使用
       if (!settingsLoaded) {
-        console.log('[PresetSettings] デフォルト設定を使用します');
+        if (isDebugEnabled()) {
+          console.log('[PresetSettings] デフォルト設定を使用します');
+        }
       }
       
     } catch (error) {
@@ -764,7 +866,9 @@ export const usePresetSettings = (): UsePresetSettingsReturn => {
       }
     });
     setIsDirty(true);
-    console.log('プリセット設定をデフォルトに戻しました');
+    if (isDebugEnabled()) {
+      console.log('プリセット設定をデフォルトに戻しました');
+    }
   }, []);
 
   // 変更を破棄して元の設定に戻す
@@ -772,8 +876,31 @@ export const usePresetSettings = (): UsePresetSettingsReturn => {
     setPresets(originalSettings.presets);
     setPagePresetSettings(originalSettings.pagePresetSettings);
     setIsDirty(false);
-    console.log('プリセット設定の変更を破棄しました');
+    if (isDebugEnabled()) {
+      console.log('プリセット設定の変更を破棄しました');
+    }
   }, [originalSettings]);
+
+  // グローバル設定の変更を監視してマージ実行（ループ防止版）
+  useEffect(() => {
+    if (GLOBAL_INTEGRATION_CONFIG.enabled && globalPresetHook.globalSettings && globalPresetHook.isInitialized) {
+      const globalVersion = globalPresetHook.globalSettings.version;
+      
+      // バージョンベースの重複実行防止
+      if (isGlobalMerged && lastGlobalVersion === globalVersion) {
+        return;
+      }
+
+      const mergeResult = mergeGlobalAndLocalSettings(presets, pagePresetSettings, globalPresetHook.globalSettings, globalVersion);
+      
+      if (mergeResult.merged) {
+        setPresets(mergeResult.presets);
+        setPagePresetSettings(mergeResult.pageSettings);
+        setIsGlobalMerged(true);
+        setLastGlobalVersion(globalVersion);
+      }
+    }
+  }, [globalPresetHook.globalSettings?.version, globalPresetHook.isInitialized]);
 
   // 初期化時に設定読み込み
   useEffect(() => {
@@ -801,6 +928,16 @@ export const usePresetSettings = (): UsePresetSettingsReturn => {
     resetToDefaults,
     discardChanges,
     isLoading,
-    isDirty
+    isDirty,
+    
+    // グローバル設定統合（新機能）
+    globalSettings: {
+      isAvailable: !!globalPresetHook.globalSettings,
+      isLoading: globalPresetHook.isLoading,
+      version: globalPresetHook.globalSettings?.version || '',
+      lastSyncTime: globalPresetHook.lastSyncTime
+    },
+    refreshGlobalSettings: globalPresetHook.refreshSettings,
+    isUsingGlobalSettings
   };
 };
