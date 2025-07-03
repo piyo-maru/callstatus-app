@@ -2800,7 +2800,7 @@ export default function FullMainApp() {
         <div className="bg-white shadow-lg rounded-xl border border-gray-100 relative min-w-[1360px]">
           {/* 統一ヘッダー行 */}
           <div className="sticky top-0 z-30 flex bg-gray-100 border-b shadow-sm">
-            <div className="min-w-fit max-w-[400px] w-[400px] px-2 py-2 font-bold text-gray-600 text-sm text-center border-r whitespace-nowrap">
+            <div className="min-w-fit max-w-[240px] w-[240px] px-2 py-2 font-bold text-gray-600 text-sm text-center border-r whitespace-nowrap">
               部署 / グループ / スタッフ名
             </div>
             <div className="flex-1">
@@ -2826,7 +2826,7 @@ export default function FullMainApp() {
           </div>
           
           <div className="flex">
-            <div className="min-w-fit max-w-[400px] w-[400px] sticky left-0 z-20 bg-white border-r border-gray-200">
+            <div className="min-w-fit max-w-[240px] w-[240px] sticky left-0 z-20 bg-white border-r border-gray-200">
               {Object.keys(groupedStaffForGantt).length > 0 ? (
                 sortByDisplayOrder(Object.entries(groupedStaffForGantt), 'department').map(([department, groups]) => (
                   <div key={department} className="department-group">
