@@ -44,6 +44,7 @@ import {
   formatDateWithHoliday, checkSupportedCharacters, 
   timeStringToHours 
 } from './utils/MainAppUtils';
+import { useMainAppDate } from '../../utils/datePersistence';
 import { ConfirmationModal } from './modals/ConfirmationModal';
 import { ScheduleModal } from './modals/ScheduleModal';
 import { AssignmentModal } from './modals/AssignmentModal';
@@ -852,7 +853,7 @@ export default function FullMainApp() {
   const [selectedStatus, setSelectedStatus] = useState('all');
   const [selectedSettingFilter, setSelectedSettingFilter] = useState('all');
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [displayDate, setDisplayDate] = useState(new Date());
+  const [displayDate, setDisplayDate] = useMainAppDate();
   const [dragInfo, setDragInfo] = useState<DragInfo | null>(null);
   const [draggedSchedule, setDraggedSchedule] = useState<Partial<Schedule> | null>(null);
   const [dragOffset, setDragOffset] = useState<number>(0); // ゴーストエレメント位置調整用オフセット
@@ -1080,6 +1081,35 @@ export default function FullMainApp() {
     const groupSetting = departmentSettings.groups.find(g => g.name === staff.currentGroup);
     return groupSetting?.backgroundColor || null;
   }, [departmentSettings]);
+
+  // 担当設定データのみを取得する軽量な関数
+  const fetchResponsibilityData = useCallback(async () => {
+    try {
+      const currentApiUrl = getApiUrl();
+      const dateString = `${displayDate.getFullYear()}-${String(displayDate.getMonth() + 1).padStart(2, '0')}-${String(displayDate.getDate()).padStart(2, '0')}`;
+      
+      const responsibilityRes = await fetch(`${currentApiUrl}/api/responsibilities?date=${dateString}`);
+      if (responsibilityRes.ok) {
+        const responsibilityData = await responsibilityRes.json();
+        
+        // 担当設定をスタッフデータに反映
+        const responsibilityMap = new Map<number, any>();
+        responsibilityData.responsibilities?.forEach((responsibility: any) => {
+          responsibilityMap.set(responsibility.staffId, responsibility);
+        });
+        
+        // 既存のスタッフデータに担当設定を更新
+        setStaffList(prevStaffList => 
+          prevStaffList.map(staff => ({
+            ...staff,
+            responsibilities: responsibilityMap.get(staff.id) || {}
+          }))
+        );
+      }
+    } catch (error) {
+      console.warn('Failed to fetch responsibility data:', error);
+    }
+  }, [displayDate]);
   
   const fetchData = useCallback(async (date: Date) => {
     setIsLoading(true);
@@ -1266,6 +1296,16 @@ export default function FullMainApp() {
   useEffect(() => {
     fetchData(displayDate);
   }, [displayDate, fetchData]);
+
+  // ページフォーカス時に担当設定データを自動更新
+  useEffect(() => {
+    const handleFocus = () => {
+      fetchResponsibilityData();
+    };
+    
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [fetchResponsibilityData]);
 
   useEffect(() => {
     // WebSocket接続条件チェック

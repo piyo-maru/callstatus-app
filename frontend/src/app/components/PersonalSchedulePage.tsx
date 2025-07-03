@@ -30,6 +30,7 @@ import { CsvUploadModal } from './modals/CsvUploadModal';
 import { getApiUrl } from './constants/MainAppConstants';
 import { checkSupportedCharacters } from './utils/MainAppUtils';
 import { ImportHistory } from './types/MainAppTypes';
+import { usePersonalPageDate } from '../../utils/datePersistence';
 
 // --- インポート履歴モーダルコンポーネント ---
 const ImportHistoryModal = ({ isOpen, onClose, onRollback, authenticatedFetch }: {
@@ -270,7 +271,7 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
   // 統一プリセットシステム
   const { getPresetsForPage } = usePresetSettings();
   
-  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [selectedDate, setSelectedDate] = usePersonalPageDate();
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [currentStaff, setCurrentStaff] = useState<Staff | null>(null);
   const [contractData, setContractData] = useState<any>(null);
@@ -977,6 +978,30 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
       restoreScrollPosition();
     }
   }, [schedules, loading, restoreScrollPosition]);
+
+  // 現在の日付の担当設定データを取得する軽量な関数
+  const refreshCurrentResponsibilityData = useCallback(async () => {
+    const dateString = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`;
+    const responsibilityList = await fetchResponsibilityData(dateString);
+    
+    // 担当設定データを状態に反映
+    const newResponsibilityData: { [key: string]: ResponsibilityData } = {};
+    responsibilityList.forEach((item: any) => {
+      const key = `${item.staffId}-${item.date}`;
+      newResponsibilityData[key] = item.responsibilities;
+    });
+    setResponsibilityData(newResponsibilityData);
+  }, [selectedDate, fetchResponsibilityData]);
+
+  // ページフォーカス時に担当設定データを自動更新
+  useEffect(() => {
+    const handleFocus = () => {
+      refreshCurrentResponsibilityData();
+    };
+    
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [refreshCurrentResponsibilityData]);
 
   // 祝日データを初期化
   useEffect(() => {

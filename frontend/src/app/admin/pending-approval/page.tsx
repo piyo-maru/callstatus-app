@@ -100,6 +100,14 @@ export default function PendingApprovalPage() {
   const [approvalAction, setApprovalAction] = useState<'approve' | 'reject'>('approve');
   const [approvalReason, setApprovalReason] = useState('');
   const [processingItem, setProcessingItem] = useState<PendingSchedule | null>(null);
+  
+  // 処理状態管理
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [processingProgress, setProcessingProgress] = useState({ current: 0, total: 0 });
+  const [processingType, setProcessingType] = useState<'approve' | 'reject' | null>(null);
+  const [processingResults, setProcessingResults] = useState({ success: 0, failed: 0, errors: [] as string[] });
+  const [isIndividualProcessing, setIsIndividualProcessing] = useState(false);
+  const [processingItemId, setProcessingItemId] = useState<number | null>(null);
 
   // Pending一覧取得
   const fetchPendingList = useCallback(async () => {
@@ -155,11 +163,14 @@ export default function PendingApprovalPage() {
 
   // 承認・却下実行
   const executeApproval = useCallback(async () => {
-    try {
-      const currentApiUrl = getApiUrl();
+    const currentApiUrl = getApiUrl();
+    
+    if (processingItem) {
+      // 個別処理
+      setIsIndividualProcessing(true);
+      setProcessingItemId(processingItem.id);
       
-      if (processingItem) {
-        // 個別処理
+      try {
         const endpoint = approvalAction === 'approve' ? 'approve' : 'reject';
         const response = await fetch(`${currentApiUrl}/api/schedules/pending/${processingItem.id}/${endpoint}`, {
           method: 'POST',
@@ -172,41 +183,94 @@ export default function PendingApprovalPage() {
         
         if (response.ok) {
           alert(`${approvalAction === 'approve' ? '承認' : '却下'}しました`);
+          await fetchPendingList();
+          setShowApprovalModal(false);
         } else {
           alert(`${approvalAction === 'approve' ? '承認' : '却下'}に失敗しました`);
         }
-      } else {
-        // 一括処理
-        const response = await fetch(`${currentApiUrl}/api/admin/pending-schedules/bulk-approval`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            pendingIds: Array.from(selectedItems),
-            action: approvalAction,
-            reason: approvalReason
-          })
-        });
-        
-        if (response.ok) {
-          const result = await response.json();
-          alert(`${result.success}件の${approvalAction === 'approve' ? '承認' : '却下'}が完了しました`);
-          setSelectedItems(new Set());
-        } else {
-          alert(`一括${approvalAction === 'approve' ? '承認' : '却下'}に失敗しました`);
-        }
+      } catch (error) {
+        console.error('Individual approval failed:', error);
+        alert('処理に失敗しました');
+      } finally {
+        setIsIndividualProcessing(false);
+        setProcessingItemId(null);
       }
+    } else {
+      // 一括処理（進行状況追跡付き）
+      const itemsToProcess = Array.from(selectedItems);
+      const totalItems = itemsToProcess.length;
       
-      // データ再取得
-      await fetchPendingList();
+      setIsProcessing(true);
+      setProcessingType(approvalAction);
+      setProcessingProgress({ current: 0, total: totalItems });
+      setProcessingResults({ success: 0, failed: 0, errors: [] });
       setShowApprovalModal(false);
-    } catch (error) {
-      console.error('Approval failed:', error);
-      alert('処理に失敗しました');
+      
+      let successCount = 0;
+      let failedCount = 0;
+      const errors: string[] = [];
+      
+      try {
+        for (let i = 0; i < itemsToProcess.length; i++) {
+          const itemId = itemsToProcess[i];
+          const item = pendingList.find(p => p.id === itemId);
+          
+          try {
+            const endpoint = approvalAction === 'approve' ? 'approve' : 'reject';
+            const response = await fetch(`${currentApiUrl}/api/schedules/pending/${itemId}/${endpoint}`, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ reason: approvalReason })
+            });
+            
+            if (response.ok) {
+              successCount++;
+            } else {
+              failedCount++;
+              const errorText = await response.text();
+              errors.push(`${item?.staffName || itemId}: ${errorText}`);
+            }
+          } catch (error) {
+            failedCount++;
+            errors.push(`${item?.staffName || itemId}: ネットワークエラー`);
+          }
+          
+          // 進行状況更新
+          setProcessingProgress({ current: i + 1, total: totalItems });
+          setProcessingResults({ success: successCount, failed: failedCount, errors });
+          
+          // API負荷軽減のため少し待機
+          if (i < itemsToProcess.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+          }
+        }
+        
+        // 処理完了後の結果表示
+        const resultMessage = `処理完了: 成功 ${successCount}件 / 失敗 ${failedCount}件`;
+        if (failedCount > 0) {
+          const detailMessage = `${resultMessage}\n\n失敗詳細:\n${errors.slice(0, 5).join('\n')}${errors.length > 5 ? '\n...他' + (errors.length - 5) + '件' : ''}`;
+          alert(detailMessage);
+        } else {
+          alert(resultMessage);
+        }
+        
+        setSelectedItems(new Set());
+        await fetchPendingList();
+        
+      } catch (error) {
+        console.error('Bulk approval failed:', error);
+        alert('一括処理に失敗しました');
+      } finally {
+        setIsProcessing(false);
+        setProcessingType(null);
+        setProcessingProgress({ current: 0, total: 0 });
+        setProcessingResults({ success: 0, failed: 0, errors: [] });
+      }
     }
-  }, [processingItem, approvalAction, approvalReason, selectedItems, token, fetchPendingList]);
+  }, [processingItem, approvalAction, approvalReason, selectedItems, token, fetchPendingList, pendingList]);
 
   // 部署一覧取得
   const departments = useMemo(() => {
@@ -371,23 +435,38 @@ export default function PendingApprovalPage() {
                 <span className="text-sm text-gray-600">{selectedItems.size}件選択中</span>
                 <button
                   onClick={() => handleBulkApproval('approve')}
-                  className="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700"
+                  disabled={isProcessing || isIndividualProcessing || isLoading}
+                  className={`px-3 py-1 text-white text-sm rounded ${
+                    isProcessing || isIndividualProcessing || isLoading
+                      ? 'bg-gray-400 cursor-not-allowed'
+                      : 'bg-green-600 hover:bg-green-700'
+                  }`}
                 >
-                  一括承認
+                  {isProcessing && processingType === 'approve' ? '承認中...' : '一括承認'}
                 </button>
                 <button
                   onClick={() => handleBulkApproval('reject')}
-                  className="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700"
+                  disabled={isProcessing || isIndividualProcessing || isLoading}
+                  className={`px-3 py-1 text-white text-sm rounded ${
+                    isProcessing || isIndividualProcessing || isLoading
+                      ? 'bg-gray-400 cursor-not-allowed'
+                      : 'bg-red-600 hover:bg-red-700'
+                  }`}
                 >
-                  一括却下
+                  {isProcessing && processingType === 'reject' ? '却下中...' : '一括却下'}
                 </button>
               </>
             )}
             <button
               onClick={fetchPendingList}
-              className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+              disabled={isProcessing || isIndividualProcessing || isLoading}
+              className={`px-3 py-1 text-white text-sm rounded ${
+                isProcessing || isIndividualProcessing || isLoading
+                  ? 'bg-gray-400 cursor-not-allowed'
+                  : 'bg-blue-600 hover:bg-blue-700'
+              }`}
             >
-              更新
+              {isLoading ? '更新中...' : '更新'}
             </button>
           </div>
         </div>
@@ -408,9 +487,14 @@ export default function PendingApprovalPage() {
                   type="checkbox"
                   checked={selectedItems.size > 0 && selectedItems.size === filteredList.filter(item => !item.approvedAt && !item.rejectedAt).length}
                   onChange={handleSelectAll}
-                  className="rounded"
+                  disabled={isProcessing || isIndividualProcessing}
+                  className={`rounded ${
+                    isProcessing || isIndividualProcessing ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
                 />
-                <span className="text-sm font-medium text-gray-700">全選択</span>
+                <span className={`text-sm font-medium text-gray-700 ${
+                  isProcessing || isIndividualProcessing ? 'opacity-50' : ''
+                }`}>全選択</span>
               </div>
             </div>
 
@@ -440,7 +524,10 @@ export default function PendingApprovalPage() {
                                 }
                                 setSelectedItems(newSelected);
                               }}
-                              className="rounded"
+                              disabled={isProcessing || isIndividualProcessing}
+                              className={`rounded ${
+                                isProcessing || isIndividualProcessing ? 'opacity-50 cursor-not-allowed' : ''
+                              }`}
                             />
                           )}
                           
@@ -517,15 +604,25 @@ export default function PendingApprovalPage() {
                             <div className="flex items-center space-x-1">
                               <button
                                 onClick={() => handleIndividualApproval(item, 'approve')}
-                                className="px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700"
+                                disabled={isProcessing || (isIndividualProcessing && processingItemId === item.id)}
+                                className={`px-2 py-1 text-white text-xs rounded ${
+                                  isProcessing || (isIndividualProcessing && processingItemId === item.id)
+                                    ? 'bg-gray-400 cursor-not-allowed'
+                                    : 'bg-green-600 hover:bg-green-700'
+                                }`}
                               >
-                                承認
+                                {isIndividualProcessing && processingItemId === item.id ? '承認中...' : '承認'}
                               </button>
                               <button
                                 onClick={() => handleIndividualApproval(item, 'reject')}
-                                className="px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700"
+                                disabled={isProcessing || (isIndividualProcessing && processingItemId === item.id)}
+                                className={`px-2 py-1 text-white text-xs rounded ${
+                                  isProcessing || (isIndividualProcessing && processingItemId === item.id)
+                                    ? 'bg-gray-400 cursor-not-allowed'
+                                    : 'bg-red-600 hover:bg-red-700'
+                                }`}
                               >
-                                却下
+                                {isIndividualProcessing && processingItemId === item.id ? '却下中...' : '却下'}
                               </button>
                             </div>
                           )}
@@ -616,18 +713,84 @@ export default function PendingApprovalPage() {
             <div className="flex items-center justify-end space-x-2">
               <button
                 onClick={() => setShowApprovalModal(false)}
-                className="px-3 py-2 text-sm text-gray-700 border border-gray-300 rounded hover:bg-gray-50"
+                disabled={isIndividualProcessing}
+                className={`px-3 py-2 text-sm border border-gray-300 rounded ${
+                  isIndividualProcessing
+                    ? 'text-gray-400 bg-gray-100 cursor-not-allowed'
+                    : 'text-gray-700 hover:bg-gray-50'
+                }`}
               >
                 キャンセル
               </button>
               <button
                 onClick={executeApproval}
-                className={`px-3 py-2 text-sm text-white rounded hover:opacity-90 ${
-                  approvalAction === 'approve' ? 'bg-green-600' : 'bg-red-600'
+                disabled={isIndividualProcessing}
+                className={`px-3 py-2 text-sm text-white rounded ${
+                  isIndividualProcessing
+                    ? 'bg-gray-400 cursor-not-allowed'
+                    : `hover:opacity-90 ${
+                        approvalAction === 'approve' ? 'bg-green-600' : 'bg-red-600'
+                      }`
                 }`}
               >
-                {approvalAction === 'approve' ? '承認する' : '却下する'}
+                {isIndividualProcessing
+                  ? `${approvalAction === 'approve' ? '承認' : '却下'}中...`
+                  : `${approvalAction === 'approve' ? '承認する' : '却下する'}`
+                }
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* 処理中モーダル */}
+      {isProcessing && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-96 max-w-md">
+            <div className="text-center">
+              {/* タイトル */}
+              <h3 className="text-lg font-medium text-gray-900 mb-4">
+                {processingType === 'approve' ? '一括承認中' : '一括却下中'}
+              </h3>
+              
+              {/* ローディングスピナー */}
+              <div className="mb-4">
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+              </div>
+              
+              {/* 進行状況 */}
+              <div className="mb-4">
+                <div className="text-sm text-gray-600 mb-2">
+                  {processingProgress.current} / {processingProgress.total} 件処理中
+                </div>
+                
+                {/* 進行状況バー */}
+                <div className="w-full bg-gray-200 rounded-full h-2.5">
+                  <div 
+                    className="bg-indigo-600 h-2.5 rounded-full transition-all duration-300 ease-out"
+                    style={{ 
+                      width: `${processingProgress.total > 0 ? (processingProgress.current / processingProgress.total) * 100 : 0}%` 
+                    }}
+                  ></div>
+                </div>
+              </div>
+              
+              {/* 結果表示 */}
+              <div className="text-sm space-y-1">
+                <div className="flex justify-between">
+                  <span className="text-green-600">成功:</span>
+                  <span className="font-medium text-green-600">{processingResults.success}件</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-red-600">失敗:</span>
+                  <span className="font-medium text-red-600">{processingResults.failed}件</span>
+                </div>
+              </div>
+              
+              {/* 注意メッセージ */}
+              <div className="mt-4 text-xs text-gray-500">
+                処理中はこのウィンドウを閉じないでください
+              </div>
             </div>
           </div>
         </div>

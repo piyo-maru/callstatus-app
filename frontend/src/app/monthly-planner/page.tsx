@@ -20,6 +20,7 @@ import { CsvUploadModal } from '../components/modals/CsvUploadModal';
 import { getApiUrl } from '../components/constants/MainAppConstants';
 import { checkSupportedCharacters } from '../components/utils/MainAppUtils';
 import { ImportHistory } from '../components/types/MainAppTypes';
+import { useMonthlyPlannerDate } from '../../utils/datePersistence';
 
 registerLocale('ja', ja);
 
@@ -670,12 +671,8 @@ function MonthlyPlannerPageContent() {
     };
   }, [getPresetDetailsExtended]);
   
-  // 基本状態 - 初期表示は翌月
-  const [currentMonth, setCurrentMonth] = useState(() => {
-    const nextMonth = new Date();
-    nextMonth.setMonth(nextMonth.getMonth() + 1);
-    return nextMonth;
-  });
+  // 基本状態 - 初期表示は翌月（永続化対応）
+  const [currentMonth, setCurrentMonth] = useMonthlyPlannerDate();
   
   // プリセットホバー状態管理
   const [hoveredPreset, setHoveredPreset] = useState<string | null>(null);
@@ -1053,35 +1050,45 @@ function MonthlyPlannerPageContent() {
     }
   }, [token]);
 
-  // 担当設定データ取得関数
+  // 担当設定データ取得関数（月全体の日毎データを取得）
   const fetchResponsibilityData = useCallback(async () => {
     try {
       const currentApiUrl = getApiUrl();
       const year = currentMonth.getFullYear();
       const month = currentMonth.getMonth() + 1;
+      const responsibilityMap: { [key: string]: ResponsibilityData } = {};
       
-      const response = await fetch(`${currentApiUrl}/api/responsibilities?year=${year}&month=${month}`, {
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
+      // 月の日数を取得
+      const daysInMonth = new Date(year, month, 0).getDate();
       
-      if (response.ok) {
-        const data = await response.json();
-        const responsibilityMap: { [key: string]: ResponsibilityData } = {};
+      // 各日の担当設定データを取得
+      for (let day = 1; day <= daysInMonth; day++) {
+        const dateString = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
         
-        // APIレスポンスが { responsibilities: [...] } 形式の場合の対応
-        const responsibilityList = data.responsibilities || data;
-        
-        if (Array.isArray(responsibilityList)) {
-          responsibilityList.forEach((item: any) => {
-            const key = `${item.staffId}-${item.date}`;
-            responsibilityMap[key] = item.responsibilities;
+        try {
+          const response = await fetch(`${currentApiUrl}/api/responsibilities?date=${dateString}`, {
+            headers: {
+              'Content-Type': 'application/json'
+            }
           });
+          
+          if (response.ok) {
+            const data = await response.json();
+            const responsibilityList = data.responsibilities || data;
+            
+            if (Array.isArray(responsibilityList)) {
+              responsibilityList.forEach((item: any) => {
+                const key = `${item.staffId}-${dateString}`;
+                responsibilityMap[key] = item.responsibilities;
+              });
+            }
+          }
+        } catch (dayError) {
+          console.warn(`Failed to fetch responsibility data for ${dateString}:`, dayError);
         }
-        
-        setResponsibilityData(responsibilityMap);
       }
+      
+      setResponsibilityData(responsibilityMap);
     } catch (error) {
       console.error('Failed to fetch responsibility data:', error);
     }
@@ -1693,6 +1700,16 @@ function MonthlyPlannerPageContent() {
     cleanupOldTempPresets();
   }, [loadTempPresetsFromStorage, cleanupOldTempPresets]);
 
+  // ページフォーカス時に担当設定データを自動更新
+  useEffect(() => {
+    const handleFocus = () => {
+      fetchResponsibilityData();
+    };
+    
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [fetchResponsibilityData]);
+
   const createTempPreset = useCallback((schedules: any[], representativeIndex: number, description?: string) => {
     const tempId = `custom-composite-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     const representativeSchedule = schedules[representativeIndex] || schedules[0];
@@ -1973,12 +1990,8 @@ function MonthlyPlannerPageContent() {
       });
       
       if (response.ok) {
-        // ローカル状態を即座に更新
-        const responsibilityKey = `${staffId}-${date}`;
-        setResponsibilityData(prev => ({
-          ...prev,
-          [responsibilityKey]: newResponsibilityData
-        }));
+        // 担当設定データを再取得して最新状態に同期
+        await fetchResponsibilityData();
         
         return true;
       } else {
