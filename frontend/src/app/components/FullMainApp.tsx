@@ -2275,7 +2275,23 @@ export default function FullMainApp() {
       // O(1)でスタッフのスケジュールを取得
       const staffSchedules = schedulesByStaffMap.get(staff.id) || [];
       const applicableSchedules = staffSchedules.filter(s => currentDecimalHour >= s.start && currentDecimalHour < s.end);
-      const currentSchedule = applicableSchedules.length > 0 ? applicableSchedules.reduce((latest, current) => latest.id > current.id ? latest : current) : null;
+      // レイヤー優先順位: adjustment > contract （折れ線グラフと同じロジック）
+      const currentSchedule = applicableSchedules.length > 0 ? 
+        applicableSchedules.reduce((best, current) => {
+          const bestLayer = (best as any).layer || 'adjustment';
+          const currentLayer = (current as any).layer || 'adjustment';
+          
+          // 調整レイヤーが契約レイヤーより優先
+          if (currentLayer === 'adjustment' && bestLayer === 'contract') {
+            return current;
+          }
+          if (bestLayer === 'adjustment' && currentLayer === 'contract') {
+            return best;
+          }
+          
+          // 同じレイヤーなら新しいIDを優先
+          return current.id > best.id ? current : best;
+        }) : null;
       return { ...staff, currentStatus: currentSchedule ? currentSchedule.status : 'off' };
     });
   }, [staffList, schedulesByStaffMap, currentTime]);
