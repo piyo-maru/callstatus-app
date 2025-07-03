@@ -38,6 +38,50 @@ const getApiUrl = (): string => {
   return `http://${currentHost}:3002`;
 };
 
+// カスタム複合予定の詳細解析ユーティリティ
+const parseCompositeScheduleDetails = (memo: string) => {
+  try {
+    // カスタム複合予定のパターンを確認
+    if (memo.includes('カスタム複合予定') && memo.includes('details:')) {
+      const detailsMatch = memo.match(/details:(\{.*\})$/);
+      if (detailsMatch) {
+        const details = JSON.parse(detailsMatch[1]);
+        return {
+          isComposite: true,
+          description: details.description || '',
+          schedules: details.schedules || [],
+          presetLabel: 'カスタム複合予定'
+        };
+      }
+    }
+    
+    // 通常のプリセット予定のパターン
+    if (memo.includes('月次プランナー:') && !memo.includes('カスタム複合予定')) {
+      const labelMatch = memo.match(/月次プランナー:\s*([^|]+)/);
+      if (labelMatch) {
+        return {
+          isComposite: false,
+          presetLabel: labelMatch[1].trim(),
+          description: '',
+          schedules: []
+        };
+      }
+    }
+    
+    return null;
+  } catch (error) {
+    console.warn('Failed to parse composite schedule details:', error);
+    return null;
+  }
+};
+
+// 時刻を表示用にフォーマット
+const formatTime = (decimalTime: number): string => {
+  const hours = Math.floor(decimalTime);
+  const minutes = Math.round((decimalTime - hours) * 60);
+  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+};
+
 export default function PendingApprovalPage() {
   const { user, token, logout } = useAuth();
   
@@ -410,8 +454,32 @@ export default function PendingApprovalPage() {
                               <span className="text-sm text-gray-500">{item.date}</span>
                             </div>
                             <div className="mt-1 text-sm text-gray-600">
-                              {capitalizeStatus(item.status)} ({item.start}:00-{item.end}:00)
-                              {item.memo && <span className="ml-2">- {item.memo}</span>}
+                              {capitalizeStatus(item.status)} ({formatTime(item.start)}-{formatTime(item.end)})
+                              {item.memo && (() => {
+                                const compositeDetails = parseCompositeScheduleDetails(item.memo);
+                                if (compositeDetails?.isComposite) {
+                                  const schedulesSummary = compositeDetails.schedules.map((schedule: any) => 
+                                    `${capitalizeStatus(schedule.status)} ${formatTime(schedule.startTime)}-${formatTime(schedule.endTime)}`
+                                  ).join(' , ');
+                                  return (
+                                    <span className="ml-2">
+                                      <span className="text-indigo-600 font-medium">- {compositeDetails.presetLabel}</span>
+                                      {compositeDetails.description && (
+                                        <span className="text-gray-700"> - 説明: {compositeDetails.description}</span>
+                                      )}
+                                      <span className="text-gray-600 text-xs"> ({schedulesSummary})</span>
+                                    </span>
+                                  );
+                                } else if (compositeDetails?.presetLabel) {
+                                  return (
+                                    <span className="ml-2 text-indigo-600 font-medium">
+                                      - {compositeDetails.presetLabel}
+                                    </span>
+                                  );
+                                } else {
+                                  return <span className="ml-2">- {item.memo}</span>;
+                                }
+                              })()}
                             </div>
                             <div className="mt-1 flex items-center space-x-4 text-xs text-gray-500">
                               <span>タイプ: {item.pendingType}</span>
@@ -486,8 +554,43 @@ export default function PendingApprovalPage() {
                   <strong>{processingItem.staffName}</strong>の予定を{approvalAction === 'approve' ? '承認' : '却下'}します
                 </p>
                 <p className="text-xs text-gray-500 mt-1">
-                  {processingItem.date} {capitalizeStatus(processingItem.status)} ({processingItem.start}:00-{processingItem.end}:00)
+                  {processingItem.date} {capitalizeStatus(processingItem.status)} ({formatTime(processingItem.start)}-{formatTime(processingItem.end)})
                 </p>
+                {processingItem.memo && (() => {
+                  const compositeDetails = parseCompositeScheduleDetails(processingItem.memo);
+                  if (compositeDetails?.isComposite) {
+                    const schedulesSummary = compositeDetails.schedules.map((schedule: any) => 
+                      `${capitalizeStatus(schedule.status)} ${formatTime(schedule.startTime)}-${formatTime(schedule.endTime)}`
+                    ).join(' , ');
+                    return (
+                      <div className="mt-2 p-2 bg-blue-50 rounded border border-blue-200">
+                        <div className="text-sm text-blue-800">
+                          <span className="font-medium">{compositeDetails.presetLabel}</span>
+                          {compositeDetails.description && (
+                            <span className="text-blue-700"> - 説明: {compositeDetails.description}</span>
+                          )}
+                          <div className="text-xs text-blue-600 mt-1">({schedulesSummary})</div>
+                        </div>
+                      </div>
+                    );
+                  } else if (compositeDetails?.presetLabel) {
+                    return (
+                      <div className="mt-2 p-2 bg-indigo-50 rounded border border-indigo-200">
+                        <div className="text-sm text-indigo-700 font-medium">
+                          {compositeDetails.presetLabel}
+                        </div>
+                      </div>
+                    );
+                  } else {
+                    return (
+                      <div className="mt-2 p-2 bg-gray-50 rounded border border-gray-200">
+                        <div className="text-sm text-gray-700">
+                          メモ: {processingItem.memo}
+                        </div>
+                      </div>
+                    );
+                  }
+                })()}
               </div>
             ) : (
               <div className="mb-4">
