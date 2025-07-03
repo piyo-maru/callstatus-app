@@ -142,6 +142,7 @@ export class SnapshotsService {
 
   /**
    * 指定日のスケジュールデータを社員情報と共に取得
+   * 通常のAdjustmentと承認済みPendingの両方を取得
    */
   private async getScheduleWithStaffInfo(tx: any, date: Date) {
     const startOfDay = new Date(date);
@@ -150,12 +151,17 @@ export class SnapshotsService {
     const endOfDay = new Date(date);
     endOfDay.setHours(23, 59, 59, 999);
     
+    // 通常のAdjustmentと承認済みPendingレコードの両方を取得
     return await tx.adjustment.findMany({
       where: {
         date: {
           gte: startOfDay,
           lte: endOfDay
-        }
+        },
+        OR: [
+          { isPending: false },                    // 通常のAdjustment
+          { isPending: true, approvedAt: { not: null } }  // 承認済みPending
+        ]
       },
       include: {
         Staff: true
