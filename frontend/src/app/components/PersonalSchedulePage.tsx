@@ -15,6 +15,7 @@ import {
   TIMELINE_CONFIG,
   capitalizeStatus,
   getEffectiveStatusColor,
+  getContrastTextColor,
   LIGHT_ANIMATIONS,
   BUTTON_STYLES
 } from './timeline/TimelineUtils';
@@ -27,7 +28,7 @@ import { UnifiedPreset } from './types/PresetTypes';
 import { UnifiedSettingsModal } from './modals/UnifiedSettingsModal';
 import { JsonUploadModal } from './modals/JsonUploadModal';
 import { CsvUploadModal } from './modals/CsvUploadModal';
-import { getApiUrl } from './constants/MainAppConstants';
+import { getApiUrl, departmentColors, teamColors } from './constants/MainAppConstants';
 import { checkSupportedCharacters } from './utils/MainAppUtils';
 import { ImportHistory } from './types/MainAppTypes';
 import { usePersonalPageDate } from '../../utils/datePersistence';
@@ -277,6 +278,10 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
   const [contractData, setContractData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [departmentSettings, setDepartmentSettings] = useState<{
+    departments: Array<{id: number, name: string, shortName?: string, backgroundColor?: string, displayOrder?: number}>,
+    groups: Array<{id: number, name: string, shortName?: string, backgroundColor?: string, displayOrder?: number}>
+  }>({ departments: [], groups: [] });
   const [selectedDateForPreset, setSelectedDateForPreset] = useState<Date | null>(null);
   const [showPresetModal, setShowPresetModal] = useState(false);
   const [isResponsibilityModalOpen, setIsResponsibilityModalOpen] = useState(false);
@@ -358,13 +363,20 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
       const representativeIndex = preset.representativeScheduleIndex ?? 0;
       const representativeSchedule = preset.schedules[representativeIndex] || preset.schedules[0];
       
+      // 小数点時間を正しく変換するヘルパー関数
+      const formatDecimalTime = (time: number): string => {
+        const hours = Math.floor(time);
+        const minutes = Math.round((time % 1) * 60);
+        return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+      };
+
       return {
         id: preset.id,
         name: preset.name,
         displayName: preset.displayName,
         timeDisplay: preset.schedules.length === 1 
-          ? `${preset.schedules[0].startTime.toString().padStart(2, '0')}:00-${preset.schedules[0].endTime.toString().padStart(2, '0')}:00`
-          : `${preset.schedules[0].startTime.toString().padStart(2, '0')}:00-${preset.schedules[preset.schedules.length - 1].endTime.toString().padStart(2, '0')}:00 + 調整`,
+          ? `${formatDecimalTime(preset.schedules[0].startTime)}-${formatDecimalTime(preset.schedules[0].endTime)}`
+          : `${formatDecimalTime(preset.schedules[0].startTime)}-${formatDecimalTime(preset.schedules[preset.schedules.length - 1].endTime)} + 調整`,
         schedules: preset.schedules.map(schedule => ({
           status: schedule.status,
           startTime: schedule.startTime,
@@ -527,6 +539,42 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
   const canManage = useCallback(() => {
     return user?.role === 'ADMIN' || user?.role === 'SYSTEM_ADMIN';
   }, [user?.role]);
+
+  // 部署・グループ設定取得
+  const fetchDepartmentSettings = useCallback(async () => {
+    try {
+      const currentApiUrl = getApiUrl();
+      const response = await authenticatedFetch(`${currentApiUrl}/api/department-settings`);
+      if (response.ok) {
+        const data = await response.json();
+        setDepartmentSettings(data);
+      }
+    } catch (error) {
+      console.warn('Failed to fetch department settings:', error);
+    }
+  }, [authenticatedFetch]);
+
+  // 動的部署色設定
+  const dynamicDepartmentColors = useMemo(() => {
+    const colors: { [key: string]: string } = {};
+    departmentSettings.departments.forEach(dept => {
+      if (dept.backgroundColor) {
+        colors[dept.name] = dept.backgroundColor;
+      }
+    });
+    return colors;
+  }, [departmentSettings.departments]);
+
+  // 動的グループ色設定
+  const dynamicTeamColors = useMemo(() => {
+    const colors: { [key: string]: string } = {};
+    departmentSettings.groups.forEach(group => {
+      if (group.backgroundColor) {
+        colors[group.name] = group.backgroundColor;
+      }
+    });
+    return colors;
+  }, [departmentSettings.groups]);
 
   // 担当設定データ取得関数
   const fetchResponsibilityData = useCallback(async (dateString: string) => {
@@ -1007,6 +1055,11 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
   useEffect(() => {
     fetchHolidays().then(setHolidays);
   }, []);
+
+  // 部署・グループ設定を初期化
+  useEffect(() => {
+    fetchDepartmentSettings();
+  }, [fetchDepartmentSettings]);
 
   // 初期化処理
   useEffect(() => {
@@ -2145,31 +2198,97 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
             </div>
           </div>
           
-          {/* 個人情報行 */}
-          <div className="px-6 py-3 bg-gray-50 border-t">
-            <div className="p-2 bg-blue-50 rounded border border-blue-200">
-              <div className="space-y-3">
-                <div className="flex items-center space-x-6">
-                  <span><span className="text-sm text-gray-600"><strong>名前:</strong></span> <span className="text-base text-blue-800">{currentStaff.name}</span></span>
-                  <span><span className="text-sm text-gray-600"><strong>社員番号:</strong></span> <span className="text-base text-blue-800">{currentStaff.empNo || 'N/A'}</span></span>
-                  <span><span className="text-sm text-gray-600"><strong>部署:</strong></span> <span className="text-base text-blue-800">{currentStaff.department}</span></span>
-                  <span><span className="text-sm text-gray-600"><strong>グループ:</strong></span> <span className="text-base text-blue-800">{currentStaff.group}</span></span>
+          {/* 個人情報行 - Google マテリアルデザイン風 */}
+          <div className="px-6 py-2 bg-gray-50 border-t">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-2">
+              <div className="space-y-2">
+                {/* 基本情報カード - 1行デザイン */}
+                <div className="flex items-center gap-4 h-12">
+                  <div className="bg-indigo-50 rounded-lg pl-4 pr-6 py-0.5 border-l-4 border-indigo-600 flex items-center gap-3 h-full">
+                    <span className="text-xs font-medium text-indigo-600 uppercase tracking-wide">社員番号:</span>
+                    <span className="text-base font-semibold text-indigo-900">{currentStaff.empNo || 'N/A'}</span>
+                  </div>
+                  
+                  <div className="bg-indigo-50 rounded-lg pl-4 pr-6 py-0.5 border-l-4 border-indigo-600 flex items-center gap-3 h-full">
+                    <span className="text-xs font-medium text-indigo-600 uppercase tracking-wide">名前:</span>
+                    <span className="text-base font-semibold text-indigo-900">{currentStaff.name}</span>
+                  </div>
+                  
+                  <div 
+                    className="rounded-lg pl-4 pr-6 py-0.5 border-l-4 flex items-center gap-3 h-full"
+                    style={{
+                      backgroundColor: dynamicDepartmentColors[currentStaff.department] || departmentColors[currentStaff.department] || '#f3f4f6',
+                      borderLeftColor: dynamicDepartmentColors[currentStaff.department] || departmentColors[currentStaff.department] || '#9ca3af'
+                    }}
+                  >
+                    <span 
+                      className="text-xs font-medium uppercase tracking-wide"
+                      style={{ 
+                        color: getContrastTextColor(dynamicDepartmentColors[currentStaff.department] || departmentColors[currentStaff.department] || '#9ca3af'),
+                        opacity: 0.8 
+                      }}
+                    >
+                      部署:
+                    </span>
+                    <span 
+                      className="text-base font-semibold"
+                      style={{ 
+                        color: getContrastTextColor(dynamicDepartmentColors[currentStaff.department] || departmentColors[currentStaff.department] || '#9ca3af')
+                      }}
+                    >
+                      {currentStaff.department}
+                    </span>
+                  </div>
+                  
+                  <div 
+                    className="rounded-lg pl-4 pr-6 py-0.5 border-l-4 flex items-center gap-3 h-full"
+                    style={{
+                      backgroundColor: dynamicTeamColors[currentStaff.group] || teamColors[currentStaff.group] || '#f3f4f6',
+                      borderLeftColor: dynamicTeamColors[currentStaff.group] || teamColors[currentStaff.group] || '#9ca3af'
+                    }}
+                  >
+                    <span 
+                      className="text-xs font-medium uppercase tracking-wide"
+                      style={{ 
+                        color: getContrastTextColor(dynamicTeamColors[currentStaff.group] || teamColors[currentStaff.group] || '#9ca3af'),
+                        opacity: 0.8 
+                      }}
+                    >
+                      グループ:
+                    </span>
+                    <span 
+                      className="text-base font-semibold"
+                      style={{ 
+                        color: getContrastTextColor(dynamicTeamColors[currentStaff.group] || teamColors[currentStaff.group] || '#9ca3af')
+                      }}
+                    >
+                      {currentStaff.group}
+                    </span>
+                  </div>
                 </div>
-                <div>
-                  <span className="text-sm text-gray-600"><strong>契約勤務時間:</strong></span> 
-                  <span className="ml-2 text-blue-800 text-sm">
-                    {contractData ? (
-                      ['月曜日', '火曜日', '水曜日', '木曜日', '金曜日', '土曜日', '日曜日'].map((day, index) => {
-                        const dayKeys = ['mondayHours', 'tuesdayHours', 'wednesdayHours', 'thursdayHours', 'fridayHours', 'saturdayHours', 'sundayHours'];
-                        const hours = contractData[dayKeys[index]];
-                        return hours ? `${day}: ${hours}` : null;
-                      }).filter(Boolean).join('　')
-                    ) : (
-                      '契約データがありません'
-                    )}
-                  </span>
-                  <div className="text-xs text-gray-500 mt-1">
-                    ※ 祝日は赤字で表示されます。祝日の勤務時間は個別に調整してください。
+                
+                {/* 契約勤務時間カード */}
+                <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center">
+                      <div className="w-2 h-2 bg-indigo-500 rounded-full mr-3"></div>
+                      <div className="text-sm font-medium text-gray-700 uppercase tracking-wide">契約勤務時間</div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {contractData ? (
+                        ['月曜日', '火曜日', '水曜日', '木曜日', '金曜日', '土曜日', '日曜日'].map((day, index) => {
+                          const dayKeys = ['mondayHours', 'tuesdayHours', 'wednesdayHours', 'thursdayHours', 'fridayHours', 'saturdayHours', 'sundayHours'];
+                          const hours = contractData[dayKeys[index]];
+                          return hours ? (
+                            <span key={day} className="bg-white px-2 py-1 text-xs text-gray-800 border border-gray-300 rounded">
+                              {day}: {hours}
+                            </span>
+                          ) : null;
+                        })
+                      ) : (
+                        <span className="text-gray-600 text-xs">契約データがありません</span>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -2191,21 +2310,37 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
             {presetSchedules.map((preset) => {
-              // 代表色用のスケジュールを取得（プリセット変換時に既に決定済み）
-              const representativeIndex = preset.representativeScheduleIndex ?? 0;
+              // プリセット設定の代表色を参照（representativeScheduleIndexを使用）
+              const originalPreset = originalPresets.find(p => p.id === preset.id);
+              const representativeIndex = originalPreset?.representativeScheduleIndex ?? 0;
               const status = preset.schedules[representativeIndex]?.status || preset.schedules[0]?.status || 'online';
               
-              // 現在有効な色を取得（カスタム設定を含む）
-              const originalColor = getEffectiveStatusColor(status);
+              // プリセット設定の代表色を取得（承認済み予定と同じ色システム）
+              const backgroundColor = getEffectiveStatusColor(status);
               
-              // 背景色を薄くした色を生成（白と70%ブレンド）
-              const lightBackgroundColor = lightenColor(originalColor, 0.7);
+              // 月次プランナーの承認済み予定と同じコントラスト計算
+              const getContrastColor = (bgColor: string): string => {
+                if (!bgColor || !bgColor.includes('#')) {
+                  return '#000000';
+                }
+                
+                const color = bgColor.replace('#', '');
+                if (color.length !== 6) {
+                  return '#000000';
+                }
+                
+                const r = parseInt(color.substring(0, 2), 16);
+                const g = parseInt(color.substring(2, 4), 16);
+                const b = parseInt(color.substring(4, 6), 16);
+                
+                // 明度計算（YIQ公式）
+                const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+                
+                // 明度が高い（明るい）色なら黒文字、低い（暗い）色なら白文字
+                return brightness > 150 ? '#000000' : '#ffffff';
+              };
               
-              // ボーダー色を少し暗くした色を生成
-              const borderColor = darkenColor(lightBackgroundColor, 0.3);
-              
-              // 色相ベースで調和したテキスト色を決定
-              const textColor = getHueBasedTextColor(lightBackgroundColor);
+              const textColor = getContrastColor(backgroundColor);
               
               return (
                 <button
@@ -2227,16 +2362,57 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
                   onMouseLeave={() => {
                     setHoveredPreset(null);
                   }}
-                  className={`p-2 text-sm border rounded-lg hover:opacity-90 text-left ${LIGHT_ANIMATIONS.interactive} relative`}
+                  className={`rounded-md flex flex-col text-xs text-center pt-1 pb-1 px-2 border-2 border-transparent hover:opacity-80 cursor-pointer ${LIGHT_ANIMATIONS.interactive} relative h-12`}
                   style={{
-                    backgroundColor: lightBackgroundColor,
-                    borderColor: borderColor,
-                    color: textColor
+                    backgroundColor,
+                    opacity: 0.9
                   }}
                 >
-                  <div className="font-medium">{preset.displayName}</div>
-                  <div className="text-xs mt-1 opacity-75">
-                    {preset.timeDisplay}
+                  {/* 予定種別 */}
+                  <div 
+                    className="font-medium leading-none mb-0.5 text-sm"
+                    style={{ color: textColor }}
+                  >
+                    {preset.displayName}
+                  </div>
+                  
+                  {/* 時刻表示 */}
+                  <div 
+                    className="text-xs leading-none"
+                    style={{ 
+                      color: textColor, 
+                      opacity: 0.9 
+                    }}
+                  >
+                    {(() => {
+                      // 小数点時間を正しく変換（例: 17.75 → 17:45）
+                      const formatDecimalTime = (time: number): string => {
+                        const hours = Math.floor(time);
+                        const minutes = Math.round((time % 1) * 60);
+                        return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+                      };
+                      
+                      // timeDisplayに小数点時間が含まれている場合は変換
+                      if (preset.timeDisplay.includes('.')) {
+                        // 複合予定の場合
+                        if (preset.timeDisplay.includes(' + 調整')) {
+                          const [timeRange, adjustment] = preset.timeDisplay.split(' + ');
+                          const [start, end] = timeRange.split('-');
+                          const startTime = parseFloat(start.replace(':00', ''));
+                          const endTime = parseFloat(end.replace(':00', ''));
+                          return `${formatDecimalTime(startTime)}-${formatDecimalTime(endTime)} + 調整`;
+                        } else {
+                          // 単一予定の場合
+                          const [start, end] = preset.timeDisplay.split('-');
+                          const startTime = parseFloat(start.replace(':00', ''));
+                          const endTime = parseFloat(end.replace(':00', ''));
+                          return `${formatDecimalTime(startTime)}-${formatDecimalTime(endTime)}`;
+                        }
+                      }
+                      
+                      // 小数点が含まれていない場合はそのまま表示
+                      return preset.timeDisplay;
+                    })()}
                   </div>
                 </button>
               );
