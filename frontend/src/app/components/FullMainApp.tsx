@@ -2917,7 +2917,7 @@ export default function FullMainApp() {
                   {currentTimePosition !== null && (
                     <div className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-30" 
                          style={{ left: `${currentTimePosition}%` }} 
-                         title={`現在時刻: ${currentTime.getHours()}:${String(currentTime.getMinutes()).padStart(2, '0')}`}>
+                         title={`現在時刻: ${String(currentTime.getHours()).padStart(2, '0')}:${String(currentTime.getMinutes()).padStart(2, '0')}`}>
                     </div>
                   )}
                   {Object.keys(groupedStaffForGantt).length > 0 ? (

@@ -28,6 +28,8 @@ import { UnifiedPreset } from './types/PresetTypes';
 import { UnifiedSettingsModal } from './modals/UnifiedSettingsModal';
 import { JsonUploadModal } from './modals/JsonUploadModal';
 import { CsvUploadModal } from './modals/CsvUploadModal';
+import { ScheduleModal } from './modals/ScheduleModal';
+import { ConfirmationModal } from './modals/ConfirmationModal';
 import { getApiUrl, departmentColors, teamColors } from './constants/MainAppConstants';
 import { checkSupportedCharacters } from './utils/MainAppUtils';
 import { ImportHistory } from './types/MainAppTypes';
@@ -2830,10 +2832,25 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
       <ScheduleModal 
         isOpen={isModalOpen} 
         onClose={() => setIsModalOpen(false)} 
-        staffList={currentStaff ? [currentStaff] : []} 
+        staffList={currentStaff ? [{
+          id: currentStaff.id,
+          empNo: currentStaff.empNo,
+          name: currentStaff.name,
+          department: currentStaff.department,
+          group: currentStaff.group,
+          isActive: currentStaff.isActive ?? true
+        }] : []} 
         onSave={handleSaveSchedule} 
-        scheduleToEdit={editingSchedule} 
-        initialData={draggedSchedule || undefined} 
+        scheduleToEdit={editingSchedule ? {
+          ...editingSchedule,
+          start: typeof editingSchedule.start === 'number' ? editingSchedule.start : 0,
+          end: typeof editingSchedule.end === 'number' ? editingSchedule.end : 0
+        } : null} 
+        initialData={draggedSchedule ? {
+          ...draggedSchedule,
+          start: typeof draggedSchedule.start === 'number' ? draggedSchedule.start : 0,
+          end: typeof draggedSchedule.end === 'number' ? draggedSchedule.end : 0
+        } : undefined} 
       />
       <ConfirmationModal 
         isOpen={deletingScheduleId !== null} 
@@ -2940,271 +2957,9 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
   );
 };
 
-// ScheduleModal コンポーネント
-const ScheduleModal = ({ isOpen, onClose, staffList, onSave, scheduleToEdit, initialData }: { 
-  isOpen: boolean; 
-  onClose: () => void; 
-  staffList: Staff[]; 
-  onSave: (data: any) => void;
-  scheduleToEdit: Schedule | null;
-  initialData?: Partial<Schedule>;
-}) => {
-  const [selectedStaff, setSelectedStaff] = useState<number | ''>('');
-  const [selectedStatus, setSelectedStatus] = useState<string>('');
-  const [startTime, setStartTime] = useState<number>(9);
-  const [endTime, setEndTime] = useState<number>(18);
-  const [startTimeString, setStartTimeString] = useState<string>('09:00');
-  const [endTimeString, setEndTimeString] = useState<string>('18:00');
-  const [memo, setMemo] = useState<string>('');
+// 共通ScheduleModalコンポーネントを使用（modals/ScheduleModal.tsx）
+// 個人ページ独自のScheduleModal実装を削除
 
-  // 時間をHH:MM形式に変換
-  const timeToString = (time: number): string => {
-    const hours = Math.floor(time);
-    const minutes = Math.round((time % 1) * 60);
-    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
-  };
-  
-  // HH:MM形式を数値に変換
-  const stringToTime = (timeString: string): number => {
-    const [hours, minutes] = timeString.split(':').map(Number);
-    return hours + (minutes / 60);
-  };
-
-  useEffect(() => {
-    if (isOpen) {
-      if (scheduleToEdit) {
-        // 編集モード
-        const startTimeValue = typeof scheduleToEdit.start === 'number' ? scheduleToEdit.start : 9;
-        const endTimeValue = typeof scheduleToEdit.end === 'number' ? scheduleToEdit.end : 18;
-        setSelectedStaff(scheduleToEdit.staffId);
-        setSelectedStatus(scheduleToEdit.status);
-        setStartTime(startTimeValue);
-        setEndTime(endTimeValue);
-        setStartTimeString(timeToString(startTimeValue));
-        setEndTimeString(timeToString(endTimeValue));
-        setMemo(scheduleToEdit.memo || '');
-      } else if (initialData) {
-        // ドラッグ&ドロップまたはプリセットからの新規作成
-        const startTimeValue = typeof initialData.start === 'number' ? initialData.start : 9;
-        const endTimeValue = typeof initialData.end === 'number' ? initialData.end : 18;
-        setSelectedStaff(initialData.staffId || (staffList.length > 0 ? staffList[0].id : ''));
-        setSelectedStatus(initialData.status || 'online');
-        setStartTime(startTimeValue);
-        setEndTime(endTimeValue);
-        setStartTimeString(timeToString(startTimeValue));
-        setEndTimeString(timeToString(endTimeValue));
-        setMemo(initialData.memo || '');
-      } else {
-        // 空の新規作成
-        setSelectedStaff(staffList.length > 0 ? staffList[0].id : '');
-        setSelectedStatus('online');
-        setStartTime(9);
-        setEndTime(18);
-        setStartTimeString('09:00');
-        setEndTimeString('18:00');
-        setMemo('');
-      }
-    }
-  }, [isOpen, scheduleToEdit, initialData, staffList]);
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!selectedStaff || !selectedStatus) {
-      alert('スタッフとステータスを選択してください');
-      return;
-    }
-    
-    if (startTime >= endTime) {
-      alert('開始時刻は終了時刻より前に設定してください');
-      return;
-    }
-
-    const scheduleData = {
-      id: scheduleToEdit?.id,
-      staffId: Number(selectedStaff),
-      status: selectedStatus,
-      start: startTime,
-      end: endTime,
-      memo: memo,
-      date: initialData?.date || (scheduleToEdit ? (scheduleToEdit as any).date : undefined)
-    };
-
-    onSave(scheduleData);
-  };
-
-  if (!isOpen) return null;
-
-  return createPortal(
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 w-full max-w-md">
-        <h2 className="text-lg font-bold mb-4">
-          {scheduleToEdit ? 'スケジュール編集' : 'スケジュール追加'}
-        </h2>
-        
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* スタッフ選択 */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              スタッフ
-            </label>
-            <select
-              value={selectedStaff}
-              onChange={(e) => setSelectedStaff(e.target.value === '' ? '' : Number(e.target.value))}
-              className="w-full border border-gray-300 rounded-md px-3 py-2"
-              required
-              disabled={staffList.length <= 1}
-            >
-              <option value="">選択してください</option>
-              {staffList.map((staff) => (
-                <option key={staff.id} value={staff.id}>
-                  {staff.name} ({staff.department} - {staff.group})
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* ステータス選択 */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              ステータス
-            </label>
-            <select
-              value={selectedStatus}
-              onChange={(e) => setSelectedStatus(e.target.value)}
-              className="w-full border border-gray-300 rounded-md px-3 py-2"
-              required
-            >
-              <option value="">選択してください</option>
-              {availableStatuses.map((status) => (
-                <option key={status} value={status}>
-                  {capitalizeStatus(status)}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* 開始時刻 */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              開始時刻
-            </label>
-            <input
-              type="time"
-              value={startTimeString}
-              onChange={(e) => {
-                const newStartTime = stringToTime(e.target.value);
-                setStartTimeString(e.target.value);
-                setStartTime(newStartTime);
-                if (newStartTime >= endTime) {
-                  const newEndTime = Math.min(newStartTime + 1, 21);
-                  setEndTime(newEndTime);
-                  setEndTimeString(timeToString(newEndTime));
-                }
-              }}
-              min="08:00"
-              max="20:59"
-              className={`w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 ${LIGHT_ANIMATIONS.input}`}
-            />
-          </div>
-
-          {/* 終了時刻 */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              終了時刻
-            </label>
-            <input
-              type="time"
-              value={endTimeString}
-              onChange={(e) => {
-                const newEndTime = stringToTime(e.target.value);
-                setEndTimeString(e.target.value);
-                setEndTime(newEndTime);
-              }}
-              min="08:01"
-              max="21:00"
-              className={`w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 ${LIGHT_ANIMATIONS.input}`}
-            />
-          </div>
-
-          {/* メモ */}
-          {(selectedStatus === 'meeting' || selectedStatus === 'training' || selectedStatus === 'unplanned') && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                メモ
-              </label>
-              <input
-                type="text"
-                value={memo}
-                onChange={(e) => setMemo(e.target.value)}
-                className="w-full border border-gray-300 rounded-md px-3 py-2"
-                placeholder="詳細を入力..."
-              />
-            </div>
-          )}
-
-          {/* ボタン */}
-          <div className="flex space-x-3 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 px-4 h-7 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 flex items-center"
-            >
-              キャンセル
-            </button>
-            <button
-              type="submit"
-              className="flex-1 px-4 h-7 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center"
-            >
-              {scheduleToEdit ? '更新' : '追加'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>,
-    document.body
-  );
-};
-
-// ConfirmationModal コンポーネント
-const ConfirmationModal = ({ isOpen, onClose, onConfirm, message }: { 
-  isOpen: boolean; 
-  onClose: () => void; 
-  onConfirm: () => void; 
-  message: string; 
-}) => {
-  if (!isOpen) return null;
-
-  return createPortal(
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 w-full max-w-sm">
-        <h3 className="text-lg font-medium text-gray-900 mb-4">
-          確認
-        </h3>
-        <p className="text-sm text-gray-500 mb-6">
-          {message}
-        </p>
-        <div className="flex space-x-3">
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex-1 px-4 h-7 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 flex items-center"
-          >
-            キャンセル
-          </button>
-          <button
-            type="button"
-            onClick={onConfirm}
-            className="flex-1 px-4 h-7 bg-red-600 text-white rounded-md hover:bg-red-700 flex items-center"
-          >
-            削除
-          </button>
-        </div>
-      </div>
-    </div>,
-    document.body
-  );
-};
 
 // 担当設定モーダルコンポーネント
 interface ResponsibilityModalProps {

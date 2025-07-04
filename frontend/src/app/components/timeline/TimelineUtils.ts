@@ -116,19 +116,19 @@ export const generateTimeOptions = (
     }
   }
   // 終了時刻も追加
-  options.push({ value: endHour, label: `${endHour}:00`});
+  options.push({ value: endHour, label: `${String(endHour).padStart(2, '0')}:00`});
   return options;
 };
 
 /**
  * 小数点時間を時:分形式に変換
  * @param time 小数点時間（例: 9.5）
- * @returns 時:分形式の文字列（例: "9:30"）
+ * @returns 時:分形式の文字列（例: "09:30"）
  */
 export const formatDecimalTime = (time: number): string => {
   const hours = Math.floor(time);
   const minutes = Math.round((time - hours) * 60);
-  return `${hours}:${String(minutes).padStart(2, '0')}`;
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
 };
 
 /**
