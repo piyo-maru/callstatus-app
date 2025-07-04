@@ -479,7 +479,7 @@ const DroppableCell: React.FC<{
   );
 };
 
-// 月次プランナーのメインコンポーネント
+// 月次計画のメインコンポーネント
 function MonthlyPlannerPageContent() {
   const router = useRouter();
   const { user, token, logout } = useAuth();
@@ -525,10 +525,11 @@ function MonthlyPlannerPageContent() {
   const { 
     saveResponsibility,
     loadMonthResponsibilities,
+    loadAllStaffMonthResponsibilities,
     getResponsibilityForDate
   } = useResponsibilityData(authenticatedFetch);
   
-  // 月次プランナー用のプリセットを取得し、レガシー形式に変換
+  // 月次計画用のプリセットを取得し、レガシー形式に変換
   const monthlyPlannerPresets = useMemo(() => {
     const unifiedPresets = getPresetsForPage('monthlyPlanner');
     return unifiedPresets.map(preset => convertToLegacyFormat(preset)) as PresetSchedule[];
@@ -681,7 +682,7 @@ function MonthlyPlannerPageContent() {
   // Pending関連状態
   const [pendingSchedules, setPendingSchedules] = useState<PendingSchedule[]>([]);
   
-  // 契約スケジュール状態（月次プランナーでは不要 - プリセット登録専用）
+  // 契約スケジュール状態（月次計画では不要 - プリセット登録専用）
   
   // モーダル状態
   const [showModal, setShowModal] = useState(false);
@@ -1025,24 +1026,24 @@ function MonthlyPlannerPageContent() {
   }, [token]);
 
   // 担当設定データ取得関数（月全体の日毎データを取得）
-  // 統一担当設定データ読み込み（月全体）
+  // 統一担当設定データ読み込み（月全体・効率化版）
   const fetchResponsibilityData = useCallback(async () => {
+    if (staffList.length === 0) return;
+    
     try {
       const year = currentMonth.getFullYear();
       const month = currentMonth.getMonth();
       const startDate = new Date(year, month, 1);
       const endDate = new Date(year, month + 1, 0);
       
-      // 全スタッフの担当設定データを読み込み
-      for (const staff of staffList) {
-        await loadMonthResponsibilities(staff.id, startDate, endDate);
-      }
+      // 全スタッフの担当設定データを一括読み込み（API呼び出し最適化）
+      await loadAllStaffMonthResponsibilities(staffList, startDate, endDate);
     } catch (error) {
       console.error('Failed to fetch responsibility data:', error);
     }
-  }, [currentMonth, staffList, loadMonthResponsibilities]);
+  }, [currentMonth, staffList, loadAllStaffMonthResponsibilities]);
 
-  // Pending取得関数（月次プランナー専用API使用）
+  // Pending取得関数（月次計画専用API使用）
   const fetchPendingSchedules = useCallback(async () => {
     try {
       const currentApiUrl = getApiUrl();
@@ -1393,7 +1394,7 @@ function MonthlyPlannerPageContent() {
         status: preset.status,
         start: preset.start,
         end: preset.end,
-        memo: `月次プランナー: ${preset.label}|presetId:${preset.key}`,
+        memo: `月次計画: ${preset.label}|presetId:${preset.key}`,
         pendingType: 'monthly-planner' as const
       };
 
@@ -1758,7 +1759,7 @@ function MonthlyPlannerPageContent() {
         status: preset.status,
         start: preset.start,
         end: preset.end,
-        memo: `月次プランナー: ${preset.label}`
+        memo: `月次計画: ${preset.label}`
       };
 
       const response = await fetch(`${currentApiUrl}/api/schedules/pending/${selectedPendingForEdit.id}`, {
@@ -2223,7 +2224,7 @@ function MonthlyPlannerPageContent() {
         {/* タイトル行 */}
         <div className="bg-indigo-600 px-6 py-3 rounded-t-lg">
           <div className="flex items-center justify-between">
-            <h1 className="text-lg font-semibold text-white">月次プランナー</h1>
+            <h1 className="text-lg font-semibold text-white">月次計画</h1>
             <div className="flex items-center space-x-4">  
               <span className="text-sm text-indigo-100">
                 {user?.name || user?.email} ({user?.role === 'ADMIN' ? '管理者' : user?.role === 'SYSTEM_ADMIN' ? 'システム管理者' : '一般ユーザー'})
@@ -2836,7 +2837,7 @@ function MonthlyPlannerPageContent() {
                         status: customScheduleStatus,
                         start: startDecimal,
                         end: endDecimal,
-                        memo: customScheduleMemo || `月次プランナー: ${capitalizeStatus(customScheduleStatus)}`,
+                        memo: customScheduleMemo || `月次計画: ${capitalizeStatus(customScheduleStatus)}`,
                         pendingType: 'monthly-planner' as const
                       };
 
@@ -3205,7 +3206,7 @@ function MonthlyPlannerPageContent() {
                         status: tempPreset.status,
                         start: tempPreset.start,
                         end: tempPreset.end,
-                        memo: `月次プランナー: ${tempPreset.label}|presetId:${tempPreset.id}|details:${JSON.stringify(compositeDetails)}`,
+                        memo: `月次計画: ${tempPreset.label}|presetId:${tempPreset.id}|details:${JSON.stringify(compositeDetails)}`,
                         pendingType: 'monthly-planner' as const
                       };
 

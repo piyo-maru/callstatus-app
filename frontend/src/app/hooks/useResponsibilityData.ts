@@ -82,7 +82,7 @@ export const useResponsibilityData = (customAuthenticatedFetch?: (url: string, o
     }
   }, [authenticatedFetch]);
   
-  // 月全体の担当設定データを読み込み
+  // 月全体の担当設定データを読み込み（効率化版）
   const loadMonthResponsibilities = useCallback(async (
     staffId: number, 
     startDate: Date, 
@@ -91,12 +91,19 @@ export const useResponsibilityData = (customAuthenticatedFetch?: (url: string, o
     const days = eachDayOfInterval({ start: startDate, end: endDate });
     const responsibilityMap: { [key: string]: ResponsibilityData } = {};
     
+    // 日付別にAPIキャッシュを作成（同じ日付の重複API呼び出しを防ぐ）
+    const dateCache: { [dateString: string]: any[] } = {};
+    
     for (const day of days) {
       const dateString = format(day, 'yyyy-MM-dd');
       
       try {
-        const responsibilities = await fetchResponsibilities(dateString);
+        // キャッシュにない場合のみAPI呼び出し
+        if (!dateCache[dateString]) {
+          dateCache[dateString] = await fetchResponsibilities(dateString);
+        }
         
+        const responsibilities = dateCache[dateString];
         responsibilities.forEach((item: any) => {
           if (item.staffId === staffId && item.responsibilities) {
             const key = createResponsibilityKey(staffId, day);
@@ -111,13 +118,14 @@ export const useResponsibilityData = (customAuthenticatedFetch?: (url: string, o
     setResponsibilityData(prev => ({ ...prev, ...responsibilityMap }));
   }, [fetchResponsibilities]);
   
-  // 単一日付の担当設定データを読み込み
-  const loadSingleDateResponsibilities = useCallback(async (date: Date) => {
+  // 単一日付の担当設定データを読み込み（データマップを返す）
+  const loadSingleDateResponsibilities = useCallback(async (date: Date): Promise<{ [key: string]: ResponsibilityData }> => {
     const dateString = format(date, 'yyyy-MM-dd');
     
     try {
       const responsibilities = await fetchResponsibilities(dateString);
       const responsibilityMap: { [key: string]: ResponsibilityData } = {};
+      
       
       responsibilities.forEach((item: any) => {
         if (item.staffId && item.responsibilities) {
@@ -127,8 +135,10 @@ export const useResponsibilityData = (customAuthenticatedFetch?: (url: string, o
       });
       
       setResponsibilityData(prev => ({ ...prev, ...responsibilityMap }));
+      return responsibilityMap; // 取得したデータを直接返す
     } catch (error) {
       console.error(`担当設定データ取得エラー (${dateString}):`, error);
+      return {}; // エラー時は空オブジェクトを返す
     }
   }, [fetchResponsibilities]);
   
@@ -138,7 +148,8 @@ export const useResponsibilityData = (customAuthenticatedFetch?: (url: string, o
     date: Date
   ): ResponsibilityData | null => {
     const key = createResponsibilityKey(staffId, date);
-    return responsibilityData[key] || null;
+    const result = responsibilityData[key] || null;
+    return result;
   }, [responsibilityData]);
   
   // 担当設定データをクリア
@@ -146,11 +157,44 @@ export const useResponsibilityData = (customAuthenticatedFetch?: (url: string, o
     setResponsibilityData({});
   }, []);
   
+  // 月次プランナー専用：全スタッフの月全体データを一括読み込み
+  const loadAllStaffMonthResponsibilities = useCallback(async (
+    staffList: { id: number }[],
+    startDate: Date,
+    endDate: Date
+  ) => {
+    const days = eachDayOfInterval({ start: startDate, end: endDate });
+    const responsibilityMap: { [key: string]: ResponsibilityData } = {};
+    
+    // 月全体の日付別データを一括取得
+    for (const day of days) {
+      const dateString = format(day, 'yyyy-MM-dd');
+      
+      try {
+        const responsibilities = await fetchResponsibilities(dateString);
+        
+        // 取得したデータをスタッフ別にマッピング
+        responsibilities.forEach((item: any) => {
+          if (item.staffId && item.responsibilities) {
+            const key = createResponsibilityKey(item.staffId, day);
+            responsibilityMap[key] = item.responsibilities;
+          }
+        });
+      } catch (error) {
+        console.error(`担当設定データ取得エラー (${dateString}):`, error);
+      }
+    }
+    
+    setResponsibilityData(prev => ({ ...prev, ...responsibilityMap }));
+    return responsibilityMap;
+  }, [fetchResponsibilities]);
+
   return {
     responsibilityData,
     saveResponsibility,
     loadMonthResponsibilities,
     loadSingleDateResponsibilities,
+    loadAllStaffMonthResponsibilities,
     getResponsibilityForDate,
     clearResponsibilityData,
     fetchResponsibilities

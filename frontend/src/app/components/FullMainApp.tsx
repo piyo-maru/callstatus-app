@@ -15,6 +15,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 // ★★★ カレンダーライブラリをインポート ★★★
 import DatePicker, { registerLocale } from 'react-datepicker';
 import { ja } from 'date-fns/locale/ja';
+import { format } from 'date-fns';
 import "react-datepicker/dist/react-datepicker.css";
 // ★★★ タイムライン共通ユーティリティをインポート ★★★
 import { 
@@ -56,6 +57,7 @@ import { ResponsibilityBadges, isReceptionStaff } from './responsibility';
 // 出社状況ページ専用モーダル（業務要件に最適化）
 import { ResponsibilityModal } from './modals/ResponsibilityModal';
 import { useResponsibilityData } from '../hooks/useResponsibilityData';
+import { hasResponsibilityData } from '../utils/responsibilityUtils';
 import type { 
   ResponsibilityData as UnifiedResponsibilityData
 } from '../types/responsibility';
@@ -924,7 +926,7 @@ export default function FullMainApp() {
     return map;
   }, [departmentSettings.departments]);
 
-  // 動的部署色設定（月次プランナーと同じロジック）
+  // 動的部署色設定（月次計画と同じロジック）
   const dynamicDepartmentColors = useMemo(() => {
     const colors: { [key: string]: string } = {};
     departmentSettings.departments.forEach(dept => {
@@ -936,7 +938,7 @@ export default function FullMainApp() {
     return colors;
   }, [departmentSettings.departments]);
 
-  // 動的グループ色設定（月次プランナーと同じロジック）
+  // 動的グループ色設定（月次計画と同じロジック）
   const dynamicTeamColors = useMemo(() => {
     const colors: { [key: string]: string } = {};
     departmentSettings.groups.forEach(group => {
@@ -1153,8 +1155,8 @@ export default function FullMainApp() {
         console.warn('Failed to fetch support data:', error);
       }
       
-      // 統一担当設定データを読み込み
-      await loadSingleDateResponsibilities(date);
+      // 統一担当設定データを読み込み（データを直接取得）
+      const currentResponsibilityData = await loadSingleDateResponsibilities(date);
       
       // 部署設定データを取得
       try {
@@ -1209,9 +1211,12 @@ export default function FullMainApp() {
           result.isSupporting = false;
         }
         
-        // 担当設定データを統一システムから取得・統合
-        const responsibilityData = getResponsibilityForDate(staff.id, displayDate);
-        result.hasResponsibilities = responsibilityData !== null;
+        // 担当設定データを統一システムから取得・統合（直接取得したデータを使用）
+        const responsibilityKey = `${staff.id}-${format(date, 'yyyy-MM-dd')}`;
+        const responsibilityData = currentResponsibilityData[responsibilityKey] || null;
+        const hasResponsibilitiesResult = responsibilityData !== null && hasResponsibilityData(responsibilityData);
+        
+        result.hasResponsibilities = hasResponsibilitiesResult;
         result.responsibilities = responsibilityData as any; // 既存モーダル互換性のためデータを統合
         
         // 受付部署の判定
@@ -1221,6 +1226,7 @@ export default function FullMainApp() {
       });
       
       setStaffList(staffWithSupportAndResponsibility);
+      
       
       // 履歴データ状態を更新
       setIsHistoricalMode(!!scheduleData.isHistorical);
@@ -1250,7 +1256,7 @@ export default function FullMainApp() {
       console.error('データの取得に失敗しました', error); 
     } 
     finally { setIsLoading(false); }
-  }, [maskingEnabled]);
+  }, [maskingEnabled, loadSingleDateResponsibilities]);
   
   useEffect(() => {
     fetchData(displayDate);
@@ -2339,7 +2345,10 @@ export default function FullMainApp() {
       
       return statusFiltered.filter(staff => {
         if (selectedSettingFilter === 'all') return true;
-        if (selectedSettingFilter === 'responsibility') return staff.hasResponsibilities;
+        if (selectedSettingFilter === 'responsibility') {
+          console.log(`[デバッグ] 担当設定フィルター: ${staff.name} => hasResponsibilities=${staff.hasResponsibilities}`);
+          return staff.hasResponsibilities;
+        }
         if (selectedSettingFilter === 'support') return staff.isSupporting;
         return true;
       });
@@ -2554,7 +2563,7 @@ export default function FullMainApp() {
             <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
             </svg>
-            月次プランナー
+            月次計画
           </a>
           <button
             onClick={logout}

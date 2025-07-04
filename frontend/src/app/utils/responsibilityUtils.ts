@@ -12,11 +12,12 @@ export const createResponsibilityKey = (staffId: number, date: Date): string => 
 
 // 担当設定データの存在確認
 export const hasResponsibilityData = (data: any): boolean => {
-  if (!data) return false;
+  if (!data) {
+    return false;
+  }
   
-  const hasGeneral = data.fax || data.subjectCheck || data.custom;
+  const hasGeneral = data.fax || data.subjectCheck || (data.custom && data.custom.trim());
   const hasReception = data.lunch || data.cs;
-  
   return hasGeneral || hasReception;
 };
 
