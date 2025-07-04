@@ -2494,18 +2494,23 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
                       if (isPastDate) return; // 過去の日付は選択不可
                       
                       if (selectedDateForPreset && isSameDay(selectedDateForPreset, day)) {
-                        // 担当設定モーダルを開く前にスクロール位置をキャプチャ
-                        captureScrollPosition();
-                        setSelectedDateForResponsibility(day);
-                        setIsResponsibilityModalOpen(true);
+                        // 選択状態で左クリック → 選択解除
+                        setSelectedDateForPreset(null);
                       } else {
+                        // 未選択状態で左クリック → 選択
                         setSelectedDateForPreset(day);
                       }
                     }}
                     onContextMenu={(e) => {
                       e.preventDefault(); // 右クリックメニューを無効化
                       if (isPastDate) return;
-                      setSelectedDateForPreset(null);
+                      
+                      if (selectedDateForPreset && isSameDay(selectedDateForPreset, day)) {
+                        // 選択状態で右クリック → 担当設定モーダルを開く
+                        captureScrollPosition();
+                        setSelectedDateForResponsibility(day);
+                        setIsResponsibilityModalOpen(true);
+                      }
                     }}
                   >
                     <span className="flex items-center justify-between w-full">
