@@ -34,6 +34,14 @@ import { getApiUrl, departmentColors, teamColors } from './constants/MainAppCons
 import { checkSupportedCharacters } from './utils/MainAppUtils';
 import { ImportHistory } from './types/MainAppTypes';
 import { usePersonalPageDate } from '../../utils/datePersistence';
+// 統一担当設定コンポーネントとフック
+import { ResponsibilityModal, ResponsibilityBadges, isReceptionStaff } from './responsibility';
+import { useResponsibilityData } from '../hooks/useResponsibilityData';
+import type { 
+  ResponsibilityData as UnifiedResponsibilityData, 
+  GeneralResponsibilityData as UnifiedGeneralResponsibilityData, 
+  ReceptionResponsibilityData as UnifiedReceptionResponsibilityData 
+} from '../types/responsibility';
 
 // --- インポート履歴モーダルコンポーネント ---
 const ImportHistoryModal = ({ isOpen, onClose, onRollback, authenticatedFetch }: {
@@ -274,6 +282,36 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
   // 統一プリセットシステム
   const { getPresetsForPage } = usePresetSettings();
   
+  // 認証付きfetch関数
+  const authenticatedFetch = useCallback(async (url: string, options: RequestInit = {}) => {
+    const headers: Record<string, string> = {
+      ...options.headers as Record<string, string>,
+    };
+
+    // FormDataを使用する場合はContent-Typeを設定しない（ブラウザが自動設定）
+    if (!(options.body instanceof FormData)) {
+      headers['Content-Type'] = 'application/json';
+    }
+
+    // トークンを取得して認証ヘッダーに追加
+    const token = localStorage.getItem('access_token');
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+
+    return fetch(url, {
+      ...options,
+      headers
+    });
+  }, []);
+
+  // 統一担当設定管理フック（個人ページのauthenticatedFetchを渡す）
+  const { 
+    saveResponsibility,
+    loadMonthResponsibilities,
+    getResponsibilityForDate
+  } = useResponsibilityData(authenticatedFetch);
+  
   const [selectedDate, setSelectedDate] = usePersonalPageDate();
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [currentStaff, setCurrentStaff] = useState<Staff | null>(null);
@@ -288,7 +326,6 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
   const [showPresetModal, setShowPresetModal] = useState(false);
   const [isResponsibilityModalOpen, setIsResponsibilityModalOpen] = useState(false);
   const [selectedDateForResponsibility, setSelectedDateForResponsibility] = useState<Date | null>(null);
-  const [responsibilityData, setResponsibilityData] = useState<{ [key: string]: ResponsibilityData }>({});
   const [isCompactMode, setIsCompactMode] = useState(() => {
     // localStorageから初期値を読み込み
     if (typeof window !== 'undefined') {
@@ -503,36 +540,6 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
 
   // APIベースURLは統一されたgetApiUrl関数を使用
 
-  // 認証付きfetch
-  const authenticatedFetch = useCallback(async (url: string, options: RequestInit = {}) => {
-    const headers: Record<string, string> = {
-      ...options.headers as Record<string, string>,
-    };
-
-    // FormDataを使用する場合はContent-Typeを設定しない（ブラウザが自動設定）
-    if (!(options.body instanceof FormData)) {
-      headers['Content-Type'] = 'application/json';
-    }
-
-    // useAuthからのtokenを使用
-    const token = localStorage.getItem('access_token');
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-
-    const response = await fetch(url, {
-      ...options,
-      headers,
-    });
-
-    // 401エラーの場合はログアウト
-    if (response.status === 401) {
-      logout();
-      throw new Error('認証が必要です');
-    }
-
-    return response;
-  }, [logout]);
 
   // グローバル表示設定の取得
   const { settings: globalDisplaySettings, isLoading: isSettingsLoading } = useGlobalDisplaySettings(authenticatedFetch);
@@ -598,58 +605,6 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
     return [];
   }, [authenticatedFetch, getApiUrl]);
 
-  // 担当設定保存関数
-  const saveResponsibilityData = useCallback(async (staffId: number, date: string, responsibilityData: ResponsibilityData) => {
-    try {
-      const response = await authenticatedFetch(`${getApiUrl()}/api/responsibilities`, {
-        method: 'POST',
-        body: JSON.stringify({
-          staffId,
-          date,
-          responsibilities: responsibilityData
-        })
-      });
-      
-      if (response.ok) {
-        // 担当設定データを再取得して更新
-        const updatedData = await fetchResponsibilityData(date);
-        const responsibilityMap: { [key: string]: ResponsibilityData } = {};
-        
-        // updatedDataが配列かどうかチェック
-        if (Array.isArray(updatedData)) {
-          if (isDebugMode) console.log('担当設定保存後のデータ更新:', updatedData);
-          updatedData.forEach((assignment: any) => {
-            const key = `${assignment.staffId}-${date}`;
-            
-            if (!responsibilityMap[key]) {
-              // 部署に応じて初期化
-              if (currentStaff?.department.includes('受付') || currentStaff?.group.includes('受付')) {
-                responsibilityMap[key] = { lunch: false, fax: false, cs: false, custom: '' } as ReceptionResponsibilityData;
-              } else {
-                responsibilityMap[key] = { fax: false, subjectCheck: false, custom: '' } as GeneralResponsibilityData;
-              }
-            }
-            
-            if (assignment.assignmentType === 'fax') responsibilityMap[key].fax = true;
-            if (assignment.assignmentType === 'subjectCheck') (responsibilityMap[key] as GeneralResponsibilityData).subjectCheck = true;
-            if (assignment.assignmentType === 'lunch') (responsibilityMap[key] as ReceptionResponsibilityData).lunch = true;
-            if (assignment.assignmentType === 'cs') (responsibilityMap[key] as ReceptionResponsibilityData).cs = true;
-            if (assignment.assignmentType === 'custom') responsibilityMap[key].custom = assignment.customLabel || '';
-          });
-          
-          setResponsibilityData(prev => {
-            const newData = { ...prev, ...responsibilityMap };
-            return newData;
-          });
-        } else {
-        }
-        return true;
-      }
-    } catch (error) {
-      console.error('担当設定保存エラー:', error); // エラーログは保持
-    }
-    return false;
-  }, [authenticatedFetch, getApiUrl, fetchResponsibilityData, currentStaff]);
 
   // 現在のユーザーの社員情報を取得
   const fetchCurrentStaff = useCallback(async () => {
@@ -1030,28 +985,29 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
   }, [schedules, loading, restoreScrollPosition]);
 
   // 現在の日付の担当設定データを取得する軽量な関数
-  const refreshCurrentResponsibilityData = useCallback(async () => {
-    const dateString = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`;
-    const responsibilityList = await fetchResponsibilityData(dateString);
-    
-    // 担当設定データを状態に反映
-    const newResponsibilityData: { [key: string]: ResponsibilityData } = {};
-    responsibilityList.forEach((item: any) => {
-      const key = `${item.staffId}-${item.date}`;
-      newResponsibilityData[key] = item.responsibilities;
-    });
-    setResponsibilityData(newResponsibilityData);
-  }, [selectedDate, fetchResponsibilityData]);
+  // 統一担当設定データ読み込み
+  const loadCurrentMonthResponsibilities = useCallback(async () => {
+    if (currentStaff) {
+      const startDate = startOfMonth(selectedDate);
+      const endDate = endOfMonth(selectedDate);
+      await loadMonthResponsibilities(currentStaff.id, startDate, endDate);
+    }
+  }, [currentStaff, selectedDate, loadMonthResponsibilities]);
+
+  // 月またはスタッフが変更された時に担当設定データを読み込み
+  useEffect(() => {
+    loadCurrentMonthResponsibilities();
+  }, [loadCurrentMonthResponsibilities]);
 
   // ページフォーカス時に担当設定データを自動更新
   useEffect(() => {
     const handleFocus = () => {
-      refreshCurrentResponsibilityData();
+      loadCurrentMonthResponsibilities();
     };
     
     window.addEventListener('focus', handleFocus);
     return () => window.removeEventListener('focus', handleFocus);
-  }, [refreshCurrentResponsibilityData]);
+  }, [loadCurrentMonthResponsibilities]);
 
   // 祝日データを初期化
   useEffect(() => {
@@ -1070,57 +1026,6 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
     }
   }, [authLoading, user, fetchCurrentStaff]);
 
-  // 担当設定データ読み込み（メイン画面と同じ方式）
-  const loadResponsibilityData = useCallback(async () => {
-    if (!currentStaff) return;
-    
-    if (isDev) {
-      if (isDebugMode) console.log('担当設定データ読み込み開始（メイン画面方式）:', {
-        staffId: currentStaff.id,
-        staffName: currentStaff.name,
-        monthDaysCount: monthDays.length
-      });
-    }
-    
-    const responsibilityMap: { [key: string]: ResponsibilityData } = {};
-    
-    // 選択月の各日の担当設定を取得（メイン画面と同じAPI構造）
-    for (const day of monthDays) {
-      const dateString = format(day, 'yyyy-MM-dd');
-      
-      try {
-        const response = await authenticatedFetch(`${getApiUrl()}/api/responsibilities?date=${dateString}`);
-        if (response.ok) {
-          const data = await response.json();
-          if (isDebugMode) console.log(`${dateString}の担当設定データ（メイン画面形式）:`, data);
-          
-          // メイン画面と同じ構造: {responsibilities: [...]}
-          if (data.responsibilities && Array.isArray(data.responsibilities)) {
-            data.responsibilities.forEach((responsibilityInfo: any) => {
-              if (responsibilityInfo.staffId === currentStaff.id && responsibilityInfo.responsibilities) {
-                const key = `${responsibilityInfo.staffId}-${dateString}`;
-                if (isDebugMode) console.log(`担当設定マップ追加（メイン画面方式）: ${key}`, responsibilityInfo.responsibilities);
-                
-                // メイン画面と同じように、responsibilityInfo.responsibilitiesを直接使用
-                responsibilityMap[key] = responsibilityInfo.responsibilities;
-              }
-            });
-          }
-        } else {
-          console.warn(`担当設定API失敗 (${dateString}):`, response.status);
-        }
-      } catch (error) {
-        console.error(`担当設定データ取得エラー (${dateString}):`, error);
-      }
-    }
-    
-    if (isDebugMode) console.log('担当設定データ読み込み完了（メイン画面方式）:', {
-      mapKeys: Object.keys(responsibilityMap),
-      mapData: responsibilityMap
-    });
-    
-    setResponsibilityData(responsibilityMap);
-  }, [currentStaff, monthDays, authenticatedFetch, getApiUrl]);
 
   // 設定変更後のデータ再取得・再レンダリング
   const handleSettingsChange = useCallback(async (settings: any) => {
@@ -1131,7 +1036,6 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
     if (currentStaff) {
       await fetchSchedules();
       // 担当設定データの再取得
-      await loadResponsibilityData();
     }
     
     // 表示設定の変更を反映するため、強制的に再レンダリングをトリガー
@@ -1143,7 +1047,6 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
     if (currentStaff) {
       fetchSchedules();
       // 担当設定データも取得
-      loadResponsibilityData();
     }
   }, [currentStaff]);
 
@@ -1377,44 +1280,6 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
     }
   }, [dragOffset, handleUpdateSchedule]);
 
-  // 担当設定バッジ生成（月次プランナーと同じデザイン）
-  const generateResponsibilityBadges = useCallback((date: Date): JSX.Element[] => {
-    if (!currentStaff) return [];
-    
-    const dateString = format(date, 'yyyy-MM-dd');
-    const key = `${currentStaff.id}-${dateString}`;
-    const responsibility = responsibilityData[key];
-    
-    // バッジ生成ログを削除（高頻度実行でパフォーマンスに影響）
-    if (isDebugMode) {
-      console.log('バッジ生成チェック:', {
-        date: dateString,
-        staffId: currentStaff.id,
-        key
-      });
-    }
-    
-    if (!responsibility) return [];
-    
-    const badges: JSX.Element[] = [];
-    
-    // 受付部署の場合
-    if ('lunch' in responsibility) {
-      const receptionResp = responsibility as ReceptionResponsibilityData;
-      if (receptionResp.lunch) badges.push(<span key="lunch" className="bg-blue-500 text-white px-1 py-0 rounded text-[10px] font-bold">昼</span>);
-      if (receptionResp.fax) badges.push(<span key="fax" className="bg-green-500 text-white px-1 py-0 rounded text-[10px] font-bold">FAX</span>);
-      if (receptionResp.cs) badges.push(<span key="cs" className="bg-purple-500 text-white px-1 py-0 rounded text-[10px] font-bold">CS</span>);
-      if (receptionResp.custom) badges.push(<span key="custom" className="bg-gray-500 text-white px-1 py-0 rounded text-[10px] font-bold">{receptionResp.custom.substring(0, 3)}</span>);
-    } else {
-      // 一般部署の場合
-      const generalResp = responsibility as GeneralResponsibilityData;
-      if (generalResp.fax) badges.push(<span key="fax" className="bg-green-500 text-white px-1 py-0 rounded text-[10px] font-bold">FAX</span>);
-      if (generalResp.subjectCheck) badges.push(<span key="subject" className="bg-orange-500 text-white px-1 py-0 rounded text-[10px] font-bold">件名</span>);
-      if (generalResp.custom) badges.push(<span key="custom" className="bg-gray-500 text-white px-1 py-0 rounded text-[10px] font-bold">{generalResp.custom.substring(0, 3)}</span>);
-    }
-    
-    return badges;
-  }, [currentStaff, responsibilityData]);
 
   // 特定日の既存スケジュールを取得（重複チェック用）
   const fetchExistingSchedulesForDate = useCallback(async (targetDate: Date, staffId: number): Promise<Schedule[]> => {
@@ -1867,8 +1732,8 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
     }
   };
 
-  // 担当設定保存処理
-  const handleResponsibilitySave = async (data: ResponsibilityData) => {
+  // 統一担当設定保存処理
+  const handleResponsibilitySave = async (responsibilityData: UnifiedResponsibilityData) => {
     if (!currentStaff || !selectedDateForResponsibility) {
       alert('担当設定の保存に必要な情報が不足しています');
       return;
@@ -1879,20 +1744,17 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
       console.log('担当設定保存:', {
         staff: currentStaff.name,
         date: dateString,
-        data
+        data: responsibilityData
       });
       
-      const success = await saveResponsibilityData(currentStaff.id, dateString, data);
+      const success = await saveResponsibility(currentStaff.id, dateString, responsibilityData);
       
       if (success) {
-        alert(`担当設定を保存しました:\nFAX対応: ${data.fax ? 'あり' : 'なし'}\n件名チェック: ${('subjectCheck' in data) ? (data.subjectCheck ? 'あり' : 'なし') : 'N/A'}\nその他: ${data.custom || 'なし'}`);
-        
         // モーダルを閉じる
         setIsResponsibilityModalOpen(false);
         setSelectedDateForResponsibility(null);
         
-        // 担当設定データを再読み込みしてバッジを更新
-        await loadResponsibilityData();
+        console.log('担当設定保存完了');
       } else {
         alert('担当設定の保存に失敗しました');
       }
@@ -1902,6 +1764,7 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
       alert('担当設定の保存に失敗しました');
     }
   };
+
 
   // ステータス色の取得
   const getStatusColor = useCallback((status: string): string => {
@@ -2482,7 +2345,7 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
                     className={`px-2 text-sm font-medium whitespace-nowrap ${isCompactMode ? 'h-[32px]' : 'h-[45px]'} ${isPastDate ? 'opacity-50 cursor-default' : 'hover:bg-gray-50 cursor-pointer'} flex items-center border-b border-gray-200 ${
                       isCurrentDay ? 'bg-blue-50 font-semibold text-blue-900' : ''
                     } ${
-                      selectedDateForPreset && isSameDay(selectedDateForPreset, day) ? 'bg-blue-100 border-blue-300' : ''
+                      selectedDateForPreset && isSameDay(selectedDateForPreset, day) ? 'bg-blue-100 border border-indigo-600' : ''
                     } ${
                       holiday ? 'bg-red-50 text-red-600' : ''  // 祝日
                     } ${
@@ -2516,17 +2379,18 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
                     <span className="flex items-center justify-between w-full">
                       <div className="flex flex-col">
                         <div className="text-xs font-semibold whitespace-nowrap">
+                          {selectedDateForPreset && isSameDay(selectedDateForPreset, day) ? '📌 ' : ''}
                           {format(day, 'M/d E', { locale: ja })}
                         </div>
                         {holiday && (
                           <div className="text-xs text-red-600 mt-1 whitespace-nowrap">{holiday.name}</div>
                         )}
-                        {selectedDateForPreset && isSameDay(selectedDateForPreset, day) && (
-                          <div className="text-xs text-blue-600 mt-1 whitespace-nowrap">📌 選択中</div>
-                        )}
                       </div>
-                      <div className="flex gap-1 ml-2">
-                        {generateResponsibilityBadges(day)}
+                      <div className="flex gap-1 ml-2 flex-nowrap">
+                        <ResponsibilityBadges 
+                          responsibilities={currentStaff ? getResponsibilityForDate(currentStaff.id, day) : null}
+                          isReception={currentStaff ? isReceptionStaff(currentStaff) : false}
+                        />
                       </div>
                     </span>
                   </div>
@@ -2864,7 +2728,7 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
         message="この予定を削除しますか？" 
       />
       
-      {/* 担当設定モーダル */}
+      {/* 統一担当設定モーダル */}
       {isResponsibilityModalOpen && currentStaff && selectedDateForResponsibility && (
         <ResponsibilityModal
           isOpen={isResponsibilityModalOpen}
@@ -2875,7 +2739,7 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
           staff={currentStaff}
           selectedDate={selectedDateForResponsibility}
           onSave={handleResponsibilitySave}
-          existingData={responsibilityData[`${currentStaff.id}-${format(selectedDateForResponsibility, 'yyyy-MM-dd')}`] || null}
+          existingData={getResponsibilityForDate(currentStaff.id, selectedDateForResponsibility)}
         />
       )}
 
@@ -2959,200 +2823,6 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
         document.body
       )}
     </div>
-  );
-};
-
-// 共通ScheduleModalコンポーネントを使用（modals/ScheduleModal.tsx）
-// 個人ページ独自のScheduleModal実装を削除
-
-
-// 担当設定モーダルコンポーネント
-interface ResponsibilityModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  staff: Staff;
-  selectedDate: Date;
-  onSave: (data: ResponsibilityData) => void;
-  existingData?: ResponsibilityData | null;
-}
-
-const ResponsibilityModal: React.FC<ResponsibilityModalProps> = ({
-  isOpen,
-  onClose,
-  staff,
-  selectedDate,
-  onSave,
-  existingData
-}) => {
-  // 部署判定
-  const isReception = staff.department.includes('受付') || staff.group.includes('受付');
-  
-  // 一般部署用
-  const [fax, setFax] = useState(false);
-  const [subjectCheck, setSubjectCheck] = useState(false);
-  const [custom, setCustom] = useState('');
-  
-  // 受付部署用
-  const [lunch, setLunch] = useState(false);
-  const [cs, setCs] = useState(false);
-
-  // 既存データの読み込み（メイン画面と同じロジック）
-  useEffect(() => {
-    if (isOpen && existingData) {
-      console.log('既存担当設定データを読み込み:', existingData);
-      
-      if (isReception) {
-        const r = existingData as ReceptionResponsibilityData;
-        setLunch(r.lunch || false);
-        setFax(r.fax || false);
-        setCs(r.cs || false);
-        setCustom(r.custom || '');
-      } else {
-        const r = existingData as GeneralResponsibilityData;
-        setFax(r.fax || false);
-        setSubjectCheck(r.subjectCheck || false);
-        setCustom(r.custom || '');
-      }
-    } else if (isOpen && !existingData) {
-      // 既存データがない場合は初期化
-      console.log('既存担当設定データなし - 初期値を設定');
-      setFax(false);
-      setSubjectCheck(false);
-      setLunch(false);
-      setCs(false);
-      setCustom('');
-    }
-  }, [isOpen, existingData, isReception]);
-
-  if (!isOpen) return null;
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (isReception) {
-      onSave({
-        lunch,
-        fax,
-        cs,
-        custom
-      } as ReceptionResponsibilityData);
-    } else {
-      onSave({
-        fax,
-        subjectCheck,
-        custom
-      } as GeneralResponsibilityData);
-    }
-    
-    onClose();
-  };
-
-  return createPortal(
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
-      <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-md">
-        <h2 className="text-lg font-semibold mb-4">
-          担当設定 - {format(selectedDate, 'M月d日(E)', { locale: ja })}
-        </h2>
-        
-        <div className="mb-4 p-3 bg-blue-50 rounded border">
-          <div className="text-sm text-blue-800">
-            <strong>担当者:</strong> {staff.name} ({staff.department})
-          </div>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-3">
-            {isReception ? (
-              // 受付部署用UI
-              <>
-                <label className="flex items-center space-x-3">
-                  <input
-                    type="checkbox"
-                    checked={lunch}
-                    onChange={(e) => setLunch(e.target.checked)}
-                    className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-                  />
-                  <span className="text-sm">🍽️ 昼当番</span>
-                </label>
-                
-                <label className="flex items-center space-x-3">
-                  <input
-                    type="checkbox"
-                    checked={fax}
-                    onChange={(e) => setFax(e.target.checked)}
-                    className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-                  />
-                  <span className="text-sm">📠 FAX当番</span>
-                </label>
-                
-                <label className="flex items-center space-x-3">
-                  <input
-                    type="checkbox"
-                    checked={cs}
-                    onChange={(e) => setCs(e.target.checked)}
-                    className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-                  />
-                  <span className="text-sm">☎️ CS担当</span>
-                </label>
-              </>
-            ) : (
-              // 一般部署用UI
-              <>
-                <label className="flex items-center space-x-3">
-                  <input
-                    type="checkbox"
-                    checked={fax}
-                    onChange={(e) => setFax(e.target.checked)}
-                    className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-                  />
-                  <span className="text-sm">📠 FAX当番</span>
-                </label>
-                
-                <label className="flex items-center space-x-3">
-                  <input
-                    type="checkbox"
-                    checked={subjectCheck}
-                    onChange={(e) => setSubjectCheck(e.target.checked)}
-                    className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-                  />
-                  <span className="text-sm">📝 件名チェック担当</span>
-                </label>
-              </>
-            )}
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                その他の担当業務
-              </label>
-              <textarea
-                value={custom}
-                onChange={(e) => setCustom(e.target.value)}
-                placeholder="その他の担当業務があれば入力してください"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                rows={3}
-              />
-            </div>
-          </div>
-
-          <div className="flex space-x-3 pt-4 border-t">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 px-4 h-7 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 flex items-center"
-            >
-              キャンセル
-            </button>
-            <button
-              type="submit"
-              className="flex-1 px-4 h-7 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center"
-            >
-              保存
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>,
-    document.body
   );
 };
 
