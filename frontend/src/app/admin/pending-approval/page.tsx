@@ -94,6 +94,16 @@ export default function PendingApprovalPage() {
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('pending');
   const [filterDate, setFilterDate] = useState<string>('');
   const [filterDepartment, setFilterDepartment] = useState<string>('all');
+  const [filterGroup, setFilterGroup] = useState<string>('all');
+  
+  // 部署・グループ設定
+  const [departmentSettings, setDepartmentSettings] = useState<{
+    departments: Array<{id: number, name: string, shortName?: string, backgroundColor?: string, displayOrder?: number}>;
+    groups: Array<{id: number, name: string, shortName?: string, backgroundColor?: string, displayOrder?: number}>;
+  }>({ departments: [], groups: [] });
+  
+  // スタッフ情報（フィルタリング用）
+  const [staffList, setStaffList] = useState<Array<{id: number, empNo?: string, name: string, department: string, group: string}>>([]);
   
   // 承認・却下モーダル状態
   const [showApprovalModal, setShowApprovalModal] = useState(false);
@@ -109,6 +119,44 @@ export default function PendingApprovalPage() {
   const [isIndividualProcessing, setIsIndividualProcessing] = useState(false);
   const [processingItemId, setProcessingItemId] = useState<number | null>(null);
 
+  // 部署・グループ設定取得
+  const fetchDepartmentSettings = useCallback(async () => {
+    try {
+      const currentApiUrl = getApiUrl();
+      const response = await fetch(`${currentApiUrl}/api/department-settings`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setDepartmentSettings(data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch department settings:', error);
+    }
+  }, [token]);
+
+  // スタッフ一覧取得
+  const fetchStaffList = useCallback(async () => {
+    try {
+      const currentApiUrl = getApiUrl();
+      const response = await fetch(`${currentApiUrl}/api/staff`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setStaffList(data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch staff list:', error);
+    }
+  }, [token]);
+
   // Pending一覧取得
   const fetchPendingList = useCallback(async () => {
     setIsLoading(true);
@@ -117,7 +165,6 @@ export default function PendingApprovalPage() {
       const params = new URLSearchParams();
       
       if (filterDate) params.append('date', filterDate);
-      if (filterDepartment !== 'all') params.append('department', filterDepartment);
       if (filterStatus !== 'all') params.append('status', filterStatus);
       
       const response = await fetch(`${currentApiUrl}/api/admin/pending-schedules?${params}`, {
@@ -138,7 +185,7 @@ export default function PendingApprovalPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [token, filterDate, filterDepartment, filterStatus]);
+  }, [token, filterDate, filterStatus]);
 
   // 個別承認・却下
   const handleIndividualApproval = useCallback(async (item: PendingSchedule, action: 'approve' | 'reject') => {
@@ -272,21 +319,126 @@ export default function PendingApprovalPage() {
     }
   }, [processingItem, approvalAction, approvalReason, selectedItems, token, fetchPendingList, pendingList]);
 
-  // 部署一覧取得
-  const departments = useMemo(() => {
-    const deptSet = new Set(pendingList.map(item => item.staffName?.split(' ')[0]).filter(Boolean));
-    return Array.from(deptSet).sort();
-  }, [pendingList]);
+  // 部署・グループマップ
+  const departmentMap = useMemo(() => {
+    const map = new Map();
+    departmentSettings.departments.forEach(dept => {
+      map.set(dept.name, dept);
+    });
+    return map;
+  }, [departmentSettings.departments]);
+
+  const groupToStaffMap = useMemo(() => {
+    const map = new Map();
+    staffList.forEach(staff => {
+      map.set(staff.group, staff);
+    });
+    return map;
+  }, [staffList]);
+
+  // 部署のソート
+  const sortedDepartments = useMemo(() => {
+    const uniqueDepts = Array.from(new Set(staffList.map(s => s.department)));
+    return uniqueDepts.sort((a, b) => {
+      const settingA = departmentMap.get(a);
+      const settingB = departmentMap.get(b);
+      const orderA = settingA?.displayOrder || 0;
+      const orderB = settingB?.displayOrder || 0;
+      if (orderA !== orderB) {
+        return orderA - orderB;
+      }
+      return a.localeCompare(b);
+    });
+  }, [staffList, departmentMap]);
+
+  // グループのソート（選択部署に基づく）
+  const sortedGroups = useMemo(() => {
+    const filteredStaff = staffList.filter(s => {
+      return filterDepartment === 'all' || s.department === filterDepartment;
+    });
+    const uniqueGroups = Array.from(new Set(filteredStaff.map(s => s.group)));
+    
+    return uniqueGroups.sort((a, b) => {
+      const staffA = groupToStaffMap.get(a);
+      const staffB = groupToStaffMap.get(b);
+      
+      if (!staffA || !staffB) return 0;
+      
+      const deptA = departmentMap.get(staffA.department);
+      const deptB = departmentMap.get(staffB.department);
+      
+      const orderA = deptA?.displayOrder ?? 999;
+      const orderB = deptB?.displayOrder ?? 999;
+      
+      if (orderA !== orderB) {
+        return orderA - orderB;
+      }
+      return a.localeCompare(b, 'ja', { numeric: true });
+    });
+  }, [staffList, filterDepartment, groupToStaffMap, departmentMap]);
 
   // フィルタリングされたリスト
   const filteredList = useMemo(() => {
-    return pendingList.filter(item => {
+    const filtered = pendingList.filter(item => {
+      // ステータスフィルター
       if (filterStatus === 'pending' && (item.approvedAt || item.rejectedAt)) return false;
       if (filterStatus === 'approved' && !item.approvedAt) return false;
       if (filterStatus === 'rejected' && !item.rejectedAt) return false;
-      return true;
+      
+      // 部署・グループフィルター
+      const staff = staffList.find(s => s.id === item.staffId);
+      if (!staff) return true; // スタッフ情報が見つからない場合は表示
+      
+      const departmentMatch = filterDepartment === 'all' || staff.department === filterDepartment;
+      const groupMatch = filterGroup === 'all' || staff.group === filterGroup;
+      
+      return departmentMatch && groupMatch;
     });
-  }, [pendingList, filterStatus]);
+
+    // ソート：部署>グループ>社員番号>日付の順
+    return filtered.sort((a, b) => {
+      const staffA = staffList.find(s => s.id === a.staffId);
+      const staffB = staffList.find(s => s.id === b.staffId);
+      
+      // スタッフ情報が見つからない場合は最後に
+      if (!staffA && !staffB) return 0;
+      if (!staffA) return 1;
+      if (!staffB) return -1;
+
+      // 1. 部署でソート（部署設定のdisplayOrderを考慮）
+      const deptA = departmentMap.get(staffA.department);
+      const deptB = departmentMap.get(staffB.department);
+      const deptOrderA = deptA?.displayOrder ?? 999;
+      const deptOrderB = deptB?.displayOrder ?? 999;
+      
+      if (deptOrderA !== deptOrderB) {
+        return deptOrderA - deptOrderB;
+      }
+      if (staffA.department !== staffB.department) {
+        return staffA.department.localeCompare(staffB.department);
+      }
+
+      // 2. グループでソート
+      if (staffA.group !== staffB.group) {
+        return staffA.group.localeCompare(staffB.group, 'ja', { numeric: true });
+      }
+
+      // 3. 社員番号でソート
+      const empNoA = staffA.empNo || '';
+      const empNoB = staffB.empNo || '';
+      if (empNoA !== empNoB) {
+        return empNoA.localeCompare(empNoB, 'ja', { numeric: true });
+      }
+
+      // 4. 日付でソート
+      if (a.date !== b.date) {
+        return a.date.localeCompare(b.date);
+      }
+
+      // 最終的にIDでソート（一意性確保）
+      return a.id - b.id;
+    });
+  }, [pendingList, filterStatus, staffList, filterDepartment, filterGroup, departmentMap]);
 
   // 全選択・全解除
   const handleSelectAll = useCallback(() => {
@@ -308,8 +460,15 @@ export default function PendingApprovalPage() {
 
   // 初期データ取得
   useEffect(() => {
+    fetchDepartmentSettings();
+    fetchStaffList();
     fetchPendingList();
-  }, [fetchPendingList]);
+  }, [fetchDepartmentSettings, fetchStaffList, fetchPendingList]);
+
+  // 部署選択変更時にグループをリセット
+  useEffect(() => {
+    setFilterGroup('all');
+  }, [filterDepartment]);
 
   return (
     <AuthGuard requiredRole={['ADMIN', 'SYSTEM_ADMIN']}>
@@ -371,10 +530,51 @@ export default function PendingApprovalPage() {
         
         {/* 統計・操作行 */}
         <div className="px-6 py-3 flex items-center justify-between">
-          {/* 左：フィルター・統計 */}
-          <div className="flex items-center gap-6">
-            {/* フィルター - 1行表示 */}
+          {/* 左：フィルター・統計 - 2行構成 */}
+          <div className="flex flex-col gap-3">
+            {/* 1行目：部署　グループ */}
             <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium text-gray-700">部署:</span>
+                <select
+                  value={filterDepartment}
+                  onChange={(e) => setFilterDepartment(e.target.value)}
+                  className="px-2 py-1 text-xs border border-gray-300 rounded"
+                >
+                  <option value="all">すべての部署</option>
+                  {sortedDepartments.map(dept => (
+                    <option key={dept} value={dept}>{dept}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium text-gray-700">グループ:</span>
+                <select
+                  value={filterGroup}
+                  onChange={(e) => setFilterGroup(e.target.value)}
+                  className="px-2 py-1 text-xs border border-gray-300 rounded"
+                >
+                  <option value="all">すべてのグループ</option>
+                  {sortedGroups.map(group => (
+                    <option key={group} value={group}>{group}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            
+            {/* 2行目：日付　ステータス */}
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium text-gray-700">日付:</span>
+                <input
+                  type="date"
+                  value={filterDate}
+                  onChange={(e) => setFilterDate(e.target.value)}
+                  className="px-2 py-1 text-xs border border-gray-300 rounded"
+                />
+              </div>
+
               <div className="flex items-center gap-2">
                 <span className="text-xs font-medium text-gray-700">ステータス:</span>
                 <select
@@ -388,48 +588,21 @@ export default function PendingApprovalPage() {
                   <option value="rejected">却下済み</option>
                 </select>
               </div>
-              
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-medium text-gray-700">日付:</span>
-                <input
-                  type="date"
-                  value={filterDate}
-                  onChange={(e) => setFilterDate(e.target.value)}
-                  className="px-2 py-1 text-xs border border-gray-300 rounded"
-                />
-              </div>
-
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-medium text-gray-700">部署:</span>
-                <select
-                  value={filterDepartment}
-                  onChange={(e) => setFilterDepartment(e.target.value)}
-                  className="px-2 py-1 text-xs border border-gray-300 rounded"
-                >
-                  <option value="all">すべて</option>
-                  {departments.map(dept => (
-                    <option key={dept} value={dept}>{dept}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            
-            {/* 統計表示 */}
-            <div className="flex items-center space-x-4 text-sm">
-              <div className="bg-yellow-100 px-2 py-1 rounded">
-                承認待ち: <span className="font-bold text-yellow-800">{stats.pending}</span>
-              </div>
-              <div className="bg-green-100 px-2 py-1 rounded">
-                承認済み: <span className="font-bold text-green-800">{stats.approved}</span>
-              </div>
-              <div className="bg-red-100 px-2 py-1 rounded">
-                却下済み: <span className="font-bold text-red-800">{stats.rejected}</span>
-              </div>
             </div>
           </div>
 
-          {/* 右：操作ボタン */}
-          <div className="flex items-center space-x-2">
+          {/* 右：統計バッジ + 操作ボタン - Y軸中央配置 */}
+          <div className="flex items-center space-x-2 self-center">
+            {/* 統計表示 */}
+            <div className="bg-yellow-100 px-2 py-1 rounded text-xs">
+              承認待ち: <span className="font-bold text-yellow-800">{stats.pending}</span>
+            </div>
+            <div className="bg-green-100 px-2 py-1 rounded text-xs">
+              承認済み: <span className="font-bold text-green-800">{stats.approved}</span>
+            </div>
+            <div className="bg-red-100 px-2 py-1 rounded text-xs">
+              却下済み: <span className="font-bold text-red-800">{stats.rejected}</span>
+            </div>
             {selectedItems.size > 0 && (
               <>
                 <span className="text-sm text-gray-600">{selectedItems.size}件選択中</span>
@@ -463,7 +636,7 @@ export default function PendingApprovalPage() {
               className={`px-3 py-1 text-white text-sm rounded ${
                 isProcessing || isIndividualProcessing || isLoading
                   ? 'bg-gray-400 cursor-not-allowed'
-                  : 'bg-blue-600 hover:bg-blue-700'
+                  : 'bg-indigo-600 hover:bg-indigo-700'
               }`}
             >
               {isLoading ? '更新中...' : '更新'}
@@ -511,37 +684,68 @@ export default function PendingApprovalPage() {
                     <div key={item.id} className={`p-4 hover:bg-gray-50 ${isProcessed ? 'opacity-75' : ''}`}>
                       <div className="flex items-center justify-between">
                         <div className="flex items-center space-x-4">
-                          {!isProcessed && (
-                            <input
-                              type="checkbox"
-                              checked={selectedItems.has(item.id)}
-                              onChange={(e) => {
-                                const newSelected = new Set(selectedItems);
-                                if (e.target.checked) {
-                                  newSelected.add(item.id);
-                                } else {
-                                  newSelected.delete(item.id);
-                                }
-                                setSelectedItems(newSelected);
-                              }}
-                              disabled={isProcessing || isIndividualProcessing}
-                              className={`rounded ${
-                                isProcessing || isIndividualProcessing ? 'opacity-50 cursor-not-allowed' : ''
-                              }`}
-                            />
-                          )}
-                          
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center space-x-2">
-                              <div
-                                className="w-4 h-4 rounded"
-                                style={{ backgroundColor: STATUS_COLORS[item.status] }}
+                          {/* 左側：チェックボックスとステータス色インジケーター */}
+                          <div className="flex items-center space-x-2">
+                            {!isProcessed && (
+                              <input
+                                type="checkbox"
+                                checked={selectedItems.has(item.id)}
+                                onChange={(e) => {
+                                  const newSelected = new Set(selectedItems);
+                                  if (e.target.checked) {
+                                    newSelected.add(item.id);
+                                  } else {
+                                    newSelected.delete(item.id);
+                                  }
+                                  setSelectedItems(newSelected);
+                                }}
+                                disabled={isProcessing || isIndividualProcessing}
+                                className={`rounded ${
+                                  isProcessing || isIndividualProcessing ? 'opacity-50 cursor-not-allowed' : ''
+                                }`}
                               />
-                              <span className="font-medium text-gray-900">{item.staffName}</span>
-                              <span className="text-sm text-gray-500">{item.date}</span>
+                            )}
+                            <div
+                              className="w-4 h-4 rounded"
+                              style={{ backgroundColor: STATUS_COLORS[item.status] }}
+                            />
+                          </div>
+                          
+                          {/* 右側：2行の情報表示 */}
+                          <div className="flex-1 min-w-0">
+                            {/* 1行目：社員番号　スタッフ名　部署　グループ　タイプ　作成日 */}
+                            <div className="flex items-center space-x-4">
+                              {(() => {
+                                const staff = staffList.find(s => s.id === item.staffId);
+                                return (
+                                  <>
+                                    <span className="text-sm text-gray-900">{staff?.empNo || 'N/A'}</span>
+                                    <span className="font-medium text-gray-900">{item.staffName}</span>
+                                    <span className="text-sm text-gray-600">{staff?.department || 'N/A'}</span>
+                                    <span className="text-sm text-gray-600">{staff?.group || 'N/A'}</span>
+                                    <span className="text-xs text-gray-500">タイプ: {item.pendingType}</span>
+                                    <span className="text-xs text-gray-500">作成: {new Date(item.createdAt).toLocaleDateString('ja-JP')}</span>
+                                  </>
+                                );
+                              })()}
                             </div>
-                            <div className="mt-1 text-sm text-gray-600">
-                              {capitalizeStatus(item.status)} ({formatTime(item.start)}-{formatTime(item.end)})
+                            
+                            {/* 2行目：日付（yyyy/mm/dd(aaa)）　ステータス名　時間範囲　プリセット情報 */}
+                            <div className="mt-1 flex items-center space-x-4">
+                              <span className="text-sm text-gray-500">
+                                {(() => {
+                                  const date = new Date(item.date);
+                                  const dateStr = date.toLocaleDateString('ja-JP', { 
+                                    year: 'numeric', 
+                                    month: '2-digit', 
+                                    day: '2-digit' 
+                                  });
+                                  const weekday = date.toLocaleDateString('ja-JP', { weekday: 'short' });
+                                  return `${dateStr}(${weekday})`;
+                                })()}
+                              </span>
+                              <span className="text-sm text-gray-600">{capitalizeStatus(item.status)}</span>
+                              <span className="text-sm text-gray-600">({formatTime(item.start)}-{formatTime(item.end)})</span>
                               {item.memo && (() => {
                                 const compositeDetails = parseCompositeScheduleDetails(item.memo);
                                 if (compositeDetails?.isComposite) {
@@ -549,7 +753,7 @@ export default function PendingApprovalPage() {
                                     `${capitalizeStatus(schedule.status)} ${formatTime(schedule.startTime)}-${formatTime(schedule.endTime)}`
                                   ).join(' , ');
                                   return (
-                                    <span className="ml-2">
+                                    <span>
                                       <span className="text-indigo-600 font-medium">- {compositeDetails.presetLabel}</span>
                                       {compositeDetails.description && (
                                         <span className="text-gray-700"> - 説明: {compositeDetails.description}</span>
@@ -559,18 +763,14 @@ export default function PendingApprovalPage() {
                                   );
                                 } else if (compositeDetails?.presetLabel) {
                                   return (
-                                    <span className="ml-2 text-indigo-600 font-medium">
+                                    <span className="text-indigo-600 font-medium">
                                       - {compositeDetails.presetLabel}
                                     </span>
                                   );
                                 } else {
-                                  return <span className="ml-2">- {item.memo}</span>;
+                                  return <span>- {item.memo}</span>;
                                 }
                               })()}
-                            </div>
-                            <div className="mt-1 flex items-center space-x-4 text-xs text-gray-500">
-                              <span>タイプ: {item.pendingType}</span>
-                              <span>作成: {new Date(item.createdAt).toLocaleDateString('ja-JP')}</span>
                             </div>
                           </div>
                         </div>
