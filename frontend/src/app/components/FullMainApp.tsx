@@ -48,10 +48,17 @@ import { useMainAppDate } from '../../utils/datePersistence';
 import { ConfirmationModal } from './modals/ConfirmationModal';
 import { ScheduleModal } from './modals/ScheduleModal';
 import { AssignmentModal } from './modals/AssignmentModal';
-import { ResponsibilityModal } from './modals/ResponsibilityModal';
 import { JsonUploadModal } from './modals/JsonUploadModal';
 import { CsvUploadModal } from './modals/CsvUploadModal';
 import { UnifiedSettingsModal } from './modals/UnifiedSettingsModal';
+// 統一担当設定コンポーネントとフック（バッジ・判定のみ）
+import { ResponsibilityBadges, isReceptionStaff } from './responsibility';
+// 出社状況ページ専用モーダル（業務要件に最適化）
+import { ResponsibilityModal } from './modals/ResponsibilityModal';
+import { useResponsibilityData } from '../hooks/useResponsibilityData';
+import type { 
+  ResponsibilityData as UnifiedResponsibilityData
+} from '../types/responsibility';
 
 // ★★★ カレンダーの表示言語を日本語に設定 ★★★
 registerLocale('ja', ja);
@@ -807,6 +814,13 @@ export default function FullMainApp() {
   // グローバル表示設定の取得
   const { settings: globalDisplaySettings, isLoading: isSettingsLoading, refreshSettings } = useGlobalDisplaySettings(authenticatedFetch);
   
+  // 統一担当設定管理フック
+  const { 
+    saveResponsibility,
+    loadSingleDateResponsibilities,
+    getResponsibilityForDate
+  } = useResponsibilityData(authenticatedFetch);
+  
   // 設定変更後の強制再レンダリング用
   const [settingsUpdateTrigger, setSettingsUpdateTrigger] = useState(0);
 
@@ -1082,34 +1096,6 @@ export default function FullMainApp() {
     return groupSetting?.backgroundColor || null;
   }, [departmentSettings]);
 
-  // 担当設定データのみを取得する軽量な関数
-  const fetchResponsibilityData = useCallback(async () => {
-    try {
-      const currentApiUrl = getApiUrl();
-      const dateString = `${displayDate.getFullYear()}-${String(displayDate.getMonth() + 1).padStart(2, '0')}-${String(displayDate.getDate()).padStart(2, '0')}`;
-      
-      const responsibilityRes = await fetch(`${currentApiUrl}/api/responsibilities?date=${dateString}`);
-      if (responsibilityRes.ok) {
-        const responsibilityData = await responsibilityRes.json();
-        
-        // 担当設定をスタッフデータに反映
-        const responsibilityMap = new Map<number, any>();
-        responsibilityData.responsibilities?.forEach((responsibility: any) => {
-          responsibilityMap.set(responsibility.staffId, responsibility);
-        });
-        
-        // 既存のスタッフデータに担当設定を更新
-        setStaffList(prevStaffList => 
-          prevStaffList.map(staff => ({
-            ...staff,
-            responsibilities: responsibilityMap.get(staff.id) || {}
-          }))
-        );
-      }
-    } catch (error) {
-      console.warn('Failed to fetch responsibility data:', error);
-    }
-  }, [displayDate]);
   
   const fetchData = useCallback(async (date: Date) => {
     setIsLoading(true);
@@ -1167,19 +1153,8 @@ export default function FullMainApp() {
         console.warn('Failed to fetch support data:', error);
       }
       
-      // 責任データを取得
-      let responsibilityData = { responsibilities: [] };
-      try {
-        const responsibilityRes = await fetch(`${currentApiUrl}/api/responsibilities?date=${dateString}`);
-        if (responsibilityRes.ok) {
-          responsibilityData = await responsibilityRes.json();
-          // console.log('Responsibility data fetched:', responsibilityData);
-        } else {
-          console.warn('Responsibility API failed:', responsibilityRes.status);
-        }
-      } catch (error) {
-        console.warn('Failed to fetch responsibility data:', error);
-      }
+      // 統一担当設定データを読み込み
+      await loadSingleDateResponsibilities(date);
       
       // 部署設定データを取得
       try {
@@ -1207,16 +1182,11 @@ export default function FullMainApp() {
         }
       });
       
-      const responsibilityMap = new Map<number, any>();
-      responsibilityData.responsibilities?.forEach((responsibility: any) => {
-        responsibilityMap.set(responsibility.staffId, responsibility);
-      });
       
       // 支援状況と担当設定をスタッフデータにマージ（O(1)アクセス）
       const staffWithSupportAndResponsibility = scheduleData.staff.map(staff => {
         // O(1)でMap検索
         const tempAssignment = supportAssignmentMap.get(staff.id);
-        const responsibilityInfo = responsibilityMap.get(staff.id);
         
         let result = { ...staff };
         
@@ -1239,21 +1209,10 @@ export default function FullMainApp() {
           result.isSupporting = false;
         }
         
-        // 担当設定をマージ
-        if (responsibilityInfo && responsibilityInfo.responsibilities) {
-          result.responsibilities = responsibilityInfo.responsibilities;
-          // 担当設定が実際に設定されているかチェック
-          const responsibilities = responsibilityInfo.responsibilities;
-          const hasAnyResponsibility = 
-            (responsibilities.fax) ||
-            (responsibilities.subjectCheck) ||
-            (responsibilities.lunch) ||
-            (responsibilities.cs) ||
-            (responsibilities.custom && responsibilities.custom.trim() !== '');
-          result.hasResponsibilities = hasAnyResponsibility;
-        } else {
-          result.hasResponsibilities = false;
-        }
+        // 担当設定データを統一システムから取得・統合
+        const responsibilityData = getResponsibilityForDate(staff.id, displayDate);
+        result.hasResponsibilities = responsibilityData !== null;
+        result.responsibilities = responsibilityData as any; // 既存モーダル互換性のためデータを統合
         
         // 受付部署の判定
         result.isReception = staff.department.includes('受付') || staff.group.includes('受付');
@@ -1300,12 +1259,11 @@ export default function FullMainApp() {
   // ページフォーカス時に担当設定データを自動更新
   useEffect(() => {
     const handleFocus = () => {
-      fetchResponsibilityData();
     };
     
     window.addEventListener('focus', handleFocus);
     return () => window.removeEventListener('focus', handleFocus);
-  }, [fetchResponsibilityData]);
+  }, []);
 
   useEffect(() => {
     // WebSocket接続条件チェック
@@ -1849,84 +1807,42 @@ export default function FullMainApp() {
     setIsResponsibilityModalOpen(true);
   };
 
-  // 担当設定バッジを生成する関数
-  const generateResponsibilityBadges = (responsibilities: ResponsibilityData | null, isReception: boolean) => {
-    if (!responsibilities) return null;
-    
-    const badges: JSX.Element[] = [];
-    
-    if (isReception) {
-      // 受付部署用のバッジ
-      const receptionResp = responsibilities as ReceptionResponsibilityData;
-      if (receptionResp.lunch) badges.push(<span key="lunch" className="responsibility-badge bg-blue-500 text-white px-1 py-0 rounded text-[10px] font-bold ml-1">昼</span>);
-      if (receptionResp.fax) badges.push(<span key="fax" className="responsibility-badge bg-green-500 text-white px-1 py-0 rounded text-[10px] font-bold ml-1">FAX</span>);
-      if (receptionResp.cs) badges.push(<span key="cs" className="responsibility-badge bg-purple-500 text-white px-1 py-0 rounded text-[10px] font-bold ml-1">CS</span>);
-      if (receptionResp.custom) badges.push(<span key="custom" className="responsibility-badge bg-gray-500 text-white px-1 py-0 rounded text-[10px] font-bold ml-1">{receptionResp.custom.substring(0, 3)}</span>);
-    } else {
-      // 一般部署用のバッジ
-      const generalResp = responsibilities as GeneralResponsibilityData;
-      if (generalResp.fax) badges.push(<span key="fax" className="responsibility-badge bg-green-500 text-white px-1 py-0 rounded text-[10px] font-bold ml-1">FAX</span>);
-      if (generalResp.subjectCheck) badges.push(<span key="subject" className="responsibility-badge bg-orange-500 text-white px-1 py-0 rounded text-[10px] font-bold ml-1">件名</span>);
-      if (generalResp.custom) badges.push(<span key="custom" className="responsibility-badge bg-gray-500 text-white px-1 py-0 rounded text-[10px] font-bold ml-1">{generalResp.custom.substring(0, 3)}</span>);
-    }
-    
-    return badges.length > 0 ? badges : null;
-  };
 
+  // 統一担当設定保存処理
   const handleSaveResponsibility = async (data: {
     staffId: number;
-    responsibilities: ResponsibilityData;
+    responsibilities: UnifiedResponsibilityData;
   }) => {
-    const currentApiUrl = getApiUrl();
     try {
-      // console.log('責任設定を保存中:', data);
+      const dateString = displayDate.toISOString().split('T')[0];
+      const success = await saveResponsibility(data.staffId, dateString, data.responsibilities);
       
-      const response = await authenticatedFetch(`${currentApiUrl}/api/responsibilities`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          staffId: data.staffId,
-          date: displayDate.toISOString().split('T')[0],
-          responsibilities: data.responsibilities
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error('責任設定の保存に失敗しました');
-      }
-
-      const result = await response.json();
-      // console.log('責任設定保存完了:', result);
-      
-      // データを再取得してUIを更新
-      // console.log('復元予定のスクロール位置:', savedScrollPosition);
-      await fetchData(displayDate);
-      // データ更新完了後、保存した位置に復元 - 段階的試行
-      const restoreScroll = (attempt = 1) => {
-        if (topScrollRef.current && bottomScrollRef.current) {
-          const currentPosX = topScrollRef.current.scrollLeft;
-          const currentPosY = window.scrollY;
-          // console.log(`スクロール復元試行${attempt}:`, savedScrollPosition, 'current横:', currentPosX, 'current縦:', currentPosY);
-          if (savedScrollPosition.x > 0) {
-            topScrollRef.current.scrollLeft = savedScrollPosition.x;
-            bottomScrollRef.current.scrollLeft = savedScrollPosition.x;
-            // 復元が成功したかチェック
-            setTimeout(() => {
-              const newPosX = topScrollRef.current?.scrollLeft || 0;
-              const newPosY = window.scrollY;
-              const xDiff = Math.abs(newPosX - (savedScrollPosition.x || 0));
-              const yDiff = Math.abs(newPosY - (savedScrollPosition.y || 0));
-              
-              if ((xDiff > 10 || yDiff > 10) && attempt < 5) {
-                // console.log(`復元失敗、再試行${attempt + 1}:`, { newPosX, newPosY }, 'target:', savedScrollPosition);
-                restoreScroll(attempt + 1);
-              } else {
-                // console.log('スクロール復元完了:', { x: newPosX, y: newPosY });
-              }
-            }, 50);
+      if (success) {
+        // データを再取得してUIを更新
+        await fetchData(displayDate);
+        // データ更新完了後、保存した位置に復元 - 段階的試行
+        const restoreScroll = (attempt = 1) => {
+          if (topScrollRef.current && bottomScrollRef.current) {
+            const currentPosX = topScrollRef.current.scrollLeft;
+            const currentPosY = window.scrollY;
+            if (savedScrollPosition.x > 0) {
+              topScrollRef.current.scrollLeft = savedScrollPosition.x;
+              bottomScrollRef.current.scrollLeft = savedScrollPosition.x;
+              // 復元が成功したかチェック
+              setTimeout(() => {
+                const newPosX = topScrollRef.current?.scrollLeft || 0;
+                const newPosY = window.scrollY;
+                const xDiff = Math.abs(newPosX - (savedScrollPosition.x || 0));
+                const yDiff = Math.abs(newPosY - (savedScrollPosition.y || 0));
+                
+                if ((xDiff > 10 || yDiff > 10) && attempt < 5) {
+                  restoreScroll(attempt + 1);
+                } else {
+                  // スクロール復元完了
+                }
+              }, 50);
           }
         } else {
-          // console.log('スクロール要素未準備、再試行:', attempt);
           if (attempt < 5) {
             setTimeout(() => restoreScroll(attempt + 1), 100);
           }
@@ -1936,10 +1852,13 @@ export default function FullMainApp() {
       
       setIsResponsibilityModalOpen(false);
       setSelectedStaffForResponsibility(null);
+      } else {
+        alert('担当設定の保存に失敗しました');
+      }
       
     } catch (error) {
-      console.error('責任設定の保存に失敗しました:', error);
-      alert('責任設定の保存に失敗しました: ' + (error instanceof Error ? error.message : String(error)));
+      console.error('担当設定の保存に失敗しました:', error);
+      alert('担当設定の保存に失敗しました: ' + (error instanceof Error ? error.message : String(error)));
     }
   };
 
@@ -2896,7 +2815,10 @@ export default function FullMainApp() {
                                   [支援:{getSupportDestinationText(staff)}]
                                 </span>
                               )}
-                              {generateResponsibilityBadges(staff.responsibilities || null, staff.isReception || false)}
+                              <ResponsibilityBadges 
+                                responsibilities={getResponsibilityForDate(staff.id, displayDate)}
+                                isReception={isReceptionStaff(staff)}
+                              />
                             </span>
                           </div>
                         );

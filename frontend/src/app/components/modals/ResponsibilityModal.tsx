@@ -176,18 +176,18 @@ export const ResponsibilityModal: React.FC<ResponsibilityModalProps> = ({ isOpen
             </>
           )}
           
-          {/* カスタム担当 */}
+          {/* その他の担当業務 */}
           <div>
-            <label htmlFor="custom" className="block text-sm font-medium text-gray-700">
-              カスタム担当
+            <label htmlFor="custom" className="block text-sm font-medium text-gray-700 mb-1">
+              その他の担当業務
             </label>
-            <input
-              type="text"
+            <textarea
               id="custom"
               value={custom}
               onChange={(e) => setCustom(e.target.value)}
-              placeholder="カスタム担当を入力"
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+              placeholder="その他の担当業務があれば入力してください"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              rows={3}
             />
           </div>
         </div>
