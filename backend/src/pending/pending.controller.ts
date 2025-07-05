@@ -156,11 +156,15 @@ export class AdminPendingController {
   @Get()
   async findAllForAdmin(
     @Query('date') date?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
     @Query('department') department?: string,
     @Query('status') status?: 'pending' | 'approved' | 'rejected'
   ) {
     return this.pendingService.findAllForAdmin({
       date,
+      startDate,
+      endDate,
       department,
       status,
     });

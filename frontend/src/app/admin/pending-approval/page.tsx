@@ -93,6 +93,8 @@ export default function PendingApprovalPage() {
   // フィルター状態
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('pending');
   const [filterDate, setFilterDate] = useState<string>('');
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
   const [filterDepartment, setFilterDepartment] = useState<string>('all');
   const [filterGroup, setFilterGroup] = useState<string>('all');
   
@@ -164,7 +166,14 @@ export default function PendingApprovalPage() {
       const currentApiUrl = getApiUrl();
       const params = new URLSearchParams();
       
-      if (filterDate) params.append('date', filterDate);
+      // 日付フィルター: 単一日付が指定されている場合はそれを優先、なければ日付範囲を使用
+      if (filterDate) {
+        params.append('date', filterDate);
+      } else {
+        if (startDate) params.append('startDate', startDate);
+        if (endDate) params.append('endDate', endDate);
+      }
+      
       if (filterStatus !== 'all') params.append('status', filterStatus);
       
       const response = await fetch(`${currentApiUrl}/api/admin/pending-schedules?${params}`, {
@@ -185,7 +194,7 @@ export default function PendingApprovalPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [token, filterDate, filterStatus]);
+  }, [token, filterDate, startDate, endDate, filterStatus]);
 
   // 個別承認・却下
   const handleIndividualApproval = useCallback(async (item: PendingSchedule, action: 'approve' | 'reject') => {
@@ -571,6 +580,26 @@ export default function PendingApprovalPage() {
                   type="date"
                   value={filterDate}
                   onChange={(e) => setFilterDate(e.target.value)}
+                  placeholder="単一日付"
+                  className="px-2 py-1 text-xs border border-gray-300 rounded"
+                />
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium text-gray-600">または範囲:</span>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  placeholder="開始日"
+                  className="px-2 py-1 text-xs border border-gray-300 rounded"
+                />
+                <span className="text-xs text-gray-500">〜</span>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  placeholder="終了日"
                   className="px-2 py-1 text-xs border border-gray-300 rounded"
                 />
               </div>

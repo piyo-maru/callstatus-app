@@ -499,12 +499,29 @@ export class PendingService {
    */
   async findAllForAdmin(filters: {
     date?: string;
+    startDate?: string;
+    endDate?: string;
     department?: string;
     status?: 'pending' | 'approved' | 'rejected';
   }) {
     const where: any = { isPending: true };
 
-    if (filters.date) where.date = new Date(filters.date);
+    // 日付フィルター処理（CLAUDE.md時刻処理ルール準拠）
+    if (filters.date) {
+      // 単一日付フィルター（既存の互換性を保持）
+      where.date = new Date(filters.date);
+    } else if (filters.startDate || filters.endDate) {
+      // 日付範囲フィルター
+      where.date = {};
+      if (filters.startDate) {
+        // startDate以降（以上）
+        where.date.gte = new Date(filters.startDate);
+      }
+      if (filters.endDate) {
+        // endDate以前（以下）
+        where.date.lte = new Date(filters.endDate);
+      }
+    }
 
     // ステータスフィルター
     if (filters.status === 'approved') {
