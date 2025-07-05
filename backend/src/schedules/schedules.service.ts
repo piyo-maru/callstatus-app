@@ -137,15 +137,27 @@ export class SchedulesService {
     console.log(`JST時刻 ${createScheduleDto.end} → UTC時刻 ${endUtc.toISOString()}`);
     
     // 調整レイヤー（Adjustmentテーブル）に保存（2層システム設計に準拠）
+    // CLAUDE.md厳格ルール準拠：既存カラム + 新UTCカラム両方設定
+    const dateUtc = new Date(`${createScheduleDto.date}T00:00:00Z`);
+    const nowUtc = new Date();
+    
     const newSchedule = await this.prisma.adjustment.create({
       data: {
         staffId: createScheduleDto.staffId,
         status: createScheduleDto.status,
+        // 既存カラム（並行運用のため保持）
         start: startUtc,
         end: endUtc,
+        date: dateUtc,
+        createdAt: nowUtc,
+        updatedAt: nowUtc,
+        // 新UTCカラム（CLAUDE.md厳格ルール準拠）
+        start_utc: startUtc,
+        end_utc: endUtc,
+        date_utc: dateUtc,
+        createdAt_utc: nowUtc,
+        updatedAt_utc: nowUtc,
         memo: createScheduleDto.memo || null,
-        date: new Date(`${createScheduleDto.date}T00:00:00Z`), // 日付フィールド（UTC）
-        updatedAt: new Date(), // 必須フィールド
         isPending: false // pending機能以外の通常予定はfalse
       },
     });
@@ -229,11 +241,35 @@ export class SchedulesService {
   }
 
   private async updateAdjustmentSchedule(id: number, updateScheduleDto: { status?: string; start?: number; end?: number; date: string; memo?: string; }) {
-    const data: { status?: string; start?: Date; end?: Date; memo?: string | null } = {};
+    // CLAUDE.md厳格ルール準拠：既存カラム + 新UTCカラム両方更新
+    const data: { 
+      status?: string; 
+      start?: Date; 
+      end?: Date; 
+      memo?: string | null;
+      start_utc?: Date;
+      end_utc?: Date;
+      updatedAt_utc?: Date;
+    } = {};
+    
     if (updateScheduleDto.status) data.status = updateScheduleDto.status;
-    if (updateScheduleDto.start) data.start = this.jstToUtc(updateScheduleDto.start, updateScheduleDto.date);
-    if (updateScheduleDto.end) data.end = this.jstToUtc(updateScheduleDto.end, updateScheduleDto.date);
+    
+    if (updateScheduleDto.start) {
+      const startUtc = this.jstToUtc(updateScheduleDto.start, updateScheduleDto.date);
+      data.start = startUtc;      // 既存カラム
+      data.start_utc = startUtc;  // 新UTCカラム
+    }
+    
+    if (updateScheduleDto.end) {
+      const endUtc = this.jstToUtc(updateScheduleDto.end, updateScheduleDto.date);
+      data.end = endUtc;        // 既存カラム
+      data.end_utc = endUtc;    // 新UTCカラム
+    }
+    
     if (updateScheduleDto.memo !== undefined) data.memo = updateScheduleDto.memo || null;
+    
+    // 更新時刻をUTCカラムにも設定
+    data.updatedAt_utc = new Date();
 
     // Adjustmentテーブルを使用
     const updatedSchedule = await this.prisma.adjustment.update({

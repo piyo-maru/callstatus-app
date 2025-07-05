@@ -26,6 +26,14 @@ model Adjustment {
   rejectedAt      DateTime?
   rejectedBy      Int?
   rejectionReason String?
+  // CLAUDE.md厳格ルール準拠: 新UTCカラム追加
+  date_utc        DateTime?
+  start_utc       DateTime?
+  end_utc         DateTime?
+  createdAt_utc   DateTime?
+  updatedAt_utc   DateTime?
+  approvedAt_utc  DateTime?
+  rejectedAt_utc  DateTime?
   ApprovedBy      Staff?               @relation("ApprovedAdjustments", fields: [approvedBy], references: [id])
   RejectedBy      Staff?               @relation("RejectedAdjustments", fields: [rejectedBy], references: [id])
   Staff           Staff                @relation(fields: [staffId], references: [id])
@@ -292,6 +300,11 @@ model HistoricalSchedule {
   reason          String?
   snapshotAt      DateTime @default(now())
   version         String   @default("1.0")
+  // CLAUDE.md厳格ルール準拠: 新UTCカラム追加
+  date_utc        DateTime?
+  start_utc       DateTime?
+  end_utc         DateTime?
+  snapshotAt_utc  DateTime?
 
   @@index([date])
   @@index([date, staffDepartment])
@@ -310,6 +323,10 @@ model SnapshotLog {
   startedAt    DateTime       @default(now())
   completedAt  DateTime?
   errorMessage String?
+  // CLAUDE.md厳格ルール準拠: 新UTCカラム追加
+  targetDate_utc   DateTime?
+  startedAt_utc    DateTime?
+  completedAt_utc  DateTime?
 
   @@index([targetDate])
   @@index([status])

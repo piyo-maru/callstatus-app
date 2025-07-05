@@ -171,10 +171,23 @@ export class SnapshotsService {
 
   /**
    * データをHistoricalSchedule形式に変換
+   * CLAUDE.md厳格ルール準拠：既存カラム + 新UTCカラム両方設定
    */
   private transformToHistoricalData(scheduleData: any[], batchId: string) {
+    const snapshotTime = new Date();
+    
     return scheduleData.map(item => ({
+      // 既存カラム（並行運用のため保持）
       date: item.date,
+      start: item.start,
+      end: item.end,
+      snapshotAt: snapshotTime,
+      // 新UTCカラム（CLAUDE.md厳格ルール準拠）
+      date_utc: item.date_utc || item.date,      // 新UTCカラム優先、フォールバックあり
+      start_utc: item.start_utc || item.start,   // 新UTCカラム優先、フォールバックあり
+      end_utc: item.end_utc || item.end,         // 新UTCカラム優先、フォールバックあり
+      snapshotAt_utc: snapshotTime,
+      // その他のフィールド
       originalId: item.id,
       batchId,
       staffId: item.staffId,
@@ -184,11 +197,8 @@ export class SnapshotsService {
       staffGroup: item.Staff.group,
       staffIsActive: item.Staff.isActive,
       status: item.status,
-      start: item.start,
-      end: item.end,
       memo: item.memo,
-      reason: item.reason,
-      snapshotAt: new Date()
+      reason: item.reason
     }));
   }
 
@@ -279,16 +289,17 @@ export class SnapshotsService {
 
     this.logger.log(`履歴スケジュール取得: ${dateString}`);
 
+    // CLAUDE.md厳格ルール準拠：将来的にdate_utc使用予定、現在は並行運用中
     const historicalData = await this.prisma.historicalSchedule.findMany({
       where: {
-        date: {
+        date: {  // 現在は既存カラム使用、将来的にdate_utcに移行
           gte: startOfDay,
           lte: endOfDay
         }
       },
       orderBy: [
         { staffName: 'asc' },
-        { start: 'asc' }
+        { start: 'asc' }  // 将来的にstart_utcに移行
       ]
     });
 
