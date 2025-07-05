@@ -1116,6 +1116,35 @@ export default function FullMainApp() {
           console.log('平均処理時間:', optimizationMetrics.averageUpdateTime.toFixed(2), 'ms');
           console.log('最終更新:', optimizedScheduleUpdateRef.current.lastUpdate);
           console.groupEnd();
+        },
+        
+        // Phase 1 テスト機能
+        testPartialUpdate: () => {
+          if (!enableOptimizedUpdates) {
+            console.warn('⚠️ 部分更新が無効です。まず enable() を実行してください');
+            return;
+          }
+          
+          console.group('🧪 Phase 1 部分更新テスト開始');
+          console.log('現在のスケジュール数:', schedules.length);
+          console.log('テスト用の仮想WebSocket更新をシミュレート中...');
+          
+          // 仮想的な新規スケジュール
+          const testSchedule = {
+            id: Date.now(), // 一意なID
+            staffId: staffList[0]?.id || 1,
+            status: 'online',
+            start: 9.0,
+            end: 18.0,
+            memo: 'Phase 1 テスト用スケジュール',
+            layer: 'adjustment'
+          };
+          
+          console.log('テスト用スケジュール:', testSchedule);
+          console.log('安全性チェック結果:', isSafeForOptimizedUpdate(testSchedule));
+          console.groupEnd();
+          
+          return testSchedule;
         }
       };
       
@@ -1465,9 +1494,40 @@ export default function FullMainApp() {
             return;
           }
           
-          // TODO: Phase 1で実装
-          // 現在は安全のためフォールバック
-          safeFullRefresh('Optimized add not yet implemented');
+          // 🟢 Phase 1: 実際の部分更新実装（最小リスク版）
+          console.log('📝 Phase 1: 部分更新でスケジュール追加開始:', newSchedule);
+          
+          // 既存の変換ロジックを安全に再利用
+          const convertedSchedule: Schedule = {
+            id: newSchedule.id,
+            staffId: newSchedule.staffId,
+            status: newSchedule.status,
+            start: typeof newSchedule.start === 'number' ? newSchedule.start : timeStringToHours(newSchedule.start),
+            end: typeof newSchedule.end === 'number' ? newSchedule.end : timeStringToHours(newSchedule.end),
+            memo: newSchedule.memo,
+            layer: newSchedule.layer || 'adjustment',
+            isHistorical: false
+          };
+          
+          // 既存のschedules状態を安全に更新
+          setSchedules(prevSchedules => {
+            // 重複チェック（安全性確保）
+            const existingIndex = prevSchedules.findIndex(s => s.id === convertedSchedule.id);
+            if (existingIndex >= 0) {
+              console.warn('⚠️ 重複スケジュール検出、フォールバック:', convertedSchedule.id);
+              safeFullRefresh('Duplicate schedule detected');
+              return prevSchedules; // 状態変更なし
+            }
+            
+            // 新しいスケジュールを安全に追加
+            const updatedSchedules = [...prevSchedules, convertedSchedule];
+            console.log('✅ Phase 1: スケジュール追加成功:', convertedSchedule.id);
+            
+            // 更新時刻を記録
+            optimizedScheduleUpdateRef.current.lastUpdate = new Date();
+            
+            return updatedSchedules;
+          });
           
           const duration = performance.now() - startTime;
           setOptimizationMetrics(prev => ({
@@ -1493,8 +1553,41 @@ export default function FullMainApp() {
             return;
           }
           
-          // TODO: Phase 1で実装
-          safeFullRefresh('Optimized update not yet implemented');
+          // 🟢 Phase 1: 実際の部分更新実装（更新処理）
+          console.log('📝 Phase 1: 部分更新でスケジュール更新開始:', updatedSchedule);
+          
+          // 既存の変換ロジックを安全に再利用
+          const convertedSchedule: Schedule = {
+            id: updatedSchedule.id,
+            staffId: updatedSchedule.staffId,
+            status: updatedSchedule.status,
+            start: typeof updatedSchedule.start === 'number' ? updatedSchedule.start : timeStringToHours(updatedSchedule.start),
+            end: typeof updatedSchedule.end === 'number' ? updatedSchedule.end : timeStringToHours(updatedSchedule.end),
+            memo: updatedSchedule.memo,
+            layer: updatedSchedule.layer || 'adjustment',
+            isHistorical: false
+          };
+          
+          // 既存のschedules状態を安全に更新
+          setSchedules(prevSchedules => {
+            // 既存スケジュールの検索
+            const existingIndex = prevSchedules.findIndex(s => s.id === convertedSchedule.id);
+            if (existingIndex < 0) {
+              console.warn('⚠️ 更新対象スケジュール未発見、フォールバック:', convertedSchedule.id);
+              safeFullRefresh('Update target schedule not found');
+              return prevSchedules; // 状態変更なし
+            }
+            
+            // 既存スケジュールを安全に置換
+            const updatedSchedules = [...prevSchedules];
+            updatedSchedules[existingIndex] = convertedSchedule;
+            console.log('✅ Phase 1: スケジュール更新成功:', convertedSchedule.id);
+            
+            // 更新時刻を記録
+            optimizedScheduleUpdateRef.current.lastUpdate = new Date();
+            
+            return updatedSchedules;
+          });
           
           const duration = performance.now() - startTime;
           setOptimizationMetrics(prev => ({
@@ -1515,9 +1608,28 @@ export default function FullMainApp() {
       delete: (deletedId: number) => {
         const startTime = performance.now();
         try {
+          // 🟢 Phase 1: 実際の部分更新実装（削除処理）
+          console.log('📝 Phase 1: 部分更新でスケジュール削除開始:', deletedId);
+          
           // 削除は最も安全な操作（データ追加ではないため）
-          // TODO: Phase 1で実装
-          safeFullRefresh('Optimized delete not yet implemented');
+          setSchedules(prevSchedules => {
+            // 削除対象スケジュールの検索
+            const existingIndex = prevSchedules.findIndex(s => s.id === deletedId);
+            if (existingIndex < 0) {
+              console.warn('⚠️ 削除対象スケジュール未発見、フォールバック:', deletedId);
+              safeFullRefresh('Delete target schedule not found');
+              return prevSchedules; // 状態変更なし
+            }
+            
+            // 安全にスケジュールを削除
+            const updatedSchedules = prevSchedules.filter(s => s.id !== deletedId);
+            console.log('✅ Phase 1: スケジュール削除成功:', deletedId);
+            
+            // 更新時刻を記録
+            optimizedScheduleUpdateRef.current.lastUpdate = new Date();
+            
+            return updatedSchedules;
+          });
           
           const duration = performance.now() - startTime;
           setOptimizationMetrics(prev => ({
