@@ -53,6 +53,7 @@ import { AssignmentModal } from './modals/AssignmentModal';
 import { JsonUploadModal } from './modals/JsonUploadModal';
 import { CsvUploadModal } from './modals/CsvUploadModal';
 import { UnifiedSettingsModal } from './modals/UnifiedSettingsModal';
+import { RealSystemMonitoringModal } from './modals/RealSystemMonitoringModal';
 // 統一担当設定コンポーネントとフック（バッジ・判定のみ）
 import { ResponsibilityBadges, isReceptionStaff } from './responsibility';
 // 出社状況ページ専用モーダル（業務要件に最適化）
@@ -884,6 +885,7 @@ export default function FullMainApp() {
   const [selectedSchedule, setSelectedSchedule] = useState<{ schedule: Schedule; layer: string } | null>(null);
   const [isImportHistoryModalOpen, setIsImportHistoryModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [isSystemMonitoringModalOpen, setIsSystemMonitoringModalOpen] = useState(false);
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   
   // === Phase 2a: 視覚的フィードバック状態管理 ===
@@ -3306,6 +3308,10 @@ export default function FullMainApp() {
           console.log('✅ 出社状況ページのデータ再読込完了');
         }}
       />
+      <RealSystemMonitoringModal 
+        isOpen={isSystemMonitoringModalOpen}
+        onClose={() => setIsSystemMonitoringModalOpen(false)}
+      />
       
       <main className={`p-4 font-sans ${viewMode === 'compact' ? 'compact-mode' : ''}`}>
         <header className="mb-2 p-4 bg-white shadow-sm rounded-xl border border-gray-100 flex justify-between items-center">
@@ -3332,19 +3338,25 @@ export default function FullMainApp() {
                 
                 {/* 履歴モード表示インジケーター */}
                 {isHistoricalMode && (
-                  <div className="flex items-center space-x-2 px-4 py-1 bg-amber-50 border border-amber-200 rounded-lg shadow-sm h-7">
+                  <div className="flex items-center space-x-2 px-3 py-1 bg-amber-50 border border-amber-200 rounded-lg shadow-sm h-7">
                     <span className="text-amber-600 text-xs">📊</span>
-                    <div className="text-xs text-amber-700">
-                      <div className="font-medium">履歴データ表示中</div>
+                    <div className="flex items-center space-x-1 text-xs text-amber-700">
+                      <span className="font-medium">履歴データ表示中</span>
                       {historicalInfo.snapshotDate && (
-                        <div className="text-amber-600">
-                          {new Date(historicalInfo.snapshotDate).toLocaleDateString('ja-JP')} のスナップショット
-                        </div>
+                        <>
+                          <span className="text-amber-500">•</span>
+                          <span className="text-amber-600">
+                            {new Date(historicalInfo.snapshotDate).toLocaleDateString('ja-JP')}
+                          </span>
+                        </>
                       )}
                       {historicalInfo.recordCount && (
-                        <div className="text-amber-600">
-                          {historicalInfo.recordCount}件のデータ
-                        </div>
+                        <>
+                          <span className="text-amber-500">•</span>
+                          <span className="text-amber-600">
+                            {historicalInfo.recordCount}件
+                          </span>
+                        </>
                       )}
                     </div>
                   </div>
@@ -3378,6 +3390,18 @@ export default function FullMainApp() {
         <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
       </svg>
       設定
+                  </button>
+                )}
+                {/* システム監視ボタン（SYSTEM_ADMIN専用） */}
+                {user?.role === 'SYSTEM_ADMIN' && (
+                  <button 
+                    onClick={() => setIsSystemMonitoringModalOpen(true)}
+                    className="flex items-center px-4 h-7 text-xs font-medium text-white bg-blue-600 border border-transparent rounded-lg shadow-sm hover:bg-blue-700 transition-colors duration-150 min-w-fit whitespace-nowrap"
+                  >
+                    <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    システム監視
                   </button>
                 )}
                 {/* 1px余白 */}
