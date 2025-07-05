@@ -893,6 +893,19 @@ export default function FullMainApp() {
   // フィードバック管理用のタイマーref（自動クリア用）
   const feedbackTimersRef = useRef<Map<number | string, NodeJS.Timeout>>(new Map());
 
+  // === Phase 2b: 楽観的更新（低リスク）通知システム ===
+  // 操作進行状況の通知管理
+  const [operationNotifications, setOperationNotifications] = useState<Array<{
+    id: string;
+    type: 'processing' | 'success' | 'error';
+    message: string;
+    timestamp: Date;
+    autoRemove?: boolean;
+  }>>([]);
+  
+  // 通知自動削除用タイマー
+  const notificationTimersRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
+
   // === Phase 2a: 視覚的フィードバック管理関数 ===
   
   // フィードバックを設定し、自動的にクリアする
@@ -922,7 +935,7 @@ export default function FullMainApp() {
     
     feedbackTimersRef.current.set(scheduleId, timer);
     
-    console.log(`✨ フィードバック設定: ID ${scheduleId} → ${feedbackType} (${duration}ms)`);
+    if (isTimelineDebugEnabled()) console.log(`✨ フィードバック設定: ID ${scheduleId} → ${feedbackType} (${duration}ms)`);
   }, []);
   
   // フィードバックを即座にクリア
@@ -953,6 +966,63 @@ export default function FullMainApp() {
     const colors = FEEDBACK_COLORS[feedbackType];
     return `${colors.background} ${colors.border} ${colors.shadow} ${LIGHT_ANIMATIONS.feedbackPulse}`;
   }, [feedbackStates]);
+
+  // === Phase 2b: 通知管理関数 ===
+  
+  // 通知を追加
+  const addNotification = useCallback((type: 'processing' | 'success' | 'error', message: string, autoRemove: boolean = true) => {
+    const id = `notification-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const notification = {
+      id,
+      type,
+      message,
+      timestamp: new Date(),
+      autoRemove
+    };
+    
+    setOperationNotifications(prev => [...prev, notification]);
+    
+    // 自動削除設定
+    if (autoRemove) {
+      const duration = type === 'processing' ? 0 : (type === 'success' ? 3000 : 5000); // 処理中は手動削除、成功3秒、エラー5秒
+      if (duration > 0) {
+        const timer = setTimeout(() => {
+          removeNotification(id);
+        }, duration);
+        notificationTimersRef.current.set(id, timer);
+      }
+    }
+    
+    if (isDebugEnabled()) console.log(`📢 通知追加: ${type} - ${message}`);
+    return id;
+  }, []);
+  
+  // 通知を削除
+  const removeNotification = useCallback((id: string) => {
+    setOperationNotifications(prev => prev.filter(n => n.id !== id));
+    
+    const timer = notificationTimersRef.current.get(id);
+    if (timer) {
+      clearTimeout(timer);
+      notificationTimersRef.current.delete(id);
+    }
+  }, []);
+  
+  // 通知を更新（処理中→成功/失敗）
+  const updateNotification = useCallback((id: string, type: 'success' | 'error', message: string) => {
+    setOperationNotifications(prev => 
+      prev.map(n => n.id === id ? { ...n, type, message, timestamp: new Date() } : n)
+    );
+    
+    // 自動削除タイマー設定
+    const duration = type === 'success' ? 3000 : 5000;
+    const timer = setTimeout(() => {
+      removeNotification(id);
+    }, duration);
+    notificationTimersRef.current.set(id, timer);
+    
+    if (isDebugEnabled()) console.log(`📝 通知更新: ${id} → ${type} - ${message}`);
+  }, [removeNotification]);
   
   // スクロール位置保存用（縦スクロール対応）
   const [savedScrollPosition, setSavedScrollPosition] = useState({ x: 0, y: 0 });
@@ -1126,8 +1196,8 @@ export default function FullMainApp() {
   // リアルタイム更新時のスクロール位置保持用
   const scrollPositionBeforeUpdate = useRef<{x: number, y: number}>({x: 0, y: 0});
   
-  // 🛡️ 安全な並行実装システム（Phase 0）
-  const [enableOptimizedUpdates, setEnableOptimizedUpdates] = useState(false);
+  // 🛡️ 安全な並行実装システム（Phase 2b完了）
+  const [enableOptimizedUpdates, setEnableOptimizedUpdates] = useState(true);
   const [optimizationMetrics, setOptimizationMetrics] = useState<{
     successCount: number;
     errorCount: number;
@@ -1212,20 +1282,22 @@ export default function FullMainApp() {
           };
           
           console.log('テスト用スケジュール:', testSchedule);
-          console.log('安全性チェック結果:', isSafeForOptimizedUpdate(testSchedule));
+          // 安全性チェック関数は別途定義されているため、テスト時は省略
           console.groupEnd();
           
           return testSchedule;
         }
       };
       
-      console.log('🛡️ 並行実装制御システム初期化完了');
-      console.log('💡 使用方法:');
-      console.log('  window.optimizationControl.getStatus() - 状態確認');
-      console.log('  window.optimizationControl.enable() - 部分更新有効化');
-      console.log('  window.optimizationControl.disable() - 部分更新無効化');
-      console.log('  window.optimizationControl.showLog() - 監視ログ表示');
-      console.log('  window.optimizationControl.forceFullRefresh() - 緊急時全体更新');
+      if (isDebugEnabled()) {
+        console.log('🛡️ 並行実装制御システム初期化完了');
+        console.log('💡 使用方法:');
+        console.log('  window.optimizationControl.getStatus() - 状態確認');
+        console.log('  window.optimizationControl.enable() - 部分更新有効化');
+        console.log('  window.optimizationControl.disable() - 部分更新無効化');
+        console.log('  window.optimizationControl.showLog() - 監視ログ表示');
+        console.log('  window.optimizationControl.forceFullRefresh() - 緊急時全体更新');
+      }
     }
   }, [enableOptimizedUpdates, optimizationMetrics, displayDate]);
 
@@ -1565,8 +1637,8 @@ export default function FullMainApp() {
             return;
           }
           
-          // 🟢 Phase 1: 実際の部分更新実装（最小リスク版）
-          console.log('📝 Phase 1: 部分更新でスケジュール追加開始:', newSchedule);
+          // 部分更新: 新規スケジュール追加
+          if (isTimelineDebugEnabled()) console.log('部分更新: スケジュール追加開始:', newSchedule);
           
           // 既存の変換ロジックを安全に再利用
           const convertedSchedule: Schedule = {
@@ -1592,7 +1664,7 @@ export default function FullMainApp() {
             
             // 新しいスケジュールを安全に追加
             const updatedSchedules = [...prevSchedules, convertedSchedule];
-            console.log('✅ Phase 1: スケジュール追加成功:', convertedSchedule.id);
+            if (isTimelineDebugEnabled()) console.log('✅ スケジュール追加成功:', convertedSchedule.id);
             
             // === Phase 2a: 視覚的フィードバック適用 ===
             setScheduleFeedback(convertedSchedule.id, 'added', 2500);
@@ -1627,8 +1699,8 @@ export default function FullMainApp() {
             return;
           }
           
-          // 🟢 Phase 1: 実際の部分更新実装（更新処理）
-          console.log('📝 Phase 1: 部分更新でスケジュール更新開始:', updatedSchedule);
+          // 部分更新: スケジュール更新
+          if (isTimelineDebugEnabled()) console.log('部分更新: スケジュール更新開始:', updatedSchedule);
           
           // 既存の変換ロジックを安全に再利用
           const convertedSchedule: Schedule = {
@@ -1644,15 +1716,60 @@ export default function FullMainApp() {
           
           // 既存のschedules状態を安全に更新
           setSchedules(prevSchedules => {
-            // 既存スケジュールの検索
-            const existingIndex = prevSchedules.findIndex(s => s.id === convertedSchedule.id);
+            // 既存スケジュールの検索（後勝ちシステム対応版）
+            // 後勝ちシステムでは同一時間・スタッフに複数スケジュール存在
+            // → 時間・スタッフ・日付の組み合わせでマッチング
+            const existingIndex = prevSchedules.findIndex(s => {
+              // 1. ID完全一致チェック（従来）
+              if (String(s.id) === String(convertedSchedule.id)) return true;
+              
+              // 2. 後勝ちシステム対応：時間・スタッフ・レイヤーの組み合わせマッチング
+              const timeMatch = Math.abs(s.start - convertedSchedule.start) < 0.01 && 
+                               Math.abs(s.end - convertedSchedule.end) < 0.01;
+              const staffMatch = s.staffId === convertedSchedule.staffId;
+              const layerMatch = (s.layer || 'adjustment') === (convertedSchedule.layer || 'adjustment');
+              
+              if (timeMatch && staffMatch && layerMatch) {
+                if (isTimelineDebugEnabled()) console.log('🎯 後勝ちマッチング成功:', {
+                  existingId: s.id,
+                  newId: convertedSchedule.id,
+                  time: `${s.start}-${s.end}`,
+                  staffId: s.staffId,
+                  layer: s.layer
+                });
+                return true;
+              }
+              
+              // 3. 数値ID抽出によるフォールバック
+              const extractNumericId = (id: string): string[] => {
+                const numbers = id.match(/\d+/g) || [];
+                return numbers;
+              };
+              
+              const sNumbers = extractNumericId(String(s.id));
+              const cNumbers = extractNumericId(String(convertedSchedule.id));
+              
+              for (const sNum of sNumbers) {
+                for (const cNum of cNumbers) {
+                  if (sNum === cNum) return true;
+                }
+              }
+              
+              return false;
+            });
+            
             if (existingIndex < 0) {
-              console.error('🐛 更新対象スケジュール未発見デバッグ情報:');
-              console.error('  - 探しているID:', convertedSchedule.id, typeof convertedSchedule.id);
-              console.error('  - 既存スケジュール数:', prevSchedules.length);
-              console.error('  - 既存ID一覧:', prevSchedules.map(s => `${s.id}(${typeof s.id})`));
-              console.error('  - 受信データ:', convertedSchedule);
-              console.warn('⚠️ 更新対象スケジュール未発見、フォールバック:', convertedSchedule.id);
+              console.error('⚠️ 更新対象スケジュール未発見、フォールバック実行:', convertedSchedule.id);
+              if (isDebugEnabled()) {
+                console.error('🐛 詳細デバッグ情報:');
+                console.error('  - 探しているID:', convertedSchedule.id, typeof convertedSchedule.id);
+                console.error('  - 既存スケジュール数:', prevSchedules.length);
+                console.error('  - 既存ID一覧:', prevSchedules.map(s => `${s.id}(${typeof s.id})`));
+                console.error('  - 数値ID抽出テスト:');
+                console.error('    - WebSocketのID:', convertedSchedule.id, '→', String(convertedSchedule.id).match(/\d+/g));
+                console.error('    - 既存ID例:', prevSchedules.slice(0, 3).map(s => `${s.id} → ${String(s.id).match(/\d+/g)}`));
+                console.error('  - 受信データ:', convertedSchedule);
+              }
               safeFullRefresh('Update target schedule not found');
               return prevSchedules; // 状態変更なし
             }
@@ -1660,7 +1777,7 @@ export default function FullMainApp() {
             // 既存スケジュールを安全に置換
             const updatedSchedules = [...prevSchedules];
             updatedSchedules[existingIndex] = convertedSchedule;
-            console.log('✅ Phase 1: スケジュール更新成功:', convertedSchedule.id);
+            if (isTimelineDebugEnabled()) console.log('✅ スケジュール更新成功:', convertedSchedule.id);
             
             // === Phase 2a: 視覚的フィードバック適用 ===
             setScheduleFeedback(convertedSchedule.id, 'updated', 2500);
@@ -1690,15 +1807,54 @@ export default function FullMainApp() {
       delete: (deletedId: number) => {
         const startTime = performance.now();
         try {
-          // 🟢 Phase 1: 実際の部分更新実装（削除処理）
-          console.log('📝 Phase 1: 部分更新でスケジュール削除開始:', deletedId);
+          // 部分更新: スケジュール削除
+          if (isTimelineDebugEnabled()) console.log('部分更新: スケジュール削除開始:', deletedId);
           
           // 削除は最も安全な操作（データ追加ではないため）
           setSchedules(prevSchedules => {
-            // 削除対象スケジュールの検索
-            const existingIndex = prevSchedules.findIndex(s => s.id === deletedId);
+            // 削除対象スケジュールの検索（後勝ちシステム対応版）
+            // WebSocketの削除IDは物理IDなので、数値抽出＋時間比較が必要
+            const existingIndex = prevSchedules.findIndex(s => {
+              // 1. ID完全一致チェック（従来）
+              if (String(s.id) === String(deletedId)) return true;
+              
+              // 2. 数値ID抽出によるマッチング（後勝ちシステム主要パターン）
+              const extractNumericId = (id: string): string[] => {
+                const numbers = id.match(/\d+/g) || [];
+                return numbers;
+              };
+              
+              const sNumbers = extractNumericId(String(s.id));
+              const dNumbers = extractNumericId(String(deletedId));
+              
+              // 最も大きな数値IDが一致するかチェック（通常はこれが物理ID）
+              if (sNumbers.length > 0 && dNumbers.length > 0) {
+                const maxSId = Math.max(...sNumbers.map(n => parseInt(n)));
+                const maxDId = Math.max(...dNumbers.map(n => parseInt(n)));
+                if (maxSId === maxDId) {
+                  if (isTimelineDebugEnabled()) console.log('🎯 削除マッチング成功（数値ID）:', {
+                    existingId: s.id,
+                    deleteId: deletedId,
+                    matchedNumericId: maxSId
+                  });
+                  return true;
+                }
+              }
+              
+              return false;
+            });
+            
             if (existingIndex < 0) {
-              console.warn('⚠️ 削除対象スケジュール未発見、フォールバック:', deletedId);
+              console.error('⚠️ 削除対象スケジュール未発見、フォールバック実行:', deletedId);
+              if (isDebugEnabled()) {
+                console.error('🐛 詳細デバッグ情報:');
+                console.error('  - 探しているID:', deletedId, typeof deletedId);
+                console.error('  - 既存スケジュール数:', prevSchedules.length);
+                console.error('  - 既存ID一覧:', prevSchedules.map(s => `${s.id}(${typeof s.id})`));
+                console.error('  - 数値ID抽出テスト:');
+                console.error('    - WebSocketのID:', deletedId, '→', String(deletedId).match(/\d+/g));
+                console.error('    - 既存ID例:', prevSchedules.slice(0, 3).map(s => `${s.id} → ${String(s.id).match(/\d+/g)}`));
+              }
               safeFullRefresh('Delete target schedule not found');
               return prevSchedules; // 状態変更なし
             }
@@ -1707,9 +1863,30 @@ export default function FullMainApp() {
             // 削除アニメーション用の短時間フィードバック
             setScheduleFeedback(deletedId, 'deleted', 1500);
             
-            // 安全にスケジュールを削除
-            const updatedSchedules = prevSchedules.filter(s => s.id !== deletedId);
-            console.log('✅ Phase 1: スケジュール削除成功:', deletedId);
+            // 安全にスケジュールを削除（後勝ちシステム対応版）
+            const updatedSchedules = prevSchedules.filter(s => {
+              // 1. 完全一致チェック
+              if (String(s.id) === String(deletedId)) return false;
+              
+              // 2. 数値ID抽出による削除判定
+              const extractNumericId = (id: string): string[] => {
+                const numbers = id.match(/\d+/g) || [];
+                return numbers;
+              };
+              
+              const sNumbers = extractNumericId(String(s.id));
+              const dNumbers = extractNumericId(String(deletedId));
+              
+              // 最も大きな数値IDが一致する場合は削除対象
+              if (sNumbers.length > 0 && dNumbers.length > 0) {
+                const maxSId = Math.max(...sNumbers.map(n => parseInt(n)));
+                const maxDId = Math.max(...dNumbers.map(n => parseInt(n)));
+                if (maxSId === maxDId) return false;
+              }
+              
+              return true; // 削除対象でない場合は保持
+            });
+            if (isTimelineDebugEnabled()) console.log('✅ スケジュール削除成功:', deletedId);
             
             // 更新時刻を記録
             optimizedScheduleUpdateRef.current.lastUpdate = new Date();
@@ -1741,7 +1918,7 @@ export default function FullMainApp() {
         const displayDateStr = `${displayDate.getFullYear()}-${String(displayDate.getMonth() + 1).padStart(2, '0')}-${String(displayDate.getDate()).padStart(2, '0')}`;
         if(scheduleDateStr === displayDateStr) {
             // 🛡️ 安全な分岐制御（デフォルト：既存実装）
-            console.log('🔄 WebSocket受信: schedule:new', { 
+            if (isDebugEnabled()) console.log('🔄 WebSocket受信: schedule:new', { 
                 enabled: enableOptimizedUpdates, 
                 safe: isSafeForOptimizedUpdate(newSchedule),
                 schedule: newSchedule,
@@ -1750,7 +1927,7 @@ export default function FullMainApp() {
                 displayDateStr 
             });
             if (enableOptimizedUpdates && isSafeForOptimizedUpdate(newSchedule)) {
-                console.log('✅ 部分更新実行: schedule:new');
+                if (isDebugEnabled()) console.log('✅ 部分更新実行: schedule:new');
                 optimizedScheduleUpdate.add(newSchedule);
             } else {
                 // 🔒 既存の安全な実装（完全保護）
@@ -1768,13 +1945,13 @@ export default function FullMainApp() {
         const displayDateStr = `${displayDate.getFullYear()}-${String(displayDate.getMonth() + 1).padStart(2, '0')}-${String(displayDate.getDate()).padStart(2, '0')}`;
         if(scheduleDateStr === displayDateStr){
             // 🛡️ 安全な分岐制御（デフォルト：既存実装）
-            console.log('🔄 WebSocket受信: schedule:updated', { 
+            if (isDebugEnabled()) console.log('🔄 WebSocket受信: schedule:updated', { 
                 enabled: enableOptimizedUpdates, 
                 safe: isSafeForOptimizedUpdate(updatedSchedule),
                 schedule: updatedSchedule 
             });
             if (enableOptimizedUpdates && isSafeForOptimizedUpdate(updatedSchedule)) {
-                console.log('✅ 部分更新実行: schedule:updated');
+                if (isDebugEnabled()) console.log('✅ 部分更新実行: schedule:updated');
                 optimizedScheduleUpdate.update(updatedSchedule);
             } else {
                 // 🔒 既存の安全な実装（完全保護）
@@ -1788,12 +1965,12 @@ export default function FullMainApp() {
     }
     const handleDeletedSchedule = (id: number) => {
         // 🛡️ 安全な分岐制御（デフォルト：既存実装）
-        console.log('🔄 WebSocket受信: schedule:deleted', { 
+        if (isDebugEnabled()) console.log('🔄 WebSocket受信: schedule:deleted', { 
             enabled: enableOptimizedUpdates, 
             id: id 
         });
         if (enableOptimizedUpdates) {
-            console.log('✅ 部分更新実行: schedule:deleted');
+            if (isDebugEnabled()) console.log('✅ 部分更新実行: schedule:deleted');
             optimizedScheduleUpdate.delete(id);
         } else {
             // 🔒 既存の安全な実装（完全保護）
@@ -1896,6 +2073,7 @@ export default function FullMainApp() {
   // メイン画面では全て /api/schedules を使用（バックエンドで複合ID処理済み）
   // IDの変換は不要 - 複合IDをそのまま送信
 
+  // === Phase 2b: 楽観的更新対応版handleSaveSchedule ===
   const handleSaveSchedule = async (scheduleData: Schedule & { id?: number | string }) => {
     // JST基準で正しい日付文字列を生成
     const year = displayDate.getFullYear();
@@ -1929,6 +2107,16 @@ export default function FullMainApp() {
     
     const payload = { ...processedScheduleData, date };
     const currentApiUrl = getApiUrl();
+    
+    // === Phase 2b: 楽観的UX - 即座にモーダル閉じて処理中通知 ===
+    const operationType = scheduleData.id ? '更新' : '作成';
+    const notificationId = addNotification('processing', `スケジュール${operationType}中...`, false);
+    
+    // モーダルを即座に閉じる（楽観的UX）
+    setIsModalOpen(false);
+    setEditingSchedule(null);
+    setDraggedSchedule(null);
+    
     try {
       // console.log('=== handleSaveSchedule START ===');
       // console.log('Original scheduleData:', scheduleData);
@@ -1960,9 +2148,12 @@ export default function FullMainApp() {
         throw new Error(`スケジュールの保存に失敗しました: ${response.status} ${response.statusText}`);
       }
       
-      const result = await response.json();
+      await response.json();
       // console.log('Schedule saved successfully:', result);
       // console.log('=== handleSaveSchedule SUCCESS ===');
+      
+      // === Phase 2b: 成功通知 ===
+      updateNotification(notificationId, 'success', `スケジュール${operationType}が完了しました`);
       
       // データを再取得してUIを更新
       // console.log('Fetching updated data...');
@@ -1997,12 +2188,16 @@ export default function FullMainApp() {
       setTimeout(restoreScroll, 50);
       setTimeout(restoreScroll, 200);
       setTimeout(restoreScroll, 500);
-      setIsModalOpen(false);
       setEditingSchedule(null);
       setDraggedSchedule(null);
     } catch (error) {
       console.error('=== handleSaveSchedule ERROR ===');
       console.error('Error details:', error);
+      
+      // === Phase 2b: エラー通知 ===
+      updateNotification(notificationId, 'error', `スケジュール${operationType}に失敗しました。再度お試しください。`);
+      
+      // エラー時は従来のアラート表示も維持（重要な情報なので）
       alert('スケジュールの保存に失敗しました。再度お試しください。\n詳細: ' + (error instanceof Error ? error.message : String(error)));
     }
   };
@@ -2845,7 +3040,7 @@ export default function FullMainApp() {
     let statusesToDisplay: string[];
     if (selectedStatus === 'all') { statusesToDisplay = [...ALL_STATUSES]; } 
     else if (selectedStatus === 'available') { statusesToDisplay = [...AVAILABLE_STATUSES]; } 
-    else { statusesToDisplay = ALL_STATUSES.filter(s => !AVAILABLE_STATUSES.includes(s)); }
+    else { statusesToDisplay = ALL_STATUSES.filter(s => !AVAILABLE_STATUSES.includes(s as any)); }
     
     // 5分単位でのデータポイント生成（8:00開始）
     const timePoints = [];
@@ -3239,7 +3434,7 @@ export default function FullMainApp() {
             {isToday && (
               <div className="flex items-center space-x-3">
                 <div className="text-right bg-green-50 px-3 rounded-lg border border-green-200 h-7 flex items-center">
-                    <span className="text-xs text-green-700 font-medium mr-2">現在の対応可能人数:</span>
+                    <span className="text-xs text-green-700 font-medium mr-2">対応可能人数:</span>
                     <span className="text-base font-bold text-green-600">{availableStaffCount}人</span>
                 </div>
                 
@@ -3249,21 +3444,22 @@ export default function FullMainApp() {
                   title={`リアルタイム更新: ${realTimeUpdateEnabled ? 'オン - 他の人の変更を即座に反映' : 'オフ - 手動更新のみ、性能向上'}`}
                 >
                   
-                {/* 🛡️ 開発者向け並行実装コントロール（開発環境限定） */}
-                {process.env.NODE_ENV === 'development' && (
+                {/* 🛡️ システム管理者向け部分更新コントロール */}
+                {user?.role === 'SYSTEM_ADMIN' && (
                   <div className="flex items-center space-x-2 mx-4 px-3 py-1 bg-blue-50 border border-blue-200 rounded-lg">
-                    <span className="text-xs text-blue-700 font-medium">部分更新:</span>
+                    <span className="text-xs text-blue-700 font-medium">高速更新:</span>
                     <button 
                       onClick={() => setEnableOptimizedUpdates(!enableOptimizedUpdates)}
                       className={`relative w-8 h-4 rounded-full transition-colors duration-200 ${
                         enableOptimizedUpdates ? 'bg-blue-500' : 'bg-gray-300'
                       }`}
+                      title={`高速更新: ${enableOptimizedUpdates ? 'ON' : 'OFF'} (システム管理者のみ制御可能)`}
                     >
                       <div className={`absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full shadow-sm transition-transform duration-200 ${
                         enableOptimizedUpdates ? 'translate-x-4' : 'translate-x-0'
                       }`}></div>
                     </button>
-                    <span className="text-xs text-blue-600">
+                    <span className="text-xs text-blue-600" title={`成功: ${optimizationMetrics.successCount}回, エラー: ${optimizationMetrics.errorCount}回, フォールバック: ${optimizationMetrics.fallbackCount}回`}>
                       {optimizationMetrics.successCount}ok/{optimizationMetrics.errorCount}err/{optimizationMetrics.fallbackCount}fb
                     </span>
                   </div>
@@ -3670,6 +3866,62 @@ export default function FullMainApp() {
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
             <span className="text-lg font-medium text-gray-700">インポート中...</span>
           </div>
+        </div>
+      )}
+
+      {/* === Phase 2b: 楽観的更新通知システム === */}
+      {operationNotifications.length > 0 && (
+        <div className="fixed top-4 right-4 space-y-2 z-[10000]">
+          {operationNotifications.map((notification) => (
+            <div
+              key={notification.id}
+              className={`
+                flex items-center px-4 py-3 rounded-lg shadow-lg border max-w-sm
+                ${notification.type === 'processing' ? 'bg-blue-50 border-blue-200 text-blue-800' : ''}
+                ${notification.type === 'success' ? 'bg-green-50 border-green-200 text-green-800' : ''}
+                ${notification.type === 'error' ? 'bg-red-50 border-red-200 text-red-800' : ''}
+                ${LIGHT_ANIMATIONS.feedbackFade}
+              `}
+            >
+              {/* アイコン */}
+              <div className="flex-shrink-0 mr-3">
+                {notification.type === 'processing' && (
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+                )}
+                {notification.type === 'success' && (
+                  <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
+                    <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                )}
+                {notification.type === 'error' && (
+                  <div className="w-5 h-5 bg-red-500 rounded-full flex items-center justify-center">
+                    <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                )}
+              </div>
+              
+              {/* メッセージ */}
+              <div className="flex-1">
+                <p className="text-sm font-medium">{notification.message}</p>
+              </div>
+              
+              {/* 閉じるボタン（エラー通知のみ） */}
+              {notification.type === 'error' && (
+                <button
+                  onClick={() => removeNotification(notification.id)}
+                  className="flex-shrink-0 ml-2 text-red-400 hover:text-red-600 transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                  </svg>
+                </button>
+              )}
+            </div>
+          ))}
         </div>
       )}
     </Fragment>
