@@ -1044,12 +1044,13 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
     setSelectedDate(prev => new Date(prev)); // 同じ日付で再セットしてre-render
   }, [fetchCurrentStaff, currentStaff]);
 
+  // 🔧 修正：月遷移時のfetchSchedulesが実行されるように依存関係を追加
   useEffect(() => {
     if (currentStaff) {
       fetchSchedules();
       // 担当設定データも取得
     }
-  }, [currentStaff]);
+  }, [currentStaff, fetchSchedules]); // fetchSchedulesを依存関係に追加
 
   // インポート関連の処理関数
   const handleJsonUpload = async (file: File) => {
