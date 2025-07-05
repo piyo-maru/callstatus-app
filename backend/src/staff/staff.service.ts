@@ -1386,7 +1386,7 @@ export class StaffService {
 
       console.log('=== チャンク処理完了 ===', summary);
       
-      // ContractDisplayCache生成（月次プランナー用）
+      // ContractDisplayCache生成（月次計画用）
       try {
         console.log('🟢 ContractDisplayCache生成開始');
         console.log(`🟢 results配列: ${results.length}件`);

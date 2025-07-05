@@ -330,7 +330,7 @@ export class PendingService {
     const approved = await this.prisma.adjustment.update({
       where: { id },
       data: {
-        // isPending: true を維持（月次プランナーで承認済み予定を表示するため）
+        // isPending: true を維持（月次計画で承認済み予定を表示するため）
         approvedBy: approverId,
         approvedAt: new Date(),
       },
@@ -547,7 +547,7 @@ export class PendingService {
   }
 
   /**
-   * 月次プランナー専用：承認済み・未承認両方のpending予定取得
+   * 月次計画専用：承認済み・未承認両方のpending予定取得
    */
   async findAllForMonthlyPlanner(year: number, month: number) {
     console.log(`Monthly planner: fetching pendings for ${year}-${month}`);

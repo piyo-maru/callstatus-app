@@ -394,11 +394,11 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
   } | null>(null);
   const [dragOffset, setDragOffset] = useState<number>(0); // ドラッグオフセット（メイン画面と同じ）
 
-  // プリセット予定（統一プリセットシステムから取得、月次プランナーと同じ変換処理を使用）
+  // プリセット予定（統一プリセットシステムから取得、月次計画と同じ変換処理を使用）
   const presetSchedules: PresetSchedule[] = useMemo(() => {
     const unifiedPresets = getPresetsForPage('personalPage');
     return unifiedPresets.map(preset => {
-      // 代表色選択を考慮してスケジュールを決定（月次プランナーと同じロジック）
+      // 代表色選択を考慮してスケジュールを決定（月次計画と同じロジック）
       const representativeIndex = preset.representativeScheduleIndex ?? 0;
       const representativeSchedule = preset.schedules[representativeIndex] || preset.schedules[0];
       
@@ -1986,7 +1986,7 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
                 <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
                 </svg>
-                月次プランナー
+                月次計画
               </a>
               <button
                 onClick={logout}
@@ -2183,7 +2183,7 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
               // プリセット設定の代表色を取得（承認済み予定と同じ色システム）
               const backgroundColor = getEffectiveStatusColor(status);
               
-              // 月次プランナーの承認済み予定と同じコントラスト計算
+              // 月次計画の承認済み予定と同じコントラスト計算
               const getContrastColor = (bgColor: string): string => {
                 if (!bgColor || !bgColor.includes('#')) {
                   return '#000000';

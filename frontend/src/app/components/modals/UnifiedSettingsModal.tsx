@@ -275,7 +275,7 @@ export function UnifiedSettingsModal({
     
     // 安全性チェック：設定が未定義の場合はデフォルト値を使用
     if (!monthlySettings) {
-      console.warn('[UnifiedSettingsModal] 月次プランナー設定が未初期化');
+      console.warn('[UnifiedSettingsModal] 月次計画設定が未初期化');
       setMonthlyPlannerOrder([]);
       return;
     }
@@ -1376,10 +1376,10 @@ export function UnifiedSettingsModal({
                 </p>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* 月次プランナー設定 */}
+                  {/* 月次計画設定 */}
                   <div className="bg-white p-3 rounded border">
                     <h5 className="font-medium text-gray-800 mb-2 flex items-center">
-                      📅 月次プランナー
+                      📅 月次計画
                       <span className="ml-2 text-xs text-gray-500">
                         ({getPresetsForPage('monthlyPlanner').length}個有効)
                       </span>
@@ -1652,7 +1652,7 @@ export function UnifiedSettingsModal({
                     💡 <strong>設定のポイント:</strong>
                   </p>
                   <ul className="text-xs text-blue-600 mt-1 ml-4 list-disc">
-                    <li>月次プランナー: 管理者向けの勤務パターン（標準勤務、休暇系）</li>
+                    <li>月次計画: 管理者向けの勤務パターン（標準勤務、休暇系）</li>
                     <li>個人ページ: 個人利用向けのパターン（在宅、会議、研修含む）</li>
                     <li>各ページで異なるプリセットを有効化できます</li>
                     <li>▲▼ボタンで表示順序を変更できます</li>

@@ -140,11 +140,11 @@ ls test-results/                   # 失敗ログ・スクリーンショット�
 - **ステータス**: 過去データ閲覧・マスキング機能実装完了
 - **詳細**: [/docs/projects/historical-snapshots.md](/docs/projects/historical-snapshots.md)
 
-### 月次プランナー pending/approval システム 【Phase 2 完了】 ✅
+### 月次計画 pending/approval システム 【Phase 2 完了】 ✅
 - **ステータス**: Phase 2 完了（2025-06-28）- 横スクロールUI改善実装
 - **完了項目**: 
   - Phase 1: データベースマイグレーション、PendingService、CRUD API、承認ワークフロー
-  - Phase 2: 月次プランナー横スクロール統一、個人ページ横スクロール統一
+  - Phase 2: 月次計画横スクロール統一、個人ページ横スクロール統一
 - **詳細**: [/docs/projects/monthly-planner-pending-system.md](/docs/projects/monthly-planner-pending-system.md)
 
 ### 2層データレイヤーシステム 【完了】 ✅
@@ -175,7 +175,7 @@ ls test-results/                   # 失敗ログ・スクリーンショット�
 
 ### カスタム複合予定機能・承認者向け詳細情報表示 【完了】 ✅
 - **期間**: 2025-07-02
-- **ステータス**: 月次プランナーにカスタム複合予定機能実装完了
+- **ステータス**: 月次計画にカスタム複合予定機能実装完了
 - **主要機能**:
   - カスタム複合予定作成モーダル（複数スケジュール組み合わせ）
   - 複合予定説明フィールド（プリセット説明パターン準拠）
@@ -186,7 +186,7 @@ ls test-results/                   # 失敗ログ・スクリーンショット�
 
 ### 担当設定統一システム 【完了】 ✅
 - **期間**: 2025-07-04
-- **ステータス**: 全3ページ（出社状況・個人・月次プランナー）担当設定システム完全統一
+- **ステータス**: 全3ページ（出社状況・個人・月次計画）担当設定システム完全統一
 - **主要実装**:
   - useResponsibilityData統一フック（データ管理・API通信）
   - ResponsibilityBadges統一コンポーネント（表示・バッジ生成）
@@ -219,7 +219,7 @@ ls test-results/                   # 失敗ログ・スクリーンショット�
 - 人事システム連携・自動判定
 - エンタープライズ認証・権限管理
 - CSVインポート・ロールバック機能
-- カスタム複合予定機能（月次プランナー）
+- カスタム複合予定機能（月次計画）
 - プリセット管理・承認ワークフロー
 - 統一担当設定システム（FAX・昼当番・CS担当等）
 
@@ -274,7 +274,7 @@ ls test-results/                   # 失敗ログ・スクリーンショット�
 
 #### 2. Pending/Approval システム
 ```
-月次プランナー → Pending作成 → 管理者承認 → Adjustmentに変換
+月次計画 → Pending作成 → 管理者承認 → Adjustmentに変換
 ```
 - **PendingSchedule**: 承認待ち予定（`isPending: true`）
 - **承認プロセス**: 管理者による一括・個別承認
@@ -294,7 +294,7 @@ ls test-results/                   # 失敗ログ・スクリーンショット�
 ```
 /                    - 出社状況（FullMainApp.tsx）
 /personal           - 個人スケジュール（PersonalSchedulePage.tsx）
-/monthly-planner    - 月次プランナー（page.tsx）
+/monthly-planner    - 月次計画（page.tsx）
 /admin/pending-approval - 承認管理画面
 ```
 
@@ -312,7 +312,7 @@ ls test-results/                   # 失敗ログ・スクリーンショット�
 全ページで統一された横スクロール体験：
 - 上部スクロールバー + メインコンテンツスクロールバーの同期
 - sticky left sidebar（スタッフ名固定）
-- 出社状況・個人ページ・月次プランナーで統一実装
+- 出社状況・個人ページ・月次計画で統一実装
 
 ### バックエンドアーキテクチャ
 
@@ -374,7 +374,7 @@ app.module.ts               - メインモジュール
 ### プロジェクト固有
 - [認証システム](/docs/projects/authentication-system.md)
 - [履歴スナップショット](/docs/projects/historical-snapshots.md)
-- [月次プランナー](/docs/projects/monthly-planner-pending-system.md)
+- [月次計画](/docs/projects/monthly-planner-pending-system.md)
 
 ### アーキテクチャ
 - [2層データシステム](/docs/architecture/layered-data-system.md)
@@ -456,6 +456,6 @@ docker exec callstatus-app_backend_1 bash -c "cd /app && npm run build"
 - 2025-07-04: 担当設定統一システム完了、個人ページ日付選択📌形式実装、統一責任分離アーキテクチャ確立
 - 2025-07-03: 【重要修正】実装状況の誤記修正（2層レイヤー→完了、認証システム→基盤完了・調整中）、WebSocket業務要件洞察追加
 - 2025-07-01: カード設計統一・UI改善実装、1分単位精度対応完了、Excel Online互換時間入力システム実装
-- 2025-06-28: 月次プランナーPhase 2完了、新Claude Code向け技術詳細・認証状況・開発コマンド強化
+- 2025-06-28: 月次計画Phase 2完了、新Claude Code向け技術詳細・認証状況・開発コマンド強化
 - 2025-06-26: ドキュメント分割・構造化によるコンパクト化実施
 - 詳細情報は各専用ドキュメントを参照

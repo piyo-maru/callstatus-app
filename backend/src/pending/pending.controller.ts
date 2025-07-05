@@ -32,7 +32,7 @@ export class PendingController {
   }
 
   /**
-   * 月次プランナー専用：承認済み・未承認両方のpending予定取得
+   * 月次計画専用：承認済み・未承認両方のpending予定取得
    */
   @Get('monthly-planner')
   async findAllForMonthlyPlanner(

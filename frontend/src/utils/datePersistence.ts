@@ -76,7 +76,7 @@ export const usePersistentDate = (
 };
 
 /**
- * 月次プランナー用カスタムフック
+ * 月次計画用カスタムフック
  * デフォルトで翌月を表示するが、前回閲覧月があれば復元
  */
 export const useMonthlyPlannerDate = () => {

@@ -14,7 +14,7 @@ import { isReceptionStaff } from '../../utils/responsibilityUtils';
 
 /**
  * 統一担当設定モーダルコンポーネント
- * 月次プランナーの最優秀実装をベースに全ページで使用
+ * 月次計画の最優秀実装をベースに全ページで使用
  */
 export const ResponsibilityModal: React.FC<ResponsibilityModalProps> = ({
   isOpen,
@@ -36,7 +36,7 @@ export const ResponsibilityModal: React.FC<ResponsibilityModalProps> = ({
   const [lunch, setLunch] = useState(false);
   const [cs, setCs] = useState(false);
   
-  // 既存データの読み込み（月次プランナーと同じロジック）
+  // 既存データの読み込み（月次計画と同じロジック）
   useEffect(() => {
     if (isOpen && existingData) {
       console.log('既存担当設定データを読み込み:', existingData);

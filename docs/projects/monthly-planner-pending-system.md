@@ -1,9 +1,9 @@
-# 月次プランナー pending/approval システム実装計画書
+# 月次計画 pending/approval システム実装計画書
 
 ## 📋 プロジェクト概要
 
 ### 目的
-月次プランナーに承認ワークフロー機能を追加し、スケジュール登録の段階的管理を実現する。
+月次計画に承認ワークフロー機能を追加し、スケジュール登録の段階的管理を実現する。
 
 ### 基本コンセプト
 ```
@@ -17,7 +17,7 @@
 ## 🎯 機能要件
 
 ### 1. Pending機能
-- **月次プランナーでの予定入力**: カレンダーセルクリックでpending作成
+- **月次計画での予定入力**: カレンダーセルクリックでpending作成
 - **Pending状態管理**: 編集可能・視覚的区別・承認待ち表示
 - **ユーザー権限**: 自分のpendingのみ編集可能
 
@@ -108,7 +108,7 @@ interface ScheduleWithPending extends Schedule {
 
 ## 🎨 フロントエンド設計
 
-### 1. 月次プランナー改修 (`/monthly-planner/page.tsx`)
+### 1. 月次計画改修 (`/monthly-planner/page.tsx`)
 
 #### 主要機能
 - **セル入力**: クリックでpending作成
@@ -174,7 +174,7 @@ interface BulkApprovalRequest {
 - PendingService クラス
 - API テストケース
 
-### Phase 2: 月次プランナー改修 ✅ **完了** (2025-06-28)
+### Phase 2: 月次計画改修 ✅ **完了** (2025-06-28)
 **目標**: Pending作成・表示・編集機能
 
 **実装項目**:
@@ -190,11 +190,11 @@ interface BulkApprovalRequest {
 - [x] ヘッダーデザイン統一（角丸）
 - [x] 祝日対応実装（契約データ無効化・赤字表示）
 - [x] 全ページ横断の祝日サポート統合
-- [x] バッジデザイン統一（出社状況・個人ページ・月次プランナー）
+- [x] バッジデザイン統一（出社状況・個人ページ・月次計画）
 - [x] UIコンポーネント最適化とパフォーマンス改善
 
 **成果物**:
-- 新しい月次プランナーコンポーネント
+- 新しい月次計画コンポーネント
 - Pending状態管理ロジック
 - UI/UXテスト
 - ResponsibilityBadgesコンポーネント
@@ -315,7 +315,7 @@ interface PendingAuditLog {
 
 ### 🚨 問題の発生と解決
 **問題の発生:**
-- **現象**: 月次プランナーでPending作成時に403 Forbiddenエラーが発生
+- **現象**: 月次計画でPending作成時に403 Forbiddenエラーが発生
 - **根本原因**: PendingServiceの権限チェック（`createPendingDto.staffId !== creatorId`）
 - **詳細**: フロントエンドから送信されるstaffIdと、バックエンドの固定creatorId(1)が不一致
 - **影響**: 他のスタッフのPending作成時に権限エラーが発生
