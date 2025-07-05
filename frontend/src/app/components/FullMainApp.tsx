@@ -1054,11 +1054,80 @@ export default function FullMainApp() {
   
   // リアルタイム更新時のスクロール位置保持用
   const scrollPositionBeforeUpdate = useRef<{x: number, y: number}>({x: 0, y: 0});
+  
+  // 🛡️ 安全な並行実装システム（Phase 0）
+  const [enableOptimizedUpdates, setEnableOptimizedUpdates] = useState(false);
+  const [optimizationMetrics, setOptimizationMetrics] = useState<{
+    successCount: number;
+    errorCount: number;
+    fallbackCount: number;
+    averageUpdateTime: number;
+  }>({ successCount: 0, errorCount: 0, fallbackCount: 0, averageUpdateTime: 0 });
+  
+  // 並行実装用の一時的なスケジュール状態（テスト用）
+  const optimizedScheduleUpdateRef = useRef<{
+    pending: boolean;
+    lastUpdate: Date | null;
+    errorLog: string[];
+    fallbackCount: number;
+  }>({ pending: false, lastUpdate: null, errorLog: [], fallbackCount: 0 });
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 60000);
     return () => clearInterval(timer);
   }, []);
+  
+  // 🛡️ 開発者向けデバッグ・監視機能（グローバル公開）
+  useEffect(() => {
+    if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+      // Phase 0 監視・制御機能
+      (window as any).optimizationControl = {
+        // 状態確認
+        getStatus: () => ({
+          enabled: enableOptimizedUpdates,
+          metrics: optimizationMetrics,
+          safetyLog: optimizedScheduleUpdateRef.current
+        }),
+        
+        // 手動制御
+        enable: () => setEnableOptimizedUpdates(true),
+        disable: () => setEnableOptimizedUpdates(false),
+        toggle: () => setEnableOptimizedUpdates(prev => !prev),
+        
+        // メトリクスリセット
+        resetMetrics: () => setOptimizationMetrics({
+          successCount: 0, errorCount: 0, fallbackCount: 0, averageUpdateTime: 0
+        }),
+        
+        // 強制フォールバック（緊急時）
+        forceFullRefresh: () => {
+          console.log('🚨 Manual full refresh triggered');
+          setEnableOptimizedUpdates(false);
+          fetchData(displayDate);
+        },
+        
+        // 監視ログ表示
+        showLog: () => {
+          console.group('🛡️ 部分更新システム監視状況');
+          console.log('有効状態:', enableOptimizedUpdates);
+          console.log('成功:', optimizationMetrics.successCount);
+          console.log('エラー:', optimizationMetrics.errorCount);
+          console.log('フォールバック:', optimizationMetrics.fallbackCount);
+          console.log('平均処理時間:', optimizationMetrics.averageUpdateTime.toFixed(2), 'ms');
+          console.log('最終更新:', optimizedScheduleUpdateRef.current.lastUpdate);
+          console.groupEnd();
+        }
+      };
+      
+      console.log('🛡️ 並行実装制御システム初期化完了');
+      console.log('💡 使用方法:');
+      console.log('  window.optimizationControl.getStatus() - 状態確認');
+      console.log('  window.optimizationControl.enable() - 部分更新有効化');
+      console.log('  window.optimizationControl.disable() - 部分更新無効化');
+      console.log('  window.optimizationControl.showLog() - 監視ログ表示');
+      console.log('  window.optimizationControl.forceFullRefresh() - 緊急時全体更新');
+    }
+  }, [enableOptimizedUpdates, optimizationMetrics, displayDate]);
 
   // 折れ線グラフ表示設定をlocalStorageに保存
   useEffect(() => {
@@ -1340,17 +1409,150 @@ export default function FullMainApp() {
       console.error('🚨 WebSocket接続エラー:', error);
     });
     
+    // 🛡️ 安全な並行実装ロジック（Phase 0）
+    
+    // 現行システムの安全なフォールバック（既存実装の完全保護）
+    const safeFullRefresh = (reason: string) => {
+      console.log(`🔄 Safe fallback triggered: ${reason}`);
+      optimizedScheduleUpdateRef.current.fallbackCount++;
+      
+      // スクロール位置保存（既存ロジックと同じ）
+      scrollPositionBeforeUpdate.current = {
+        x: bottomScrollRef.current?.scrollLeft || 0,
+        y: window.pageYOffset || window.scrollY || 0
+      };
+      
+      // 既存の安全な全体更新
+      fetchData(displayDate);
+    };
+    
+    // 安全性チェック関数
+    const isSafeForOptimizedUpdate = (schedule: ScheduleFromDB): boolean => {
+      // 段階的にリスクを最小化した条件
+      try {
+        // 基本的なデータ整合性チェック
+        if (!schedule || !schedule.staffId || !schedule.start) {
+          return false;
+        }
+        
+        // 複雑な機能との組み合わせは避ける（安全第一）
+        if (schedule.memo?.includes('複合予定') || 
+            schedule.memo?.includes('カスタム') ||
+            schedule.memo?.includes('月次プランナー')) {
+          return false;
+        }
+        
+        // 今日のadjustment層のみ（最も安全な条件）
+        const scheduleDate = new Date(schedule.start);
+        const today = new Date();
+        const isToday = scheduleDate.toDateString() === today.toDateString();
+        const isAdjustmentLayer = !schedule.layer || schedule.layer === 'adjustment';
+        
+        return isToday && isAdjustmentLayer;
+      } catch (error) {
+        console.warn('Safety check failed:', error);
+        return false;
+      }
+    };
+    
+    // 部分更新実装（非常に慎重なアプローチ）
+    const optimizedScheduleUpdate = {
+      add: (newSchedule: ScheduleFromDB) => {
+        const startTime = performance.now();
+        try {
+          if (!isSafeForOptimizedUpdate(newSchedule)) {
+            safeFullRefresh('Safety check failed for add operation');
+            return;
+          }
+          
+          // TODO: Phase 1で実装
+          // 現在は安全のためフォールバック
+          safeFullRefresh('Optimized add not yet implemented');
+          
+          const duration = performance.now() - startTime;
+          setOptimizationMetrics(prev => ({
+            ...prev,
+            successCount: prev.successCount + 1,
+            averageUpdateTime: (prev.averageUpdateTime + duration) / 2
+          }));
+        } catch (error) {
+          console.error('Optimized add failed:', error);
+          setOptimizationMetrics(prev => ({
+            ...prev,
+            errorCount: prev.errorCount + 1
+          }));
+          safeFullRefresh('Optimized add threw exception');
+        }
+      },
+      
+      update: (updatedSchedule: ScheduleFromDB) => {
+        const startTime = performance.now();
+        try {
+          if (!isSafeForOptimizedUpdate(updatedSchedule)) {
+            safeFullRefresh('Safety check failed for update operation');
+            return;
+          }
+          
+          // TODO: Phase 1で実装
+          safeFullRefresh('Optimized update not yet implemented');
+          
+          const duration = performance.now() - startTime;
+          setOptimizationMetrics(prev => ({
+            ...prev,
+            successCount: prev.successCount + 1,
+            averageUpdateTime: (prev.averageUpdateTime + duration) / 2
+          }));
+        } catch (error) {
+          console.error('Optimized update failed:', error);
+          setOptimizationMetrics(prev => ({
+            ...prev,
+            errorCount: prev.errorCount + 1
+          }));
+          safeFullRefresh('Optimized update threw exception');
+        }
+      },
+      
+      delete: (deletedId: number) => {
+        const startTime = performance.now();
+        try {
+          // 削除は最も安全な操作（データ追加ではないため）
+          // TODO: Phase 1で実装
+          safeFullRefresh('Optimized delete not yet implemented');
+          
+          const duration = performance.now() - startTime;
+          setOptimizationMetrics(prev => ({
+            ...prev,
+            successCount: prev.successCount + 1,
+            averageUpdateTime: (prev.averageUpdateTime + duration) / 2
+          }));
+        } catch (error) {
+          console.error('Optimized delete failed:', error);
+          setOptimizationMetrics(prev => ({
+            ...prev,
+            errorCount: prev.errorCount + 1
+          }));
+          safeFullRefresh('Optimized delete threw exception');
+        }
+      }
+    };
+    
+    // 🔄 既存WebSocketハンドラー（安全な並行実装対応）
     const handleNewSchedule = (newSchedule: ScheduleFromDB) => {
         const scheduleDate = new Date(newSchedule.start);
         const scheduleDateStr = `${scheduleDate.getFullYear()}-${String(scheduleDate.getMonth() + 1).padStart(2, '0')}-${String(scheduleDate.getDate()).padStart(2, '0')}`;
         const displayDateStr = `${displayDate.getFullYear()}-${String(displayDate.getMonth() + 1).padStart(2, '0')}-${String(displayDate.getDate()).padStart(2, '0')}`;
         if(scheduleDateStr === displayDateStr) {
-            // スクロール位置を保存してからfetchData実行
-            scrollPositionBeforeUpdate.current = {
-              x: bottomScrollRef.current?.scrollLeft || 0,
-              y: window.pageYOffset || window.scrollY || 0
-            };
-            fetchData(displayDate);
+            // 🛡️ 安全な分岐制御（デフォルト：既存実装）
+            if (enableOptimizedUpdates && isSafeForOptimizedUpdate(newSchedule)) {
+                optimizedScheduleUpdate.add(newSchedule);
+            } else {
+                // 🔒 既存の安全な実装（完全保護）
+                scrollPositionBeforeUpdate.current = {
+                  x: bottomScrollRef.current?.scrollLeft || 0,
+                  y: window.pageYOffset || window.scrollY || 0
+                };
+                fetchData(displayDate);
+            }
         }
     };
     const handleUpdatedSchedule = (updatedSchedule: ScheduleFromDB) => {
@@ -1358,21 +1560,31 @@ export default function FullMainApp() {
         const scheduleDateStr = `${scheduleDate.getFullYear()}-${String(scheduleDate.getMonth() + 1).padStart(2, '0')}-${String(scheduleDate.getDate()).padStart(2, '0')}`;
         const displayDateStr = `${displayDate.getFullYear()}-${String(displayDate.getMonth() + 1).padStart(2, '0')}-${String(displayDate.getDate()).padStart(2, '0')}`;
         if(scheduleDateStr === displayDateStr){
-            // スクロール位置を保存してからfetchData実行
+            // 🛡️ 安全な分岐制御（デフォルト：既存実装）
+            if (enableOptimizedUpdates && isSafeForOptimizedUpdate(updatedSchedule)) {
+                optimizedScheduleUpdate.update(updatedSchedule);
+            } else {
+                // 🔒 既存の安全な実装（完全保護）
+                scrollPositionBeforeUpdate.current = {
+                  x: bottomScrollRef.current?.scrollLeft || 0,
+                  y: window.pageYOffset || window.scrollY || 0
+                };
+                fetchData(displayDate);
+            }
+        }
+    }
+    const handleDeletedSchedule = (id: number) => {
+        // 🛡️ 安全な分岐制御（デフォルト：既存実装）
+        if (enableOptimizedUpdates) {
+            optimizedScheduleUpdate.delete(id);
+        } else {
+            // 🔒 既存の安全な実装（完全保護）
             scrollPositionBeforeUpdate.current = {
               x: bottomScrollRef.current?.scrollLeft || 0,
               y: window.pageYOffset || window.scrollY || 0
             };
             fetchData(displayDate);
         }
-    }
-    const handleDeletedSchedule = (id: number) => {
-        // スクロール位置を保存してからfetchData実行
-        scrollPositionBeforeUpdate.current = {
-          x: bottomScrollRef.current?.scrollLeft || 0,
-          y: window.pageYOffset || window.scrollY || 0
-        };
-        fetchData(displayDate);
     };
     socket.on('schedule:new', handleNewSchedule);
     socket.on('schedule:updated', handleUpdatedSchedule);
@@ -2817,6 +3029,32 @@ export default function FullMainApp() {
                 <div 
                   className="flex items-center space-x-2"
                   title={`リアルタイム更新: ${realTimeUpdateEnabled ? 'オン - 他の人の変更を即座に反映' : 'オフ - 手動更新のみ、性能向上'}`}
+                >
+                  
+                {/* 🛡️ 開発者向け並行実装コントロール（開発環境限定） */}
+                {process.env.NODE_ENV === 'development' && (
+                  <div className="flex items-center space-x-2 mx-4 px-3 py-1 bg-blue-50 border border-blue-200 rounded-lg">
+                    <span className="text-xs text-blue-700 font-medium">部分更新:</span>
+                    <button 
+                      onClick={() => setEnableOptimizedUpdates(!enableOptimizedUpdates)}
+                      className={`relative w-8 h-4 rounded-full transition-colors duration-200 ${
+                        enableOptimizedUpdates ? 'bg-blue-500' : 'bg-gray-300'
+                      }`}
+                    >
+                      <div className={`absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full shadow-sm transition-transform duration-200 ${
+                        enableOptimizedUpdates ? 'translate-x-4' : 'translate-x-0'
+                      }`}></div>
+                    </button>
+                    <span className="text-xs text-blue-600">
+                      {optimizationMetrics.successCount}ok/{optimizationMetrics.errorCount}err/{optimizationMetrics.fallbackCount}fb
+                    </span>
+                  </div>
+                )}
+                
+                </div>
+                
+                <div 
+                  className="flex items-center space-x-2"
                 >
                   {/* 左：状態インジケーター（大きな点滅ドット） */}
                   <div className={`w-3 h-3 rounded-full ${
