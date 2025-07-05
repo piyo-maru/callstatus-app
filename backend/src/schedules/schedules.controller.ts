@@ -140,7 +140,7 @@ export class SchedulesController {
    * 履歴データを取得して返す（契約レイヤーも含む）
    */
   private async getHistoricalSchedules(date: string, includeMasking: boolean = false, targetStaffId?: number) {
-    console.log(`履歴データ取得開始: ${date}, マスキング: ${includeMasking}`);
+    console.log(`履歴データ取得開始: ${date}, マスキング: ${includeMasking}, 対象スタッフ: ${targetStaffId || '全員'}`);
     
     // 1. 履歴データ（調整レイヤー）を取得
     const historicalData = await this.snapshotsService.getHistoricalSchedules(date);
@@ -155,23 +155,40 @@ export class SchedulesController {
       console.error(`契約レイヤー生成エラー: ${error.message}`);
       // 契約レイヤー生成に失敗しても履歴データは返す
     }
+    
+    // 🔧 修正：targetStaffIdによるフィルタリング実装
+    let filteredHistoricalData = historicalData;
+    let filteredContractSchedules = contractSchedules;
+    
+    if (targetStaffId) {
+      // 履歴データをstaffIdでフィルタリング
+      filteredHistoricalData = historicalData?.filter(h => h.staffId === targetStaffId) || [];
+      // 契約データをstaffIdでフィルタリング
+      filteredContractSchedules = contractSchedules.filter(c => c.staffId === targetStaffId);
+      
+      console.log(`staffId=${targetStaffId}フィルタリング後: 履歴${filteredHistoricalData.length}件 + 契約${filteredContractSchedules.length}件`);
+    }
 
-    // データが何もない場合
-    if ((!historicalData || historicalData.length === 0) && contractSchedules.length === 0) {
+    // データが何もない場合（フィルタリング後のデータで判定）
+    if ((!filteredHistoricalData || filteredHistoricalData.length === 0) && filteredContractSchedules.length === 0) {
+      const message = targetStaffId 
+        ? `指定されたスタッフ(ID: ${targetStaffId})の${date}のデータが見つかりません`
+        : '該当日のスナップショットデータが見つかりません';
+      
       return {
         schedules: [],
         staff: [],
         isHistorical: true,
-        message: '該当日のスナップショットデータが見つかりません'
+        message
       };
     }
 
-    // 3. スタッフ情報を履歴データと契約データから構築
+    // 3. スタッフ情報を履歴データと契約データから構築（フィルタリング後データ使用）
     const staffMap = new Map();
     
     // 履歴データからスタッフ情報を構築
-    if (historicalData) {
-      for (const item of historicalData) {
+    if (filteredHistoricalData) {
+      for (const item of filteredHistoricalData) {
         if (!staffMap.has(item.staffId)) {
           const maskedName = includeMasking 
             ? await this.maskStaffName(item.staffName, item.staffId)
@@ -189,8 +206,8 @@ export class SchedulesController {
       }
     }
 
-    // 契約データからもスタッフ情報を補完（退職者も含む）
-    for (const contractSchedule of contractSchedules) {
+    // 契約データからもスタッフ情報を補完（退職者も含む、フィルタリング後データ使用）
+    for (const contractSchedule of filteredContractSchedules) {
       if (!staffMap.has(contractSchedule.staffId)) {
         // 契約レイヤーのスタッフ情報を取得
         try {
@@ -219,12 +236,12 @@ export class SchedulesController {
 
     const staff = Array.from(staffMap.values());
 
-    // 4. スケジュールデータを変換
+    // 4. スケジュールデータを変換（フィルタリング後データ使用）
     const schedules = [];
     
     // 履歴データ（調整レイヤー）を追加
-    if (historicalData) {
-      const historicalSchedules = historicalData.map((item, index) => ({
+    if (filteredHistoricalData) {
+      const historicalSchedules = filteredHistoricalData.map((item, index) => ({
         id: `hist_${item.id}_${index}`,
         staffId: item.staffId,
         status: item.status,
@@ -236,8 +253,8 @@ export class SchedulesController {
       schedules.push(...historicalSchedules);
     }
     
-    // 契約レイヤーを追加
-    const contractSchedulesConverted = contractSchedules.map((cs, index) => ({
+    // 契約レイヤーを追加（フィルタリング後データ使用）
+    const contractSchedulesConverted = filteredContractSchedules.map((cs, index) => ({
       id: `contract_hist_${cs.id}_${index}`,
       staffId: cs.staffId,
       status: cs.status,
@@ -248,16 +265,18 @@ export class SchedulesController {
     }));
     schedules.push(...contractSchedulesConverted);
 
-    console.log(`履歴データ統合完了: 履歴${historicalData ? historicalData.length : 0}件 + 契約${contractSchedules.length}件 = 合計${schedules.length}件`);
+    console.log(`履歴データ統合完了(フィルタリング後): 履歴${filteredHistoricalData ? filteredHistoricalData.length : 0}件 + 契約${filteredContractSchedules.length}件 = 合計${schedules.length}件`);
 
     return {
       schedules,
-      staff,
+      staff: Array.from(staffMap.values()),
       isHistorical: true,
-      snapshotDate: historicalData && historicalData.length > 0 ? historicalData[0]?.snapshotAt : null,
+      snapshotDate: filteredHistoricalData && filteredHistoricalData.length > 0 ? filteredHistoricalData[0]?.snapshotAt : null,
       recordCount: schedules.length,
-      historicalRecords: historicalData ? historicalData.length : 0,
-      contractRecords: contractSchedules.length
+      historicalRecords: filteredHistoricalData ? filteredHistoricalData.length : 0,
+      contractRecords: filteredContractSchedules.length,
+      // デバッグ情報追加
+      ...(targetStaffId && { filteredForStaffId: targetStaffId })
     };
   }
 

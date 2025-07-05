@@ -936,8 +936,9 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
     try {
       const promises = monthDays.map(async (day) => {
         const dateStr = format(day, 'yyyy-MM-dd');
-        const url = `${getApiUrl()}/api/schedules/unified?date=${dateStr}&includeMasking=false`;
-        if (isDebugMode) console.log(`API呼び出し: ${url}`);
+        // 🔧 修正：staffIdパラメータを追加してバックエンドでフィルタリング
+        const url = `${getApiUrl()}/api/schedules/unified?staffId=${currentStaff.id}&date=${dateStr}&includeMasking=false`;
+        if (isDebugMode) console.log(`API呼び出し(個人ページ用): ${url}`);
         
         const response = await authenticatedFetch(url);
         
@@ -945,18 +946,18 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
           const data = await response.json();
           if (isDebugMode) console.log(`${dateStr}のレスポンス:`, data);
           
-          const filteredSchedules = data.schedules?.filter((schedule: Schedule) => 
-            schedule.staffId === currentStaff.id
-          ) || [];
+          // 🔧 修正：バックエンドで既にフィルタリング済みのため、フロントエンド側フィルタリングを削除
+          const schedules = data.schedules || [];
           
           // 取得したスケジュールに日付情報を追加
-          const schedulesWithDate = filteredSchedules.map((schedule: any) => ({
+          const schedulesWithDate = schedules.map((schedule: any) => ({
             ...schedule,
             date: dateStr, // 取得日付を明示的に設定
             start: typeof schedule.start === 'number' ? schedule.start : new Date(schedule.start),
             end: typeof schedule.end === 'number' ? schedule.end : new Date(schedule.end)
           }));
           
+          if (isDebugMode) console.log(`${dateStr}のフィルタリング後スケジュール:`, schedulesWithDate.length, '件');
           return schedulesWithDate;
         } else {
           console.error(`${dateStr}のAPI呼び出し失敗:`, response.status);
