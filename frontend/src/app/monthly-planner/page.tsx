@@ -2252,8 +2252,9 @@ function MonthlyPlannerPageContent() {
                   href="/admin/pending-approval"
                   className={BUTTON_STYLES.headerPrimary}
                 >
-                  <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" clipRule="evenodd" />
+                  <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 512 512">
+                    <path d="M441.123,301.182c0,0-18.339,0-33.781,0c-29.613,0-72.404,0-72.404,0c-28.19-3.163-36.485-51.044-22.89-116.593c8.207-39.524,24.55-71.256,24.55-103.995C336.599,36.088,300.511,0,255.996,0c-44.506,0-80.594,36.088-80.594,80.594c0,32.74,16.352,64.472,24.55,103.995c13.595,65.549,5.3,113.43-22.89,116.593c0,0-42.793,0-72.404,0c-15.442,0-33.782,0-33.782,0c-22.562,0-40.858,18.295-40.858,40.858v97.052h451.963V342.04C481.981,319.477,463.687,301.182,441.123,301.182z" />
+                    <rect x="64.242" y="471.884" width="383.525" height="40.116" />
                   </svg>
                   申請承認管理
                 </a>
@@ -2302,63 +2303,70 @@ function MonthlyPlannerPageContent() {
             </h2>
           </div>
 
-          {/* 承認モードトグルと設定ボタン */}
-          <div className="flex items-center space-x-4">
+          {/* 設定ボタン */}
+          <div className="flex items-center">
             {canManage() && (
               <button
                 onClick={() => setIsSettingsModalOpen(true)}
-                className="px-3 py-1 text-xs font-medium text-white bg-gray-600 border border-transparent rounded-md hover:bg-gray-700 h-7 transition-colors duration-150"
+                className="flex items-center px-4 h-7 text-xs font-medium text-white bg-gray-600 border border-transparent rounded-lg shadow-sm hover:bg-gray-700 transition-colors duration-150 min-w-fit whitespace-nowrap"
               >
-                ⚙️ 設定
+                <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
+                </svg>
+                設定
               </button>
-            )}
-            {canManage() && (
-              <div className="flex items-center space-x-3">
-                <span className={`text-xs ${!isApprovalMode ? 'text-gray-900 font-medium' : 'text-gray-500'}`}>
-                  通常
-                </span>
-                <button
-                  onClick={() => setIsApprovalMode(!isApprovalMode)}
-                  className={`relative w-12 h-6 rounded-full transition-colors duration-200 ${
-                    isApprovalMode ? 'bg-indigo-600' : 'bg-gray-300'
-                  }`}
-                  type="button"
-                >
-                  <div className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform duration-200 ${
-                    isApprovalMode ? 'translate-x-6' : 'translate-x-0'
-                  }`}></div>
-                </button>
-                <span className={`text-xs ${isApprovalMode ? 'text-gray-900 font-medium' : 'text-gray-500'}`}>
-                  承認モード
-                </span>
-              </div>
             )}
           </div>
         </div>
 
         {/* フィルター行 */}
-        <div className="px-6 py-3 border-t border-gray-200 bg-gray-50 flex items-center space-x-6">
-          <select
-            value={selectedDepartment}
-            onChange={(e) => setSelectedDepartment(e.target.value)}
-            className="rounded-md border-gray-300 shadow-sm text-xs h-7 px-2 font-medium text-gray-700 bg-white transition-colors duration-150 hover:border-gray-400 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
-          >
-            <option value="all">すべての部署</option>
-            {sortedDepartments.map(dept => (
-              <option key={dept} value={dept}>{dept}</option>
-            ))}
-          </select>
+        <div className="px-6 py-3 border-t border-gray-200 bg-gray-50 flex items-center justify-between">
+          <div className="flex items-center space-x-6">
+            <select
+              value={selectedDepartment}
+              onChange={(e) => setSelectedDepartment(e.target.value)}
+              className="rounded-md border-gray-300 shadow-sm text-xs h-7 px-2 font-medium text-gray-700 bg-white transition-colors duration-150 hover:border-gray-400 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+            >
+              <option value="all">すべての部署</option>
+              {sortedDepartments.map(dept => (
+                <option key={dept} value={dept}>{dept}</option>
+              ))}
+            </select>
+            
+            <select
+              value={selectedGroup}
+              onChange={(e) => setSelectedGroup(e.target.value)}
+              className="rounded-md border-gray-300 shadow-sm text-xs h-7 px-2 font-medium text-gray-700 bg-white transition-colors duration-150 hover:border-gray-400 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+            >
+              <option value="all">すべてのグループ</option>
+              {sortedGroups.map(group => (
+                <option key={group} value={group}>{group}</option>
+              ))}
+            </select>
+          </div>
           
-          <select
-            value={selectedGroup}
-            onChange={(e) => setSelectedGroup(e.target.value)}
-            className="rounded-md border-gray-300 shadow-sm text-xs h-7 px-2 font-medium text-gray-700 bg-white transition-colors duration-150 hover:border-gray-400 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
-          >
-            <option value="all">すべてのグループ</option>
-            {sortedGroups.map(group => (
-              <option key={group} value={group}>{group}</option>
-            ))}
-          </select>
+          {/* 承認モード切替トグル */}
+          {canManage() && (
+            <div className="flex items-center space-x-3">
+              <span className={`text-xs ${!isApprovalMode ? 'text-gray-900 font-medium' : 'text-gray-500'}`}>
+                通常
+              </span>
+              <button
+                onClick={() => setIsApprovalMode(!isApprovalMode)}
+                className={`relative w-12 h-6 rounded-full transition-colors duration-200 ${
+                  isApprovalMode ? 'bg-indigo-600' : 'bg-gray-300'
+                }`}
+                type="button"
+              >
+                <div className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform duration-200 ${
+                  isApprovalMode ? 'translate-x-6' : 'translate-x-0'
+                }`}></div>
+              </button>
+              <span className={`text-xs ${isApprovalMode ? 'text-gray-900 font-medium' : 'text-gray-500'}`}>
+                承認モード
+              </span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -3843,6 +3851,40 @@ function MonthlyPlannerPageContent() {
         onRollback={handleRollback}
         authenticatedFetch={authenticatedFetch}
       />
+
+      {/* メイン画面に戻るリンク */}
+      <div className="mt-6 mb-10 text-center">
+        <a
+          href="/"
+          className="inline-flex items-center px-3 py-1 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 h-7 transition-colors duration-150"
+        >
+          メイン画面に戻る
+        </a>
+      </div>
+
+      {/* フローティング承認モード切替ボタン */}
+      {canManage() && (
+        <div className="fixed bottom-6 right-6 z-50">
+          <button
+            onClick={() => setIsApprovalMode(!isApprovalMode)}
+            className={`w-14 h-14 rounded-full shadow-lg transition-all duration-200 hover:scale-105 flex items-center justify-center ${
+              isApprovalMode 
+                ? 'bg-indigo-600 hover:bg-indigo-700' 
+                : 'bg-gray-400 hover:bg-gray-500'
+            }`}
+            title={isApprovalMode ? '通常モードに切替' : '承認モードに切替'}
+            type="button"
+          >
+            <svg className="w-6 h-6" viewBox="0 0 512 512" style={{width: '24px', height: '24px'}}>
+              <path 
+                d="M441.123,301.182c0,0-18.339,0-33.781,0c-29.613,0-72.404,0-72.404,0c-28.19-3.163-36.485-51.044-22.89-116.593c8.207-39.524,24.55-71.256,24.55-103.995C336.599,36.088,300.511,0,255.996,0c-44.506,0-80.594,36.088-80.594,80.594c0,32.74,16.352,64.472,24.55,103.995c13.595,65.549,5.3,113.43-22.89,116.593c0,0-42.793,0-72.404,0c-15.442,0-33.782,0-33.782,0c-22.562,0-40.858,18.295-40.858,40.858v97.052h451.963V342.04C481.981,319.477,463.687,301.182,441.123,301.182z"
+                fill="white"
+              />
+              <rect x="64.242" y="471.884" width="383.525" height="40.116" fill="white" />
+            </svg>
+          </button>
+        </div>
+      )}
 
       {/* インポート中ローディング表示 */}
       {isImporting && (

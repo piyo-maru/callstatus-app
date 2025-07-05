@@ -488,8 +488,9 @@ export default function PendingApprovalPage() {
         <div className="bg-indigo-600 px-6 py-3 rounded-t-lg">
           <div className="flex items-center justify-between">
             <h1 className="text-lg font-semibold text-white">
-              <svg className="w-5 h-5 mr-2 inline" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" clipRule="evenodd" />
+              <svg className="w-5 h-5 mr-2 inline" fill="currentColor" viewBox="0 0 512 512">
+                <path d="M441.123,301.182c0,0-18.339,0-33.781,0c-29.613,0-72.404,0-72.404,0c-28.19-3.163-36.485-51.044-22.89-116.593c8.207-39.524,24.55-71.256,24.55-103.995C336.599,36.088,300.511,0,255.996,0c-44.506,0-80.594,36.088-80.594,80.594c0,32.74,16.352,64.472,24.55,103.995c13.595,65.549,5.3,113.43-22.89,116.593c0,0-42.793,0-72.404,0c-15.442,0-33.782,0-33.782,0c-22.562,0-40.858,18.295-40.858,40.858v97.052h451.963V342.04C481.981,319.477,463.687,301.182,441.123,301.182z" />
+                <rect x="64.242" y="471.884" width="383.525" height="40.116" />
               </svg>
               申請承認管理
             </h1>
