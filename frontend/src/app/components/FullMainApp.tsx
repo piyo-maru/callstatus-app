@@ -1051,6 +1051,9 @@ export default function FullMainApp() {
   // スクロール同期用のref
   const topScrollRef = useRef<HTMLDivElement>(null);
   const bottomScrollRef = useRef<HTMLDivElement>(null);
+  
+  // リアルタイム更新時のスクロール位置保持用
+  const scrollPositionBeforeUpdate = useRef<{x: number, y: number}>({x: 0, y: 0});
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 60000);
@@ -1276,8 +1279,23 @@ export default function FullMainApp() {
       console.error('=== fetchData ERROR ===');
       console.error('データの取得に失敗しました', error); 
     } 
-    finally { setIsLoading(false); }
-  }, [maskingEnabled, loadSingleDateResponsibilities]);
+    finally { 
+      setIsLoading(false);
+      
+      // リアルタイム更新時のスクロール位置復元
+      if (realTimeUpdateEnabled && scrollPositionBeforeUpdate.current.y > 50) {
+        setTimeout(() => {
+          window.scrollTo(0, scrollPositionBeforeUpdate.current.y);
+          if (scrollPositionBeforeUpdate.current.x > 0 && bottomScrollRef.current) {
+            bottomScrollRef.current.scrollLeft = scrollPositionBeforeUpdate.current.x;
+            if (topScrollRef.current) {
+              topScrollRef.current.scrollLeft = scrollPositionBeforeUpdate.current.x;
+            }
+          }
+        }, 50);
+      }
+    }
+  }, [maskingEnabled, loadSingleDateResponsibilities, realTimeUpdateEnabled]);
   
   useEffect(() => {
     fetchData(displayDate);
@@ -1323,18 +1341,16 @@ export default function FullMainApp() {
     });
     
     const handleNewSchedule = (newSchedule: ScheduleFromDB) => {
-        // console.log('=== WebSocket: New Schedule ===');
-        // console.log('New schedule received:', newSchedule);
         const scheduleDate = new Date(newSchedule.start);
         const scheduleDateStr = `${scheduleDate.getFullYear()}-${String(scheduleDate.getMonth() + 1).padStart(2, '0')}-${String(scheduleDate.getDate()).padStart(2, '0')}`;
         const displayDateStr = `${displayDate.getFullYear()}-${String(displayDate.getMonth() + 1).padStart(2, '0')}-${String(displayDate.getDate()).padStart(2, '0')}`;
-        // console.log('Schedule date:', scheduleDateStr);
-        // console.log('Display date:', displayDateStr);
         if(scheduleDateStr === displayDateStr) {
-            // console.log('Fetching updated data due to new schedule...');
+            // スクロール位置を保存してからfetchData実行
+            scrollPositionBeforeUpdate.current = {
+              x: bottomScrollRef.current?.scrollLeft || 0,
+              y: window.pageYOffset || window.scrollY || 0
+            };
             fetchData(displayDate);
-        } else {
-            // console.log('Schedule not for current display date, ignoring');
         }
     };
     const handleUpdatedSchedule = (updatedSchedule: ScheduleFromDB) => {
@@ -1342,10 +1358,20 @@ export default function FullMainApp() {
         const scheduleDateStr = `${scheduleDate.getFullYear()}-${String(scheduleDate.getMonth() + 1).padStart(2, '0')}-${String(scheduleDate.getDate()).padStart(2, '0')}`;
         const displayDateStr = `${displayDate.getFullYear()}-${String(displayDate.getMonth() + 1).padStart(2, '0')}-${String(displayDate.getDate()).padStart(2, '0')}`;
         if(scheduleDateStr === displayDateStr){
+            // スクロール位置を保存してからfetchData実行
+            scrollPositionBeforeUpdate.current = {
+              x: bottomScrollRef.current?.scrollLeft || 0,
+              y: window.pageYOffset || window.scrollY || 0
+            };
             fetchData(displayDate);
         }
     }
     const handleDeletedSchedule = (id: number) => {
+        // スクロール位置を保存してからfetchData実行
+        scrollPositionBeforeUpdate.current = {
+          x: bottomScrollRef.current?.scrollLeft || 0,
+          y: window.pageYOffset || window.scrollY || 0
+        };
         fetchData(displayDate);
     };
     socket.on('schedule:new', handleNewSchedule);
