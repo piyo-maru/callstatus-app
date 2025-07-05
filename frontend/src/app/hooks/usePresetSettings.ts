@@ -389,11 +389,13 @@ export const usePresetSettings = (): UsePresetSettingsReturn => {
   const [pagePresetSettings, setPagePresetSettings] = useState({
     monthlyPlanner: {
       enabledPresetIds: DEFAULT_PRESET_SETTINGS.pagePresetSettings.monthlyPlanner.enabledPresetIds,
-      defaultPresetId: DEFAULT_PRESET_SETTINGS.pagePresetSettings.monthlyPlanner.defaultPresetId || 'standard-work'
+      defaultPresetId: DEFAULT_PRESET_SETTINGS.pagePresetSettings.monthlyPlanner.defaultPresetId || 'standard-work',
+      presetDisplayOrder: DEFAULT_PRESET_SETTINGS.pagePresetSettings.monthlyPlanner.enabledPresetIds
     },
     personalPage: {
       enabledPresetIds: DEFAULT_PRESET_SETTINGS.pagePresetSettings.personalPage.enabledPresetIds,
-      defaultPresetId: DEFAULT_PRESET_SETTINGS.pagePresetSettings.personalPage.defaultPresetId || 'standard-work'
+      defaultPresetId: DEFAULT_PRESET_SETTINGS.pagePresetSettings.personalPage.defaultPresetId || 'standard-work',
+      presetDisplayOrder: DEFAULT_PRESET_SETTINGS.pagePresetSettings.personalPage.enabledPresetIds
     }
   });
 
@@ -403,11 +405,13 @@ export const usePresetSettings = (): UsePresetSettingsReturn => {
     pagePresetSettings: {
       monthlyPlanner: {
         enabledPresetIds: DEFAULT_PRESET_SETTINGS.pagePresetSettings.monthlyPlanner.enabledPresetIds,
-        defaultPresetId: DEFAULT_PRESET_SETTINGS.pagePresetSettings.monthlyPlanner.defaultPresetId || 'standard-work'
+        defaultPresetId: DEFAULT_PRESET_SETTINGS.pagePresetSettings.monthlyPlanner.defaultPresetId || 'standard-work',
+        presetDisplayOrder: DEFAULT_PRESET_SETTINGS.pagePresetSettings.monthlyPlanner.enabledPresetIds
       },
       personalPage: {
         enabledPresetIds: DEFAULT_PRESET_SETTINGS.pagePresetSettings.personalPage.enabledPresetIds,
-        defaultPresetId: DEFAULT_PRESET_SETTINGS.pagePresetSettings.personalPage.defaultPresetId || 'standard-work'
+        defaultPresetId: DEFAULT_PRESET_SETTINGS.pagePresetSettings.personalPage.defaultPresetId || 'standard-work',
+        presetDisplayOrder: DEFAULT_PRESET_SETTINGS.pagePresetSettings.personalPage.enabledPresetIds
       }
     }
   });
@@ -627,7 +631,7 @@ export const usePresetSettings = (): UsePresetSettingsReturn => {
     
     // 表示順序に従ってソート
     const orderedPresets = displayOrder
-      .map(id => enabledPresets.find(p => p.id === id))
+      .map((id: string) => enabledPresets.find(p => p.id === id))
       .filter(Boolean) as typeof enabledPresets;
     
     // 順序にないが有効なプリセットがあれば最後に追加
@@ -775,7 +779,7 @@ export const usePresetSettings = (): UsePresetSettingsReturn => {
             console.error('[PresetSettings] 保存失敗:', response.status, await response.text());
           }
         } catch (apiError) {
-          if (apiError.message === 'CONFLICT_DETECTED') {
+          if (apiError instanceof Error && apiError.message === 'CONFLICT_DETECTED') {
             throw apiError;
           }
           console.error('[PresetSettings] グローバルプリセット設定保存失敗:', apiError);
@@ -855,11 +859,13 @@ export const usePresetSettings = (): UsePresetSettingsReturn => {
               const pageSettings = {
                 monthlyPlanner: {
                   enabledPresetIds: apiSettings.pagePresetSettings.monthlyPlanner.enabledPresetIds,
-                  defaultPresetId: apiSettings.pagePresetSettings.monthlyPlanner.defaultPresetId || 'standard-work'
+                  defaultPresetId: apiSettings.pagePresetSettings.monthlyPlanner.defaultPresetId || 'standard-work',
+                  presetDisplayOrder: apiSettings.pagePresetSettings.monthlyPlanner.presetDisplayOrder || apiSettings.pagePresetSettings.monthlyPlanner.enabledPresetIds
                 },
                 personalPage: {
                   enabledPresetIds: apiSettings.pagePresetSettings.personalPage.enabledPresetIds,
-                  defaultPresetId: apiSettings.pagePresetSettings.personalPage.defaultPresetId || 'standard-work'
+                  defaultPresetId: apiSettings.pagePresetSettings.personalPage.defaultPresetId || 'standard-work',
+                  presetDisplayOrder: apiSettings.pagePresetSettings.personalPage.presetDisplayOrder || apiSettings.pagePresetSettings.personalPage.enabledPresetIds
                 }
               };
               setPagePresetSettings(pageSettings);
@@ -894,11 +900,13 @@ export const usePresetSettings = (): UsePresetSettingsReturn => {
             const pageSettings = {
               monthlyPlanner: {
                 enabledPresetIds: settings.pagePresetSettings.monthlyPlanner.enabledPresetIds,
-                defaultPresetId: settings.pagePresetSettings.monthlyPlanner.defaultPresetId || 'standard-work'
+                defaultPresetId: settings.pagePresetSettings.monthlyPlanner.defaultPresetId || 'standard-work',
+                presetDisplayOrder: settings.pagePresetSettings.monthlyPlanner.presetDisplayOrder || settings.pagePresetSettings.monthlyPlanner.enabledPresetIds
               },
               personalPage: {
                 enabledPresetIds: settings.pagePresetSettings.personalPage.enabledPresetIds,
-                defaultPresetId: settings.pagePresetSettings.personalPage.defaultPresetId || 'standard-work'
+                defaultPresetId: settings.pagePresetSettings.personalPage.defaultPresetId || 'standard-work',
+                presetDisplayOrder: settings.pagePresetSettings.personalPage.presetDisplayOrder || settings.pagePresetSettings.personalPage.enabledPresetIds
               }
             };
             setPagePresetSettings(pageSettings);
@@ -937,11 +945,13 @@ export const usePresetSettings = (): UsePresetSettingsReturn => {
     setPagePresetSettings({
       monthlyPlanner: {
         enabledPresetIds: DEFAULT_PRESET_SETTINGS.pagePresetSettings.monthlyPlanner.enabledPresetIds,
-        defaultPresetId: DEFAULT_PRESET_SETTINGS.pagePresetSettings.monthlyPlanner.defaultPresetId || 'standard-work'
+        defaultPresetId: DEFAULT_PRESET_SETTINGS.pagePresetSettings.monthlyPlanner.defaultPresetId || 'standard-work',
+        presetDisplayOrder: DEFAULT_PRESET_SETTINGS.pagePresetSettings.monthlyPlanner.enabledPresetIds
       },
       personalPage: {
         enabledPresetIds: DEFAULT_PRESET_SETTINGS.pagePresetSettings.personalPage.enabledPresetIds,
-        defaultPresetId: DEFAULT_PRESET_SETTINGS.pagePresetSettings.personalPage.defaultPresetId || 'standard-work'
+        defaultPresetId: DEFAULT_PRESET_SETTINGS.pagePresetSettings.personalPage.defaultPresetId || 'standard-work',
+        presetDisplayOrder: DEFAULT_PRESET_SETTINGS.pagePresetSettings.personalPage.enabledPresetIds
       }
     });
     setIsDirty(true);

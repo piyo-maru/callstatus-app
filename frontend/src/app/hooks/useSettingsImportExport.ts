@@ -84,7 +84,7 @@ export function useSettingsImportExport(): UseSettingsImportExportReturn {
         }
         
         // エクスポート用に不要なフィールドを除外
-        const cleanDepartments = (data.departments || []).map(dept => ({
+        const cleanDepartments = (data.departments || []).map((dept: any) => ({
           id: dept.id,
           type: dept.type,
           name: dept.name,
@@ -93,7 +93,7 @@ export function useSettingsImportExport(): UseSettingsImportExportReturn {
           displayOrder: dept.displayOrder
         }));
         
-        const cleanGroups = (data.groups || []).map(group => ({
+        const cleanGroups = (data.groups || []).map((group: any) => ({
           id: group.id,
           type: group.type,
           name: group.name,

@@ -23,6 +23,7 @@ export type Staff = {
   department: string;
   group: string;
   currentStatus: string;
+  isActive?: boolean;
   isSupporting?: boolean;
   originalDept?: string;
   originalGroup?: string;

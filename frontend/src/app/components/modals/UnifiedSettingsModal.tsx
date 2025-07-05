@@ -193,7 +193,7 @@ export function UnifiedSettingsModal({
   
   // ハイライトを一時的に表示する関数
   const highlightPreset = useCallback((presetId: string) => {
-    setHighlightedPresets(prev => new Set([...prev, presetId]));
+    setHighlightedPresets(prev => new Set([...Array.from(prev), presetId]));
     // 1.5秒後にハイライトを解除
     setTimeout(() => {
       setHighlightedPresets(prev => {

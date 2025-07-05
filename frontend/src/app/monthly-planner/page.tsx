@@ -1624,7 +1624,7 @@ function MonthlyPlannerPageContent() {
       const sevenDaysAgo = now - (7 * 24 * 60 * 60 * 1000); // 7日前
       let hasChanges = false;
       
-      for (const [key, preset] of tempPresets.current.entries()) {
+      for (const [key, preset] of Array.from(tempPresets.current.entries())) {
         if (preset.createdAt) {
           const createdAt = new Date(preset.createdAt).getTime();
           if (createdAt < sevenDaysAgo) {
@@ -2353,13 +2353,13 @@ function MonthlyPlannerPageContent() {
               </span>
               <button
                 onClick={() => setIsApprovalMode(!isApprovalMode)}
-                className={`relative w-12 h-6 rounded-full transition-colors duration-200 ${
+                className={`relative w-8 h-4 rounded-full transition-colors duration-200 ${
                   isApprovalMode ? 'bg-indigo-600' : 'bg-gray-300'
                 }`}
                 type="button"
               >
-                <div className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform duration-200 ${
-                  isApprovalMode ? 'translate-x-6' : 'translate-x-0'
+                <div className={`absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full transition-transform duration-200 ${
+                  isApprovalMode ? 'translate-x-4' : 'translate-x-0'
                 }`}></div>
               </button>
               <span className={`text-xs ${isApprovalMode ? 'text-gray-900 font-medium' : 'text-gray-500'}`}>
@@ -3302,7 +3302,7 @@ function MonthlyPlannerPageContent() {
             
             return (
               <div className="space-y-1">
-                {details.map((schedule, index) => (
+                {details.map((schedule: any, index: number) => (
                   <div key={index} className="flex items-center text-xs">
                     <div
                       className="w-3 h-3 rounded mr-2"
@@ -3362,7 +3362,7 @@ function MonthlyPlannerPageContent() {
                     
                     {/* スケジュール詳細 */}
                     <div className="space-y-1">
-                      {details.presetDetails.map((schedule, index) => (
+                      {details.presetDetails.map((schedule: any, index: number) => (
                         <div key={index} className="flex items-center text-xs">
                           <div 
                             className="w-3 h-3 rounded mr-2" 
@@ -3532,7 +3532,7 @@ function MonthlyPlannerPageContent() {
                           <strong>詳細内訳:</strong>
                         </div>
                         <div className="ml-4 space-y-1 mb-2">
-                          {details.presetDetails.map((schedule, index) => (
+                          {details.presetDetails.map((schedule: any, index: number) => (
                             <div key={index} className="text-xs text-gray-700 flex items-center">
                               <div 
                                 className="w-3 h-3 rounded mr-2" 

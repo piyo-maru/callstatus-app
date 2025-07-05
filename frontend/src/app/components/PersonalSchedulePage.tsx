@@ -2050,13 +2050,13 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
                 <button
                   onClick={handleCompactModeToggle}
                   title={`表示密度: ${!isCompactMode ? '標準' : 'コンパクト'}`}
-                  className={`relative w-12 h-6 rounded-full transition-colors duration-200 ${
+                  className={`relative w-8 h-4 rounded-full transition-colors duration-200 ${
                     isCompactMode ? 'bg-indigo-600' : 'bg-gray-300'
                   }`}
                   type="button"
                 >
-                  <div className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform duration-200 ${
-                    isCompactMode ? 'translate-x-6' : 'translate-x-0'
+                  <div className={`absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full transition-transform duration-200 ${
+                    isCompactMode ? 'translate-x-4' : 'translate-x-0'
                   }`}></div>
                 </button>
                 {/* フォントサイズ調整アイコン（大小のA） */}
@@ -2722,6 +2722,7 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
           name: currentStaff.name,
           department: currentStaff.department,
           group: currentStaff.group,
+          currentStatus: '',
           isActive: currentStaff.isActive ?? true
         }] : []} 
         onSave={handleSaveSchedule} 

@@ -937,7 +937,7 @@ export default function FullMainApp() {
     
     feedbackTimersRef.current.set(scheduleId, timer);
     
-    if (isTimelineDebugEnabled()) console.log(`✨ フィードバック設定: ID ${scheduleId} → ${feedbackType} (${duration}ms)`);
+    if (isDebugEnabled()) console.log(`✨ フィードバック設定: ID ${scheduleId} → ${feedbackType} (${duration}ms)`);
   }, []);
   
   // フィードバックを即座にクリア
@@ -1640,7 +1640,7 @@ export default function FullMainApp() {
           }
           
           // 部分更新: 新規スケジュール追加
-          if (isTimelineDebugEnabled()) console.log('部分更新: スケジュール追加開始:', newSchedule);
+          if (isDebugEnabled()) console.log('部分更新: スケジュール追加開始:', newSchedule);
           
           // 既存の変換ロジックを安全に再利用
           const convertedSchedule: Schedule = {
@@ -1666,7 +1666,7 @@ export default function FullMainApp() {
             
             // 新しいスケジュールを安全に追加
             const updatedSchedules = [...prevSchedules, convertedSchedule];
-            if (isTimelineDebugEnabled()) console.log('✅ スケジュール追加成功:', convertedSchedule.id);
+            if (isDebugEnabled()) console.log('✅ スケジュール追加成功:', convertedSchedule.id);
             
             // === Phase 2a: 視覚的フィードバック適用 ===
             setScheduleFeedback(convertedSchedule.id, 'added', 2500);
@@ -1702,7 +1702,7 @@ export default function FullMainApp() {
           }
           
           // 部分更新: スケジュール更新
-          if (isTimelineDebugEnabled()) console.log('部分更新: スケジュール更新開始:', updatedSchedule);
+          if (isDebugEnabled()) console.log('部分更新: スケジュール更新開始:', updatedSchedule);
           
           // 既存の変換ロジックを安全に再利用
           const convertedSchedule: Schedule = {
@@ -1732,7 +1732,7 @@ export default function FullMainApp() {
               const layerMatch = (s.layer || 'adjustment') === (convertedSchedule.layer || 'adjustment');
               
               if (timeMatch && staffMatch && layerMatch) {
-                if (isTimelineDebugEnabled()) console.log('🎯 後勝ちマッチング成功:', {
+                if (isDebugEnabled()) console.log('🎯 後勝ちマッチング成功:', {
                   existingId: s.id,
                   newId: convertedSchedule.id,
                   time: `${s.start}-${s.end}`,
@@ -1779,7 +1779,7 @@ export default function FullMainApp() {
             // 既存スケジュールを安全に置換
             const updatedSchedules = [...prevSchedules];
             updatedSchedules[existingIndex] = convertedSchedule;
-            if (isTimelineDebugEnabled()) console.log('✅ スケジュール更新成功:', convertedSchedule.id);
+            if (isDebugEnabled()) console.log('✅ スケジュール更新成功:', convertedSchedule.id);
             
             // === Phase 2a: 視覚的フィードバック適用 ===
             setScheduleFeedback(convertedSchedule.id, 'updated', 2500);
@@ -1810,7 +1810,7 @@ export default function FullMainApp() {
         const startTime = performance.now();
         try {
           // 部分更新: スケジュール削除
-          if (isTimelineDebugEnabled()) console.log('部分更新: スケジュール削除開始:', deletedId);
+          if (isDebugEnabled()) console.log('部分更新: スケジュール削除開始:', deletedId);
           
           // 削除は最も安全な操作（データ追加ではないため）
           setSchedules(prevSchedules => {
@@ -1834,7 +1834,7 @@ export default function FullMainApp() {
                 const maxSId = Math.max(...sNumbers.map(n => parseInt(n)));
                 const maxDId = Math.max(...dNumbers.map(n => parseInt(n)));
                 if (maxSId === maxDId) {
-                  if (isTimelineDebugEnabled()) console.log('🎯 削除マッチング成功（数値ID）:', {
+                  if (isDebugEnabled()) console.log('🎯 削除マッチング成功（数値ID）:', {
                     existingId: s.id,
                     deleteId: deletedId,
                     matchedNumericId: maxSId
@@ -1888,7 +1888,7 @@ export default function FullMainApp() {
               
               return true; // 削除対象でない場合は保持
             });
-            if (isTimelineDebugEnabled()) console.log('✅ スケジュール削除成功:', deletedId);
+            if (isDebugEnabled()) console.log('✅ スケジュール削除成功:', deletedId);
             
             // 更新時刻を記録
             optimizedScheduleUpdateRef.current.lastUpdate = new Date();
@@ -3211,17 +3211,6 @@ export default function FullMainApp() {
           <span className="text-sm text-indigo-100">
             {user?.name || user?.email} ({user?.role === 'ADMIN' ? '管理者' : user?.role === 'SYSTEM_ADMIN' ? 'システム管理者' : '一般ユーザー'})
           </span>
-          {user?.role === 'SYSTEM_ADMIN' && (
-            <a
-              href="/admin/staff-management"
-              className={BUTTON_STYLES.headerPrimary}
-            >
-              <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
-              </svg>
-              管理者設定
-            </a>
-          )}
           <a
             href="/personal"
             className={BUTTON_STYLES.headerSecondary}
@@ -3240,6 +3229,17 @@ export default function FullMainApp() {
             </svg>
             月次計画
           </a>
+          {user?.role === 'SYSTEM_ADMIN' && (
+            <a
+              href="/admin/staff-management"
+              className="text-xs font-medium text-white bg-blue-600 px-3 py-1 rounded-md border border-white border-opacity-40 hover:bg-blue-700 transition-colors duration-150 h-7 flex items-center"
+            >
+              <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
+              </svg>
+              管理者設定
+            </a>
+          )}
           <button
             onClick={logout}
             className={BUTTON_STYLES.headerNeutral}
@@ -3404,6 +3404,27 @@ export default function FullMainApp() {
                     システム監視
                   </button>
                 )}
+                
+                {/* 🛡️ 部分更新トグルスイッチ（システム監視ボタンの右側） */}
+                {user?.role === 'SYSTEM_ADMIN' && (
+                  <div className="flex items-center space-x-2 px-3 py-1 bg-blue-50 border border-blue-200 rounded-lg">
+                    <span className="text-xs font-medium text-blue-700">部分更新:</span>
+                    <button 
+                      onClick={() => setEnableOptimizedUpdates(!enableOptimizedUpdates)}
+                      className={`relative w-8 h-4 rounded-full transition-colors duration-200 ${
+                        enableOptimizedUpdates ? 'bg-blue-500' : 'bg-gray-300'
+                      }`}
+                      title={`部分更新: ${enableOptimizedUpdates ? 'ON' : 'OFF'} (システム管理者のみ制御可能)`}
+                    >
+                      <div className={`absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full shadow-sm transition-transform duration-200 ${
+                        enableOptimizedUpdates ? 'translate-x-4' : 'translate-x-0'
+                      }`}></div>
+                    </button>
+                    <span className="text-xs font-medium text-blue-600" title={`成功: ${optimizationMetrics.successCount}回, エラー: ${optimizationMetrics.errorCount}回, フォールバック: ${optimizationMetrics.fallbackCount}回`}>
+                      {optimizationMetrics.successCount}ok/{optimizationMetrics.errorCount}err/{optimizationMetrics.fallbackCount}fb
+                    </span>
+                  </div>
+                )}
                 {/* 1px余白 */}
                 <span className="w-px"></span>
                 {/* 標準/コンパクト表示切替（ヘッダー右側に移動） */}
@@ -3411,12 +3432,12 @@ export default function FullMainApp() {
                   <button 
                     onClick={toggleViewMode}
                     title={`表示密度: ${viewMode === 'normal' ? '標準' : 'コンパクト'}`}
-                    className={`relative w-12 h-6 rounded-full transition-colors duration-200 ${
+                    className={`relative w-8 h-4 rounded-full transition-colors duration-200 ${
                       viewMode === 'compact' ? 'bg-indigo-600' : 'bg-gray-300'
                     }`}
                   >
-                    <div className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform duration-200 ${
-                      viewMode === 'compact' ? 'translate-x-6' : 'translate-x-0'
+                    <div className={`absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full transition-transform duration-200 ${
+                      viewMode === 'compact' ? 'translate-x-4' : 'translate-x-0'
                     }`}></div>
                   </button>
                   {/* フォントサイズ調整アイコン（大小のA） */}
@@ -3458,7 +3479,7 @@ export default function FullMainApp() {
             {isToday && (
               <div className="flex items-center space-x-3">
                 <div className="text-right bg-green-50 px-3 rounded-lg border border-green-200 h-7 flex items-center">
-                    <span className="text-xs text-green-700 font-medium mr-2">対応可能人数:</span>
+                    <span className="text-xs text-green-700 font-medium mr-2">現在の対応可能人数:</span>
                     <span className="text-base font-bold text-green-600">{availableStaffCount}人</span>
                 </div>
                 
@@ -3468,26 +3489,6 @@ export default function FullMainApp() {
                   title={`リアルタイム更新: ${realTimeUpdateEnabled ? 'オン - 他の人の変更を即座に反映' : 'オフ - 手動更新のみ、性能向上'}`}
                 >
                   
-                {/* 🛡️ システム管理者向け部分更新コントロール */}
-                {user?.role === 'SYSTEM_ADMIN' && (
-                  <div className="flex items-center space-x-2 mx-4 px-3 py-1 bg-blue-50 border border-blue-200 rounded-lg">
-                    <span className="text-xs text-blue-700 font-medium">高速更新:</span>
-                    <button 
-                      onClick={() => setEnableOptimizedUpdates(!enableOptimizedUpdates)}
-                      className={`relative w-8 h-4 rounded-full transition-colors duration-200 ${
-                        enableOptimizedUpdates ? 'bg-blue-500' : 'bg-gray-300'
-                      }`}
-                      title={`高速更新: ${enableOptimizedUpdates ? 'ON' : 'OFF'} (システム管理者のみ制御可能)`}
-                    >
-                      <div className={`absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full shadow-sm transition-transform duration-200 ${
-                        enableOptimizedUpdates ? 'translate-x-4' : 'translate-x-0'
-                      }`}></div>
-                    </button>
-                    <span className="text-xs text-blue-600" title={`成功: ${optimizationMetrics.successCount}回, エラー: ${optimizationMetrics.errorCount}回, フォールバック: ${optimizationMetrics.fallbackCount}回`}>
-                      {optimizationMetrics.successCount}ok/{optimizationMetrics.errorCount}err/{optimizationMetrics.fallbackCount}fb
-                    </span>
-                  </div>
-                )}
                 
                 </div>
                 
@@ -3502,12 +3503,12 @@ export default function FullMainApp() {
                   {/* 中央：トグルスイッチ */}
                   <button 
                     onClick={toggleRealTimeUpdate}
-                    className={`relative w-12 h-6 rounded-full transition-colors duration-200 ${
+                    className={`relative w-8 h-4 rounded-full transition-colors duration-200 ${
                       realTimeUpdateEnabled ? 'bg-teal-500' : 'bg-gray-300'
                     }`}
                   >
-                    <div className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform duration-200 ${
-                      realTimeUpdateEnabled ? 'translate-x-6' : 'translate-x-0'
+                    <div className={`absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full transition-transform duration-200 ${
+                      realTimeUpdateEnabled ? 'translate-x-4' : 'translate-x-0'
                     }`}></div>
                   </button>
                   

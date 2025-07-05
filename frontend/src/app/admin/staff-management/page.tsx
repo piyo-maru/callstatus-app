@@ -384,7 +384,7 @@ export default function StaffManagementPage() {
       
       const response = await fetch(fullUrl);
       console.log('Staff Management - Response status:', response.status);
-      console.log('Staff Management - Response headers:', [...response.headers.entries()]);
+      console.log('Staff Management - Response headers:', Array.from(response.headers.entries()));
       
       const data = await response.json();
       console.log('Staff Management - Response data keys:', Object.keys(data));

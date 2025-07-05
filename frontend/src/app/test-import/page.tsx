@@ -52,7 +52,7 @@ export default function TestImportPage() {
         timeout: 10000,
         forceNew: true,
         autoConnect: true
-      }).of('/import-progress')
+      }) // .of('/import-progress') - Socket.io namespace disabled for test
     }
     
     console.log('🔍 Socket.IO接続オプション:', {
@@ -69,24 +69,24 @@ export default function TestImportPage() {
       console.log('🔧 isConnected state should now be: true')
     })
 
-    newSocket.on('disconnect', (reason) => {
+    newSocket.on('disconnect', (reason: any) => {
       console.log('❌ WebSocket disconnected:', reason)
       setIsConnected(false)
       addLog(`❌ WebSocket切断: ${reason}`)
     })
 
-    newSocket.on('connect_error', (error) => {
+    newSocket.on('connect_error', (error: any) => {
       console.error('🚨 WebSocket connection error:', error)
       addLog(`🚨 WebSocket接続エラー: ${error.message}`)
       setIsConnected(false)
     })
 
-    newSocket.on('error', (error) => {
+    newSocket.on('error', (error: any) => {
       console.error('🚨 WebSocket error:', error)
       addLog(`🚨 WebSocketエラー: ${error}`)
     })
 
-    newSocket.on('import-progress', (data) => {
+    newSocket.on('import-progress', (data: any) => {
       console.log('📊 Import progress received:', data)
       
       // プログレス情報があれば設定
@@ -99,7 +99,7 @@ export default function TestImportPage() {
       }
     })
 
-    newSocket.on('import-completed', (data) => {
+    newSocket.on('import-completed', (data: any) => {
       console.log('✅ Import completed:', data)
       addLog(`✅ インポート完了: ${JSON.stringify(data.summary)}`)
       setIsImporting(false)
@@ -107,7 +107,7 @@ export default function TestImportPage() {
       stopProgressPolling() // ポーリング停止
     })
 
-    newSocket.on('import-error', (data) => {
+    newSocket.on('import-error', (data: any) => {
       console.log('❌ Import error:', data)
       addLog(`❌ インポートエラー: ${data.error || JSON.stringify(data)}`)
       setIsImporting(false)
@@ -115,7 +115,7 @@ export default function TestImportPage() {
       stopProgressPolling() // ポーリング停止
     })
 
-    newSocket.on('import-cancelled', (data) => {
+    newSocket.on('import-cancelled', (data: any) => {
       console.log('🚫 Import cancelled:', data)
       addLog(`🚫 インポートキャンセル: ${data.importId}`)
       setIsImporting(false)
@@ -124,7 +124,7 @@ export default function TestImportPage() {
     })
 
     // 全イベントをキャッチするデバッグリスナー
-    newSocket.onAny((eventName, ...args) => {
+    newSocket.onAny((eventName: any, ...args: any[]) => {
       console.log(`🔍 WebSocketイベント受信: ${eventName}`, args)
     })
 
