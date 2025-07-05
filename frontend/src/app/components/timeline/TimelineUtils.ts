@@ -673,5 +673,45 @@ export const LIGHT_ANIMATIONS = {
   schedule: "transition-all duration-150 ease-out",
   
   // 入力フィールド用：軽量な色・リング変化
-  input: "transition-colors duration-150 ease-out"
+  input: "transition-colors duration-150 ease-out",
+  
+  // === Phase 2a: 視覚的フィードバック専用アニメーション ===
+  // リアルタイム更新時の視覚的フィードバック用
+  feedbackPulse: "transition-all duration-300 ease-out",
+  feedbackFade: "transition-opacity duration-600 ease-out"
+} as const;
+
+// === Phase 2a: 視覚的フィードバックカラーシステム ===
+export const FEEDBACK_COLORS = {
+  // 新規追加時 - 成功を表す緑系
+  added: {
+    background: "bg-emerald-100",
+    border: "border-emerald-300", 
+    shadow: "shadow-emerald-200/50",
+    pulse: "bg-emerald-50"
+  },
+  
+  // 編集・更新時 - 変更を表す青系
+  updated: {
+    background: "bg-blue-100",
+    border: "border-blue-300",
+    shadow: "shadow-blue-200/50", 
+    pulse: "bg-blue-50"
+  },
+  
+  // 削除時 - 注意を表す赤系
+  deleted: {
+    background: "bg-red-100",
+    border: "border-red-300",
+    shadow: "shadow-red-200/50",
+    pulse: "bg-red-50"
+  },
+  
+  // エラー・フォールバック時 - 警告を表すオレンジ系
+  error: {
+    background: "bg-amber-100", 
+    border: "border-amber-300",
+    shadow: "shadow-amber-200/50",
+    pulse: "bg-amber-50"
+  }
 } as const;

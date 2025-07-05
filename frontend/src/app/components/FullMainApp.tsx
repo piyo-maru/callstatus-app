@@ -27,7 +27,8 @@ import {
   getDepartmentGroupStyle,
   LIGHT_ANIMATIONS,
   BRAND_COLORS,
-  BUTTON_STYLES
+  BUTTON_STYLES,
+  FEEDBACK_COLORS
 } from './timeline/TimelineUtils';
 // ★★★ 分離されたモジュールのインポート ★★★
 import { 
@@ -858,6 +859,7 @@ export default function FullMainApp() {
   const canManage = useCallback(() => {
     return hasPermission('ADMIN') || hasPermission('SYSTEM_ADMIN');
   }, [hasPermission]);
+
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -883,6 +885,75 @@ export default function FullMainApp() {
   const [isImportHistoryModalOpen, setIsImportHistoryModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [holidays, setHolidays] = useState<Holiday[]>([]);
+  
+  // === Phase 2a: 視覚的フィードバック状態管理 ===
+  // スケジュールID → フィードバック種別のマッピング
+  const [feedbackStates, setFeedbackStates] = useState<Map<number | string, 'added' | 'updated' | 'deleted' | 'error'>>(new Map());
+  
+  // フィードバック管理用のタイマーref（自動クリア用）
+  const feedbackTimersRef = useRef<Map<number | string, NodeJS.Timeout>>(new Map());
+
+  // === Phase 2a: 視覚的フィードバック管理関数 ===
+  
+  // フィードバックを設定し、自動的にクリアする
+  const setScheduleFeedback = useCallback((scheduleId: number | string, feedbackType: 'added' | 'updated' | 'deleted' | 'error', duration: number = 2500) => {
+    // 既存のタイマーをクリア
+    const existingTimer = feedbackTimersRef.current.get(scheduleId);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+    }
+    
+    // フィードバック状態を設定
+    setFeedbackStates(prev => {
+      const newMap = new Map(prev);
+      newMap.set(scheduleId, feedbackType);
+      return newMap;
+    });
+    
+    // 自動クリア用タイマーを設定
+    const timer = setTimeout(() => {
+      setFeedbackStates(prev => {
+        const newMap = new Map(prev);
+        newMap.delete(scheduleId);
+        return newMap;
+      });
+      feedbackTimersRef.current.delete(scheduleId);
+    }, duration);
+    
+    feedbackTimersRef.current.set(scheduleId, timer);
+    
+    console.log(`✨ フィードバック設定: ID ${scheduleId} → ${feedbackType} (${duration}ms)`);
+  }, []);
+  
+  // フィードバックを即座にクリア
+  const clearScheduleFeedback = useCallback((scheduleId: number | string) => {
+    const existingTimer = feedbackTimersRef.current.get(scheduleId);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+      feedbackTimersRef.current.delete(scheduleId);
+    }
+    
+    setFeedbackStates(prev => {
+      const newMap = new Map(prev);
+      newMap.delete(scheduleId);
+      return newMap;
+    });
+  }, []);
+  
+  // スケジュールのフィードバック状態を取得
+  const getScheduleFeedback = useCallback((scheduleId: number | string) => {
+    return feedbackStates.get(scheduleId);
+  }, [feedbackStates]);
+  
+  // フィードバック用CSSクラスを生成
+  const getFeedbackClasses = useCallback((scheduleId: number | string) => {
+    const feedbackType = feedbackStates.get(scheduleId);
+    if (!feedbackType) return '';
+    
+    const colors = FEEDBACK_COLORS[feedbackType];
+    return `${colors.background} ${colors.border} ${colors.shadow} ${LIGHT_ANIMATIONS.feedbackPulse}`;
+  }, [feedbackStates]);
+  
   // スクロール位置保存用（縦スクロール対応）
   const [savedScrollPosition, setSavedScrollPosition] = useState({ x: 0, y: 0 });
   const [isImporting, setIsImporting] = useState(false);
@@ -1523,6 +1594,9 @@ export default function FullMainApp() {
             const updatedSchedules = [...prevSchedules, convertedSchedule];
             console.log('✅ Phase 1: スケジュール追加成功:', convertedSchedule.id);
             
+            // === Phase 2a: 視覚的フィードバック適用 ===
+            setScheduleFeedback(convertedSchedule.id, 'added', 2500);
+            
             // 更新時刻を記録
             optimizedScheduleUpdateRef.current.lastUpdate = new Date();
             
@@ -1588,6 +1662,9 @@ export default function FullMainApp() {
             updatedSchedules[existingIndex] = convertedSchedule;
             console.log('✅ Phase 1: スケジュール更新成功:', convertedSchedule.id);
             
+            // === Phase 2a: 視覚的フィードバック適用 ===
+            setScheduleFeedback(convertedSchedule.id, 'updated', 2500);
+            
             // 更新時刻を記録
             optimizedScheduleUpdateRef.current.lastUpdate = new Date();
             
@@ -1625,6 +1702,10 @@ export default function FullMainApp() {
               safeFullRefresh('Delete target schedule not found');
               return prevSchedules; // 状態変更なし
             }
+            
+            // === Phase 2a: 削除前のフィードバック設定 ===
+            // 削除アニメーション用の短時間フィードバック
+            setScheduleFeedback(deletedId, 'deleted', 1500);
             
             // 安全にスケジュールを削除
             const updatedSchedules = prevSchedules.filter(s => s.id !== deletedId);
@@ -3476,6 +3557,8 @@ export default function FullMainApp() {
                                              : ''
                                          } ${
                                            isHistoricalData ? 'border-2 border-dashed border-gray-400' : ''
+                                         } ${
+                                           getFeedbackClasses(schedule.id)
                                          }`}
                                          style={{ 
                                            left: `${startPosition}%`, 
