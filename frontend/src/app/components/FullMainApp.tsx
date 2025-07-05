@@ -1026,6 +1026,27 @@ export default function FullMainApp() {
       localStorage.setItem('callstatus-user-viewMode', newMode);
     }
   };
+
+  // リアルタイム更新設定（ユーザー優先: ローカル > グローバル）
+  const [localRealTimeUpdate, setLocalRealTimeUpdate] = useState<boolean | null>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('callstatus-user-realTimeUpdate');
+      return saved !== null ? saved === 'true' : null;
+    }
+    return null;
+  });
+
+  // 実際に使用されるリアルタイム更新設定（ローカル設定優先、なければグローバル設定）
+  const realTimeUpdateEnabled = localRealTimeUpdate !== null ? localRealTimeUpdate : globalDisplaySettings.realTimeUpdateEnabled;
+
+  // リアルタイム更新切り替え（ユーザーが右上のトグルで操作）
+  const toggleRealTimeUpdate = () => {
+    const newEnabled = !realTimeUpdateEnabled;
+    setLocalRealTimeUpdate(newEnabled);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('callstatus-user-realTimeUpdate', newEnabled.toString());
+    }
+  };
   
   // スクロール同期用のref
   const topScrollRef = useRef<HTMLDivElement>(null);
@@ -1273,12 +1294,13 @@ export default function FullMainApp() {
 
   useEffect(() => {
     // WebSocket接続条件チェック
-    const isWebSocketEnabled = process.env.NEXT_PUBLIC_ENABLE_WEBSOCKET === 'true' || 
+    const isWebSocketEnabled = (process.env.NEXT_PUBLIC_ENABLE_WEBSOCKET === 'true' || 
                                process.env.NEXT_PUBLIC_FORCE_WEBSOCKET === 'true' ||
-                               window.location.hostname !== 'localhost';
+                               window.location.hostname !== 'localhost') &&
+                               realTimeUpdateEnabled; // リアルタイム更新が有効な場合のみ接続
     
     if (!isWebSocketEnabled) {
-      // console.log('WebSocket接続が無効化されています');
+      // console.log('WebSocket接続が無効化されています (環境設定またはユーザー設定により)');
       return;
     }
     
@@ -1335,7 +1357,7 @@ export default function FullMainApp() {
         socket.off('schedule:deleted', handleDeletedSchedule);
         socket.disconnect(); 
     };
-  }, [displayDate]);
+  }, [displayDate, realTimeUpdateEnabled]);
   
   // 現在時刻を1分単位に調整する関数
   const roundToNearestMinute = () => {
@@ -2707,10 +2729,10 @@ export default function FullMainApp() {
       設定
                   </button>
                 )}
+                {/* 1px余白 */}
+                <span className="w-px"></span>
+                {/* 標準/コンパクト表示切替（ヘッダー右側に移動） */}
                 <div className="flex items-center space-x-2">
-                  <span className={`text-xs ${viewMode === 'normal' ? 'text-gray-900 font-medium' : 'text-gray-500'}`}>
-                    標準
-                  </span>
                   <button 
                     onClick={toggleViewMode}
                     title={`表示密度: ${viewMode === 'normal' ? '標準' : 'コンパクト'}`}
@@ -2722,9 +2744,21 @@ export default function FullMainApp() {
                       viewMode === 'compact' ? 'translate-x-6' : 'translate-x-0'
                     }`}></div>
                   </button>
-                  <span className={`text-xs ${viewMode === 'compact' ? 'text-gray-900 font-medium' : 'text-gray-500'}`}>
-                    コンパクト
-                  </span>
+                  {/* フォントサイズ調整アイコン（大小のA） */}
+                  <svg 
+                    className={`w-4 h-4 ${viewMode === 'compact' ? 'text-indigo-600' : 'text-gray-600'}`}
+                    viewBox="0 0 512 512" 
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <g>
+                      <path d="M452.349,174.924c-2.95-11.607-13.402-19.726-25.377-19.726h-34.875c-11.326,0-21.369,7.27-24.892,18.034
+                        l-45.107,137.825l21.184,83.224l19.365-59.17h72.836l18.873,74.142H512L452.349,174.924z M373.354,302.417l27.032-82.607h5.751
+                        l21.028,82.607H373.354z" fill="currentColor"></path>
+                      <path d="M205.804,65.185h-52.385c-17.012,0-32.097,10.933-37.392,27.108L0,446.815h72.74l36.447-111.374h109.41
+                        l28.35,111.374h86.578L243.929,94.818C239.492,77.385,223.794,65.185,205.804,65.185z M125.257,286.338l40.61-124.094h8.641
+                        l31.588,124.094H125.257z" fill="currentColor"></path>
+                    </g>
+                  </svg>
                 </div>
             </div>
         </header>
@@ -2747,9 +2781,47 @@ export default function FullMainApp() {
                 )}
             </div>
             {isToday && (
-              <div className="text-right bg-green-50 px-3 rounded-lg border border-green-200 h-7 flex items-center">
-                  <span className="text-xs text-green-700 font-medium mr-2">現在の対応可能人数:</span>
-                  <span className="text-base font-bold text-green-600">{availableStaffCount}人</span>
+              <div className="flex items-center space-x-3">
+                <div className="text-right bg-green-50 px-3 rounded-lg border border-green-200 h-7 flex items-center">
+                    <span className="text-xs text-green-700 font-medium mr-2">現在の対応可能人数:</span>
+                    <span className="text-base font-bold text-green-600">{availableStaffCount}人</span>
+                </div>
+                
+                {/* リアルタイム更新オンオフ切替（対応可能人数の右側に移動） */}
+                <div 
+                  className="flex items-center space-x-2"
+                  title={`リアルタイム更新: ${realTimeUpdateEnabled ? 'オン - 他の人の変更を即座に反映' : 'オフ - 手動更新のみ、性能向上'}`}
+                >
+                  {/* 左：状態インジケーター（大きな点滅ドット） */}
+                  <div className={`w-3 h-3 rounded-full ${
+                    realTimeUpdateEnabled ? 'bg-teal-500 animate-pulse' : 'bg-gray-400'
+                  }`}></div>
+                  
+                  {/* 中央：トグルスイッチ */}
+                  <button 
+                    onClick={toggleRealTimeUpdate}
+                    className={`relative w-12 h-6 rounded-full transition-colors duration-200 ${
+                      realTimeUpdateEnabled ? 'bg-teal-500' : 'bg-gray-300'
+                    }`}
+                  >
+                    <div className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform duration-200 ${
+                      realTimeUpdateEnabled ? 'translate-x-6' : 'translate-x-0'
+                    }`}></div>
+                  </button>
+                  
+                  {/* 右：状態アイコン（モノクロSVG） */}
+                  {realTimeUpdateEnabled ? (
+                    // WiFi信号アイコン（通信中）
+                    <svg className="w-4 h-4 text-teal-600" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M17.778 8.222c-4.296-4.296-11.26-4.296-15.556 0A1 1 0 01.808 6.808c5.076-5.077 13.308-5.077 18.384 0a1 1 0 01-1.414 1.414zM14.95 11.05a7 7 0 00-9.9 0 1 1 0 01-1.414-1.414 9 9 0 0112.728 0 1 1 0 01-1.414 1.414zM12.12 13.88a3 3 0 00-4.24 0 1 1 0 01-1.415-1.414 5 5 0 017.07 0 1 1 0 01-1.415 1.414zM9 16a1 1 0 011-1h.01a1 1 0 110 2H10a1 1 0 01-1-1z" clipRule="evenodd"/>
+                    </svg>
+                  ) : (
+                    // 一時停止アイコン（停止中）
+                    <svg className="w-4 h-4 text-gray-500" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd"/>
+                    </svg>
+                  )}
+                </div>
               </div>
             )}
         </div>

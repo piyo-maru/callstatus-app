@@ -2044,11 +2044,9 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
                 </button>
               )}
               <div className="flex items-center space-x-2">
-                <span className={`text-xs ${!isCompactMode ? 'text-gray-900 font-medium' : 'text-gray-500'}`}>
-                  標準
-                </span>
                 <button
                   onClick={handleCompactModeToggle}
+                  title={`表示密度: ${!isCompactMode ? '標準' : 'コンパクト'}`}
                   className={`relative w-12 h-6 rounded-full transition-colors duration-200 ${
                     isCompactMode ? 'bg-indigo-600' : 'bg-gray-300'
                   }`}
@@ -2058,9 +2056,21 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
                     isCompactMode ? 'translate-x-6' : 'translate-x-0'
                   }`}></div>
                 </button>
-                <span className={`text-xs ${isCompactMode ? 'text-gray-900 font-medium' : 'text-gray-500'}`}>
-                  コンパクト
-                </span>
+                {/* フォントサイズ調整アイコン（大小のA） */}
+                <svg 
+                  className={`w-4 h-4 ${isCompactMode ? 'text-indigo-600' : 'text-gray-600'}`}
+                  viewBox="0 0 512 512" 
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <g>
+                    <path d="M452.349,174.924c-2.95-11.607-13.402-19.726-25.377-19.726h-34.875c-11.326,0-21.369,7.27-24.892,18.034
+                      l-45.107,137.825l21.184,83.224l19.365-59.17h72.836l18.873,74.142H512L452.349,174.924z M373.354,302.417l27.032-82.607h5.751
+                      l21.028,82.607H373.354z" fill="currentColor"></path>
+                    <path d="M205.804,65.185h-52.385c-17.012,0-32.097,10.933-37.392,27.108L0,446.815h72.74l36.447-111.374h109.41
+                      l28.35,111.374h86.578L243.929,94.818C239.492,77.385,223.794,65.185,205.804,65.185z M125.257,286.338l40.61-124.094h8.641
+                      l31.588,124.094H125.257z" fill="currentColor"></path>
+                  </g>
+                </svg>
               </div>
             </div>
           </div>

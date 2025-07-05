@@ -13,6 +13,7 @@ export interface GlobalDisplaySettings {
   viewMode: 'normal' | 'compact';
   maskingEnabled: boolean;
   timeRange: 'standard' | 'extended';
+  realTimeUpdateEnabled: boolean;
   customStatusColors: Record<string, string>;
   customStatusDisplayNames: Record<string, string>;
 }
@@ -29,6 +30,7 @@ export const useGlobalDisplaySettings = (authenticatedFetch?: (url: string, opti
     viewMode: 'normal',
     maskingEnabled: false,
     timeRange: 'standard',
+    realTimeUpdateEnabled: true,
     customStatusColors: {},
     customStatusDisplayNames: {},
   });
@@ -47,6 +49,7 @@ export const useGlobalDisplaySettings = (authenticatedFetch?: (url: string, opti
           viewMode: serverSettings.viewMode || 'normal',
           maskingEnabled: serverSettings.maskingEnabled || false,
           timeRange: serverSettings.timeRange || 'standard',
+          realTimeUpdateEnabled: serverSettings.realTimeUpdateEnabled !== undefined ? serverSettings.realTimeUpdateEnabled : true,
           customStatusColors: serverSettings.customStatusColors || {},
           customStatusDisplayNames: serverSettings.customStatusDisplayNames || {},
         };
@@ -64,6 +67,8 @@ export const useGlobalDisplaySettings = (authenticatedFetch?: (url: string, opti
     const viewMode = (localStorage.getItem('callstatus-viewMode') as 'normal' | 'compact') || 'normal';
     const maskingEnabled = localStorage.getItem('callstatus-maskingEnabled') === 'true';
     const timeRange = (localStorage.getItem('callstatus-timeRange') as 'standard' | 'extended') || 'standard';
+    const realTimeUpdateEnabledRaw = localStorage.getItem('callstatus-realTimeUpdateEnabled');
+    const realTimeUpdateEnabled = realTimeUpdateEnabledRaw !== null ? realTimeUpdateEnabledRaw === 'true' : true;
     
     let customStatusColors = {};
     let customStatusDisplayNames = {};
@@ -90,6 +95,7 @@ export const useGlobalDisplaySettings = (authenticatedFetch?: (url: string, opti
       viewMode,
       maskingEnabled,
       timeRange,
+      realTimeUpdateEnabled,
       customStatusColors,
       customStatusDisplayNames,
     };
