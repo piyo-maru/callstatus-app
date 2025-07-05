@@ -1573,6 +1573,11 @@ export default function FullMainApp() {
             // 既存スケジュールの検索
             const existingIndex = prevSchedules.findIndex(s => s.id === convertedSchedule.id);
             if (existingIndex < 0) {
+              console.error('🐛 更新対象スケジュール未発見デバッグ情報:');
+              console.error('  - 探しているID:', convertedSchedule.id, typeof convertedSchedule.id);
+              console.error('  - 既存スケジュール数:', prevSchedules.length);
+              console.error('  - 既存ID一覧:', prevSchedules.map(s => `${s.id}(${typeof s.id})`));
+              console.error('  - 受信データ:', convertedSchedule);
               console.warn('⚠️ 更新対象スケジュール未発見、フォールバック:', convertedSchedule.id);
               safeFullRefresh('Update target schedule not found');
               return prevSchedules; // 状態変更なし
@@ -1655,7 +1660,16 @@ export default function FullMainApp() {
         const displayDateStr = `${displayDate.getFullYear()}-${String(displayDate.getMonth() + 1).padStart(2, '0')}-${String(displayDate.getDate()).padStart(2, '0')}`;
         if(scheduleDateStr === displayDateStr) {
             // 🛡️ 安全な分岐制御（デフォルト：既存実装）
+            console.log('🔄 WebSocket受信: schedule:new', { 
+                enabled: enableOptimizedUpdates, 
+                safe: isSafeForOptimizedUpdate(newSchedule),
+                schedule: newSchedule,
+                date_match: scheduleDateStr === displayDateStr,
+                scheduleDateStr,
+                displayDateStr 
+            });
             if (enableOptimizedUpdates && isSafeForOptimizedUpdate(newSchedule)) {
+                console.log('✅ 部分更新実行: schedule:new');
                 optimizedScheduleUpdate.add(newSchedule);
             } else {
                 // 🔒 既存の安全な実装（完全保護）
@@ -1673,7 +1687,13 @@ export default function FullMainApp() {
         const displayDateStr = `${displayDate.getFullYear()}-${String(displayDate.getMonth() + 1).padStart(2, '0')}-${String(displayDate.getDate()).padStart(2, '0')}`;
         if(scheduleDateStr === displayDateStr){
             // 🛡️ 安全な分岐制御（デフォルト：既存実装）
+            console.log('🔄 WebSocket受信: schedule:updated', { 
+                enabled: enableOptimizedUpdates, 
+                safe: isSafeForOptimizedUpdate(updatedSchedule),
+                schedule: updatedSchedule 
+            });
             if (enableOptimizedUpdates && isSafeForOptimizedUpdate(updatedSchedule)) {
+                console.log('✅ 部分更新実行: schedule:updated');
                 optimizedScheduleUpdate.update(updatedSchedule);
             } else {
                 // 🔒 既存の安全な実装（完全保護）
@@ -1687,7 +1707,12 @@ export default function FullMainApp() {
     }
     const handleDeletedSchedule = (id: number) => {
         // 🛡️ 安全な分岐制御（デフォルト：既存実装）
+        console.log('🔄 WebSocket受信: schedule:deleted', { 
+            enabled: enableOptimizedUpdates, 
+            id: id 
+        });
         if (enableOptimizedUpdates) {
+            console.log('✅ 部分更新実行: schedule:deleted');
             optimizedScheduleUpdate.delete(id);
         } else {
             // 🔒 既存の安全な実装（完全保護）
@@ -1707,7 +1732,7 @@ export default function FullMainApp() {
         socket.off('schedule:deleted', handleDeletedSchedule);
         socket.disconnect(); 
     };
-  }, [displayDate, realTimeUpdateEnabled]);
+  }, [displayDate, realTimeUpdateEnabled, enableOptimizedUpdates]);
   
   // 現在時刻を1分単位に調整する関数
   const roundToNearestMinute = () => {
