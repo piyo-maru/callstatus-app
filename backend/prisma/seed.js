@@ -43,18 +43,21 @@ async function main() {
   // 部署設定作成
   console.log('部署設定作成中...');
   const departmentSettings = [
-    { type: 'department', name: 'システム部', backgroundColor: '#3B82F6', displayOrder: 10 },
-    { type: 'department', name: '営業部', backgroundColor: '#10B981', displayOrder: 20 },
-    { type: 'department', name: '経理部', backgroundColor: '#F59E0B', displayOrder: 30 },
-    { type: 'department', name: '人事部', backgroundColor: '#EF4444', displayOrder: 40 },
-    { type: 'group', name: '開発グループ', backgroundColor: '#8B5CF6', displayOrder: 10 },
-    { type: 'group', name: '運用グループ', backgroundColor: '#06B6D4', displayOrder: 20 },
-    { type: 'group', name: '営業一課', backgroundColor: '#84CC16', displayOrder: 10 },
-    { type: 'group', name: '営業二課', backgroundColor: '#22C55E', displayOrder: 20 },
-    { type: 'group', name: '会計グループ', backgroundColor: '#F97316', displayOrder: 10 },
-    { type: 'group', name: '財務グループ', backgroundColor: '#EAB308', displayOrder: 20 },
-    { type: 'group', name: '採用グループ', backgroundColor: '#F43F5E', displayOrder: 10 },
-    { type: 'group', name: '労務グループ', backgroundColor: '#EC4899', displayOrder: 20 },
+    // 部署: 彩度キープ×明度アップ = 淡いパステル調
+    { type: 'department', name: 'システム部', backgroundColor: '#8BB5F7', displayOrder: 10 },    // 淡い青 (明度78%, 彩度75%)
+    { type: 'department', name: '営業部', backgroundColor: '#7DDDB5', displayOrder: 20 },        // 淡い緑 (明度75%, 彩度70%)
+    { type: 'department', name: '経理部', backgroundColor: '#F7C574', displayOrder: 30 },        // 淡い金 (明度80%, 彩度75%)
+    { type: 'department', name: '人事部', backgroundColor: '#F79999', displayOrder: 40 },        // 淡い赤 (明度78%, 彩度72%)
+    
+    // グループ: より淡めで統一感を保持
+    { type: 'group', name: '開発グループ', backgroundColor: '#C4B5F7', displayOrder: 10 },      // 淡い紫 (明度80%, 彩度68%)
+    { type: 'group', name: '運用グループ', backgroundColor: '#7DD3F0', displayOrder: 20 },      // 淡い水色 (明度78%, 彩度70%)
+    { type: 'group', name: '営業一課', backgroundColor: '#B8E673', displayOrder: 10 },          // 淡い黄緑 (明度80%, 彩度72%)
+    { type: 'group', name: '営業二課', backgroundColor: '#99E6B3', displayOrder: 20 },          // 淡い薄緑 (明度78%, 彩度68%)
+    { type: 'group', name: '会計グループ', backgroundColor: '#F7B574', displayOrder: 10 },      // 淡いオレンジ (明度78%, 彩度75%)
+    { type: 'group', name: '財務グループ', backgroundColor: '#E6D973', displayOrder: 20 },      // 淡いベージュ (明度78%, 彩度70%)
+    { type: 'group', name: '採用グループ', backgroundColor: '#F7B5E6', displayOrder: 10 },      // 淡いピンク (明度80%, 彩度65%)
+    { type: 'group', name: '労務グループ', backgroundColor: '#E6B5CC', displayOrder: 20 },      // 淡いローズ (明度75%, 彩度60%)
   ];
 
   for (const setting of departmentSettings) {
@@ -123,7 +126,7 @@ async function main() {
   const adjustmentData = [
     {
       date: new Date(todayStr),
-      status: 'Online',
+      status: 'online',
       start: new Date(`${todayStr}T00:00:00Z`), // JST 9:00
       end: new Date(`${todayStr}T09:00:00Z`),   // JST 18:00
       memo: '通常業務',
@@ -131,7 +134,7 @@ async function main() {
     },
     {
       date: new Date(todayStr),
-      status: 'Meeting',
+      status: 'meeting',
       start: new Date(`${todayStr}T01:00:00Z`), // JST 10:00
       end: new Date(`${todayStr}T03:00:00Z`),   // JST 12:00
       memo: '朝会',
@@ -139,7 +142,7 @@ async function main() {
     },
     {
       date: new Date(todayStr),
-      status: 'Remote',
+      status: 'remote',
       start: new Date(`${todayStr}T01:00:00Z`), // JST 10:00
       end: new Date(`${todayStr}T10:00:00Z`),   // JST 19:00
       memo: 'リモート作業',
@@ -147,7 +150,7 @@ async function main() {
     },
     {
       date: new Date(todayStr),
-      status: 'Training',
+      status: 'training',
       start: new Date(`${todayStr}T04:00:00Z`), // JST 13:00
       end: new Date(`${todayStr}T06:00:00Z`),   // JST 15:00
       memo: '技術研修',
@@ -155,7 +158,7 @@ async function main() {
     },
     {
       date: new Date(todayStr),
-      status: 'Online',
+      status: 'online',
       start: new Date(`${todayStr}T23:30:00Z`), // JST 8:30 (前日分なので +1日)
       end: new Date(`${todayStr}T08:30:00Z`),   // JST 17:30
       memo: '営業活動',
@@ -163,7 +166,7 @@ async function main() {
     },
     {
       date: new Date(todayStr),
-      status: 'Off',
+      status: 'off',
       start: new Date(`${todayStr}T00:00:00Z`), // JST 9:00
       end: new Date(`${todayStr}T09:00:00Z`),   // JST 18:00
       memo: '有給休暇',
@@ -196,14 +199,30 @@ async function main() {
 
   // 担当設定作成
   console.log('担当設定作成中...');
-  await prisma.dailyAssignment.create({
-    data: {
-      staffId: createdStaff[1].id, // 佐藤花子
-      date: new Date(todayStr),
-      assignmentType: 'reception',
-      customLabel: 'FAX受信担当',
-      updatedAt: new Date()
-    }
+  await prisma.dailyAssignment.createMany({
+    data: [
+      {
+        staffId: createdStaff[1].id, // 佐藤花子
+        date: new Date(todayStr),
+        assignmentType: 'fax',
+        customLabel: null,
+        updatedAt: new Date()
+      },
+      {
+        staffId: createdStaff[2].id, // 山田次郎
+        date: new Date(todayStr),
+        assignmentType: 'subjectCheck',
+        customLabel: null,
+        updatedAt: new Date()
+      },
+      {
+        staffId: createdStaff[3].id, // 鈴木美咲
+        date: new Date(todayStr),
+        assignmentType: 'custom',
+        customLabel: '来客対応',
+        updatedAt: new Date()
+      }
+    ]
   });
 
   // 契約表示キャッシュ生成
@@ -328,7 +347,7 @@ async function main() {
   console.log(`- 契約データ: ${contractData.length}件`);
   console.log(`- 調整データ: ${adjustmentData.length}件`);
   console.log(`- 支援設定: 1件`);
-  console.log(`- 担当設定: 1件`);
+  console.log(`- 担当設定: 3件`);
   console.log(`- 契約表示キャッシュ: ${cacheEntries.length}件`);
   console.log(`- 昼休み（break）: ${breakEntries.length}件`);
 }

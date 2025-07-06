@@ -30,6 +30,11 @@ cd /app && npm run dev
 - バックエンド: ポート3002（外部アクセス用3003）
 - PostgreSQL: ポート5432
 
+### データベース認証情報
+- ユーザー: user
+- パスワード: password
+- データベース: mydb
+
 ## 🔧 詳細開発コマンド
 
 ### フロントエンド開発（Next.js 14）
@@ -103,6 +108,19 @@ npm run test:setup        # データベースシード実行（テスト用デ�
 # テスト結果確認
 open playwright-report/index.html  # HTMLレポート
 ls test-results/                   # 失敗ログ・スクリーンショット・動画
+```
+
+### 運用スクリプト（便利な自動化ツール）
+```bash
+# 完全起動スクリプト（推奨）- 全サービス起動・Prisma生成・開発サーバー起動を自動化
+./scripts/operations/startup.sh
+
+# システム診断スクリプト - サービス状態・ポート・DB接続を一括確認
+./scripts/operations/diagnose.sh
+
+# 再起動スクリプト
+./scripts/operations/restart.sh       # 通常再起動
+./scripts/operations/restart_clean.sh  # クリーン再起動（プロセス完全停止後）
 ```
 
 ## 🕐 時刻処理厳格ルール（必須遵守）
@@ -223,6 +241,23 @@ docker exec callstatus-app_frontend_1 bash -c "cd /app && npx tsc --noEmit"
 ## 🏗️ プロジェクト概要
 
 **コールステータスアプリ** - スタッフのスケジュール管理と在席状況をリアルタイムで追跡するシステム
+
+### 📁 プロジェクト構造
+```
+callstatus-app/
+├── frontend/          # Next.js フロントエンド
+├── backend/          # NestJS バックエンド  
+├── database/         # データベース関連
+├── scripts/          # 運用・開発スクリプト
+│   ├── operations/   # 起動・診断スクリプト
+│   ├── database/     # DB操作スクリプト
+│   └── demo-data/    # デモデータ生成
+├── docs/             # 詳細ドキュメント
+├── tests/            # E2Eテスト (Playwright)
+├── docker-compose.yml
+├── config.ini        # APIホスト設定
+└── package.json      # ルートパッケージ（E2Eテスト用）
+```
 
 ### 🏢 重要な業務コンテキスト
 - **225名規模の企業**: 実際の企業環境での運用要件に基づく設計
@@ -442,6 +477,16 @@ cd /app && npm run dev
 5. API接続失敗 → curl http://localhost:3002/api/test
 ```
 
+### コンテナ名の確認（docker exec実行前に必要）
+```bash
+# 全コンテナの状態確認
+docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+
+# 正確なコンテナ名取得
+docker ps | grep backend
+docker ps | grep frontend
+```
+
 ### プロセス競合防止（重要）
 ```bash
 # プロセス確認
@@ -481,6 +526,7 @@ docker exec callstatus-app_backend_1 bash -c "cd /app && npm run build"
 ---
 
 **📝 更新履歴**
+- 2025-07-06: 運用スクリプト情報追加、データベース認証情報追加、コンテナ名確認方法追加、プロジェクト構造追加
 - 2025-07-05: システム監視ダッシュボード・UI統一化完了、TypeScript型安全性完全修正、プロダクト品質UI実現
 - 2025-07-04: 担当設定統一システム完了、個人ページ日付選択📌形式実装、統一責任分離アーキテクチャ確立
 - 2025-07-03: 【重要修正】実装状況の誤記修正（2層レイヤー→完了、認証システム→基盤完了・調整中）、WebSocket業務要件洞察追加
