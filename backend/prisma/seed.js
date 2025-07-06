@@ -12,6 +12,7 @@ async function main() {
   console.log('⚠️  この操作は取り消せません！');
   await prisma.adjustment.deleteMany();
   await prisma.contract.deleteMany();
+  await prisma.contractDisplayCache.deleteMany(); // 外部キー制約対応
   await prisma.temporaryAssignment.deleteMany();
   await prisma.dailyAssignment.deleteMany();
   await prisma.departmentSettings.deleteMany();
@@ -205,6 +206,121 @@ async function main() {
     }
   });
 
+  // 契約表示キャッシュ生成
+  console.log('契約表示キャッシュ生成中...');
+  
+  // 現在日時から3ヶ月分のキャッシュを生成
+  const currentDate = new Date();
+  const currentYear = currentDate.getFullYear();
+  const currentMonth = currentDate.getMonth() + 1;
+  
+  // 3ヶ月分（現在月含む）
+  const monthsToGenerate = [
+    { year: currentYear, month: currentMonth },
+    { year: currentMonth === 12 ? currentYear + 1 : currentYear, month: currentMonth === 12 ? 1 : currentMonth + 1 },
+    { year: currentMonth >= 11 ? currentYear + 1 : currentYear, month: currentMonth >= 11 ? currentMonth - 10 : currentMonth + 2 }
+  ];
+  
+  const cacheEntries = [];
+  
+  for (const { year, month } of monthsToGenerate) {
+    // その月の日数を取得
+    const daysInMonth = new Date(year, month, 0).getDate();
+    
+    for (const staff of createdStaff) {
+      // スタッフの契約データを取得
+      const contract = await prisma.contract.findFirst({
+        where: { staffId: staff.id }
+      });
+      
+      if (contract) {
+        // 各日についてキャッシュエントリを生成
+        for (let day = 1; day <= daysInMonth; day++) {
+          const date = new Date(year, month - 1, day);
+          const dayOfWeek = date.getDay(); // 0=日曜日, 1=月曜日, ...
+          
+          // 曜日に対応する勤務時間を取得
+          const dayKeys = ['sundayHours', 'mondayHours', 'tuesdayHours', 'wednesdayHours', 'thursdayHours', 'fridayHours', 'saturdayHours'];
+          const workHours = contract[dayKeys[dayOfWeek]];
+          
+          // 勤務時間が設定されているかチェック
+          const hasContract = !!(workHours && workHours !== '' && workHours !== null);
+          
+          cacheEntries.push({
+            staffId: staff.id,
+            year: year,
+            month: month,
+            day: day,
+            hasContract: hasContract
+          });
+        }
+      }
+    }
+  }
+  
+  // バルクインサート
+  if (cacheEntries.length > 0) {
+    await prisma.contractDisplayCache.createMany({
+      data: cacheEntries,
+      skipDuplicates: true
+    });
+  }
+  
+  console.log(`✅ 契約表示キャッシュ生成完了: ${cacheEntries.length}件`);
+
+  // 昼休み（break）自動追加
+  console.log('昼休み（break）データ生成中...');
+  
+  const breakEntries = [];
+  
+  for (const { year, month } of monthsToGenerate) {
+    const daysInMonth = new Date(year, month, 0).getDate();
+    
+    for (const staff of createdStaff) {
+      const contract = await prisma.contract.findFirst({
+        where: { staffId: staff.id }
+      });
+      
+      if (contract) {
+        for (let day = 1; day <= daysInMonth; day++) {
+          const date = new Date(year, month - 1, day);
+          const dayOfWeek = date.getDay();
+          
+          // 曜日に対応する勤務時間を確認
+          const dayKeys = ['sundayHours', 'mondayHours', 'tuesdayHours', 'wednesdayHours', 'thursdayHours', 'fridayHours', 'saturdayHours'];
+          const workHours = contract[dayKeys[dayOfWeek]];
+          
+          // 勤務時間がある日のみ昼休みを追加
+          if (workHours && workHours !== '' && workHours !== null) {
+            const dateStr = date.toISOString().split('T')[0];
+            
+            breakEntries.push({
+              staffId: staff.id,
+              date: date,
+              status: 'break',
+              start: new Date(`${dateStr}T03:00:00.000Z`), // JST 12:00 = UTC 03:00
+              end: new Date(`${dateStr}T04:00:00.000Z`),   // JST 13:00 = UTC 04:00
+              memo: '昼休み（シードデータ自動生成）',
+              reason: 'シードデータ生成',
+              isPending: false,
+              updatedAt: new Date()
+            });
+          }
+        }
+      }
+    }
+  }
+  
+  // 昼休みデータをバルクインサート
+  if (breakEntries.length > 0) {
+    await prisma.adjustment.createMany({
+      data: breakEntries,
+      skipDuplicates: true
+    });
+  }
+  
+  console.log(`✅ 昼休み（break）生成完了: ${breakEntries.length}件`);
+
   console.log('✅ テストデータ準備完了');
   console.log(`作成されたデータ:`);
   console.log(`- スタッフ: ${createdStaff.length}名`);
@@ -213,6 +329,8 @@ async function main() {
   console.log(`- 調整データ: ${adjustmentData.length}件`);
   console.log(`- 支援設定: 1件`);
   console.log(`- 担当設定: 1件`);
+  console.log(`- 契約表示キャッシュ: ${cacheEntries.length}件`);
+  console.log(`- 昼休み（break）: ${breakEntries.length}件`);
 }
 
 main()
