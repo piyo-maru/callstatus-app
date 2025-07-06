@@ -117,10 +117,12 @@ async function main() {
     });
   }
 
-  // 調整データ作成（個別スケジュール） - 今日の日付で作成
+  // 調整データ作成（個別スケジュール） - 今日の日付で作成（JST基準）
   console.log('調整データ作成中...');
   const today = new Date();
-  const todayStr = today.toISOString().split('T')[0];
+  const jstToday = new Date(today.getTime() + 9 * 60 * 60 * 1000); // JST変換
+  const todayStr = jstToday.toISOString().split('T')[0];
+  console.log(`📅 データ作成日付: ${todayStr} (JST基準)`);
   
   // UTC時刻でのスケジュール作成（JST基準時間 - 9時間）
   const adjustmentData = [
