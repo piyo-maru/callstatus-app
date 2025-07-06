@@ -4,7 +4,7 @@ import { AppController } from './app.controller';
 import { SchedulesModule } from './schedules/schedules.module';
 import { StaffModule } from './staff/staff.module';
 import { PrismaModule } from './prisma.module';
-import { CsvImportModule } from './csv-import/csv-import.module';
+// CsvImportModule削除（ポートフォリオ版）
 import { DailyAssignmentsModule } from './daily-assignments/daily-assignments.module';
 import { ResponsibilitiesModule } from './responsibilities/responsibilities.module';
 import { DepartmentSettingsModule } from './department-settings/department-settings.module';
@@ -14,7 +14,7 @@ import { SnapshotsModule } from './snapshots/snapshots.module';
 import { PendingModule } from './pending/pending.module';
 import { ContractsModule } from './contracts/contracts.module';
 import { PresetSettingsModule } from './preset-settings/preset-settings.module';
-import { AuthModule } from './auth/auth.module';
+// AuthModule削除（ポートフォリオ版）
 import { MonthlyPlannerModule } from './monthly-planner/monthly-planner.module';
 // AuthModule有効化（Phase 2: 段階的導入）
 // import { AssignmentsModule } from './assignments/assignments.module';
@@ -27,7 +27,7 @@ import { MonthlyPlannerModule } from './monthly-planner/monthly-planner.module';
     PrismaModule,
     SchedulesModule,
     StaffModule,
-    CsvImportModule,
+    // CsvImportModule削除（ポートフォリオ版）
     DailyAssignmentsModule,
     ResponsibilitiesModule,
     DepartmentSettingsModule,
@@ -37,7 +37,7 @@ import { MonthlyPlannerModule } from './monthly-planner/monthly-planner.module';
     PendingModule,
     ContractsModule,
     PresetSettingsModule,
-    AuthModule,
+    // AuthModule削除（ポートフォリオ版）
     MonthlyPlannerModule,
     // AuthModule有効化完了（Phase 2: 段階的導入）
     // AuditModule, 

@@ -1,31 +1,31 @@
-# 📊 CallStatus - Enterprise Staff Schedule Management System
+# 📊 CallStatus - Portfolio Demo
 
-> **エンタープライズ級のスタッフスケジュール管理システム**  
-> リアルタイム同期、複雑なワークフロー、高度なデータ管理機能を備えた本格的なWebアプリケーション
+> **⚠️ ポートフォリオ・デモンストレーション版 ⚠️**  
+> これは技術力紹介のためのデモ版です。本格運用には適していません。
 
 [![Next.js](https://img.shields.io/badge/Next.js-14-black?logo=next.js)](https://nextjs.org/)
 [![NestJS](https://img.shields.io/badge/NestJS-10-e0234e?logo=nestjs)](https://nestjs.com/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue?logo=typescript)](https://www.typescriptlang.org/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-blue?logo=postgresql)](https://www.postgresql.org/)
-[![Docker](https://img.shields.io/badge/Docker-ready-2496ed?logo=docker)](https://www.docker.com/)
-[![Playwright](https://img.shields.io/badge/E2E-Playwright-2EAD33?logo=playwright)](https://playwright.dev/)
+[![AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 
-![Main Dashboard](assets/dashboard-preview.png)
+![Demo Preview](assets/demo-preview.png)
 
 ## 🎯 プロジェクト概要
 
-**CallStatus**は、225名規模の企業での実際の要件に基づいて開発されたスタッフスケジュール管理システムです。  
-複雑な勤務パターン、承認ワークフロー、リアルタイム更新など、エンタープライズレベルの要求を満たす本格的なアプリケーションです。
+**CallStatus**は、エンタープライズ級のスタッフスケジュール管理システムのポートフォリオ版です。  
+実際の企業環境での要件に基づいて設計された、技術力とアーキテクチャ設計能力を示すデモンストレーションです。
 
-### 🏢 想定利用シーン
-- **企業の勤務管理**: 複数部署・グループでの勤務時間管理
-- **リアルタイム共有**: 出社状況の即座な把握
-- **承認ワークフロー**: 予定変更の申請・承認プロセス
-- **履歴管理**: 過去のスケジュール参照・監査対応
+### 💡 このデモで確認できる技術力
+- **モダンフルスタック開発**: Next.js 14 + NestJS + PostgreSQL
+- **リアルタイム通信**: WebSocket（Socket.io）によるライブ更新
+- **エンタープライズ設計**: 複雑なデータ構造・ワークフロー実装
+- **TypeScript完全活用**: 型安全な大規模アプリケーション開発
+- **美しいUI/UX**: 商用製品レベルのインターフェース設計
 
 ---
 
-## ✨ 主要機能
+## ✨ 実装済み主要機能
 
 ### 🔄 **リアルタイム同期**
 - WebSocket（Socket.io）による即座な更新通知
@@ -33,72 +33,53 @@
 - ライブステータス表示（出社・リモート・会議等）
 
 ### 📅 **高度なスケジュール管理**
-- **2層データレイヤー**: 基本契約時間 + 個別調整の組み合わせ
-- **1分単位精度**: Excel Online互換の正確な時間計算
-- **複合予定**: 1日に複数の勤務パターンを組み合わせ可能
-- **プリセット機能**: よく使う勤務パターンの保存・再利用
+- **2層データレイヤー**: 基本契約時間 + 個別調整
+- **1分単位精度**: 正確な時間計算・表示
+- **複合予定**: 1日複数の勤務パターン組み合わせ
+- **プリセット機能**: よく使う予定パターンの保存
 
-### 🔐 **エンタープライズ認証**
-- JWT認証による安全なセッション管理
-- 役割ベース権限制御（管理者・一般ユーザー）
-- パスワードリセット・初期設定フロー
+### 🎨 **モダンUI/UX**
+- **淡いパステル色**: 目に優しいカラーパレット
+- **レスポンシブ設計**: デスクトップ最適化
+- **統一デザインシステム**: 一貫したユーザー体験
+- **横スクロール最適化**: 大量データの効率表示
 
-### 📋 **承認ワークフロー**
-- 月次計画での予定申請
-- 管理者による一括・個別承認
-- 承認履歴の完全な監査ログ
-- 承認待ち・承認済み状態の可視化
-
-### 📊 **データ管理・分析**
+### 📊 **データ管理**
 - **履歴スナップショット**: 日次での過去データ保存
-- **CSVインポート・エクスポート**: 大量データの効率的な処理
-- **ロールバック機能**: インポート操作の取り消し
-- **マスキング機能**: 過去データの個人情報保護
-
-### 🎨 **Modern UI/UX**
-- **商用製品クオリティ**: Airシフト風の洗練されたデザイン
-- **デスクトップ最適化**: 大画面での効率的な操作を重視
-- **横スクロール統一**: 大量データの効率的な表示
-- **統一カードデザイン**: モダンなUI/UXパターン実装
+- **承認ワークフロー**: 月次計画での申請・承認プロセス
+- **権限管理**: 管理者・一般ユーザーの役割分離
 
 ---
 
 ## 🛠 技術スタック
 
 ### **Frontend**
-- **Next.js 14** - App Router、RSC活用の最新構成
-- **TypeScript** - 完全型安全な開発
-- **Tailwind CSS** - ユーティリティファーストのスタイリング
+- **Next.js 14** - App Router、RSC活用
+- **TypeScript** - 完全型安全開発
+- **Tailwind CSS** - ユーティリティファーストCSS
 - **Socket.io-client** - リアルタイム通信
-- **React DnD** - ドラッグ&ドロップ操作
+- **React DnD** - ドラッグ&ドロップ
 
 ### **Backend**
-- **NestJS** - エンタープライズ向けNode.jsフレームワーク
-- **Prisma ORM** - 型安全なデータベースアクセス
-- **PostgreSQL** - 高性能リレーショナルデータベース
+- **NestJS** - エンタープライズNode.jsフレームワーク
+- **Prisma ORM** - 型安全データベースアクセス
+- **PostgreSQL** - 高性能リレーショナルDB
 - **Socket.io** - WebSocketサーバー
-- **JWT** - 認証・認可システム
+- **JWT** - 認証システム（デモでは簡略化）
 
-### **Infrastructure & DevOps**
-- **Docker & Docker Compose** - コンテナ化による環境一致
-- **Playwright** - E2Eテスト自動化（19テストケース実装）
+### **DevOps & Testing**
+- **Docker Compose** - 開発環境コンテナ化
+- **Playwright** - E2Eテスト自動化
 - **Jest** - ユニット・統合テスト
-- **GitHub Actions** - CI/CDパイプライン
-
-### **Architecture Patterns**
-- **マイクロサービス風モジュラー設計**
-- **レイヤードアーキテクチャ** - 関心の分離
-- **CQRS風データ操作** - 読み取り・書き込みの最適化
-- **イベント駆動アーキテクチャ** - WebSocketによる状態同期
+- **GitHub Actions Ready** - CI/CD対応
 
 ---
 
-## 🚀 クイックスタート
+## 🚀 デモ起動方法
 
 ### 前提条件
 - Node.js 18+
 - Docker & Docker Compose
-- PostgreSQL（Dockerで自動セットアップ）
 
 ### インストール・起動
 ```bash
@@ -106,43 +87,67 @@
 git clone https://github.com/your-username/callstatus-app.git
 cd callstatus-app
 
-# 全サービス起動（一発コマンド）
+# デモ環境セットアップ（簡易版）
+./scripts/setup-demo.sh
+
+# または手動セットアップ
 docker-compose up -d
-
-# Prismaクライアント生成（必須）
 docker exec callstatus-app_backend_1 npx prisma generate
-
-# バックエンド開発サーバー起動
-docker exec -it callstatus-app_backend_1 bash -c \"cd /app && npm run start:dev\"
-
-# フロントエンド開発サーバー起動（別ターミナル）
-docker exec -it callstatus-app_frontend_1 bash -c \"cd /app && npm run dev\"
+docker exec callstatus-app_backend_1 npm run db:seed
 ```
 
 ### 接続確認
-- **フロントエンド**: http://localhost:3000
-- **バックエンドAPI**: http://localhost:3002
-- **PostgreSQL**: localhost:5432
+- **デモ画面**: http://localhost:3000
+- **API**: http://localhost:3002
 
 ---
 
-## 📸 機能スクリーンショット
+## 📸 機能デモ
 
 ### メインダッシュボード
-![Main Dashboard](assets/main-dashboard.png)
-*リアルタイムでの出社状況表示・8:00-21:00のタイムライン表示*
+*リアルタイム出社状況・タイムライン表示*
 
 ### 月次計画
-![Monthly Planner](assets/monthly-planner.png)
-*カレンダー形式での月間予定管理・申請ワークフロー*
-
-### 承認管理画面
-![Approval Management](assets/approval-management.png)
-*管理者向け一括承認・詳細な申請内容確認*
+*カレンダー形式での予定管理・承認ワークフロー*
 
 ### 個人スケジュール
-![Personal Schedule](assets/personal-schedule.png)
 *個人向け予定編集・プリセット活用*
+
+---
+
+## 🏗 アーキテクチャのポイント
+
+### 設計思想
+- **関心の分離**: レイヤード・モジュラーアーキテクチャ
+- **スケーラビリティ**: 大量データ・多ユーザー対応設計
+- **保守性**: TypeScript型安全性・テスト自動化
+- **ユーザビリティ**: 実際の業務フローに基づくUX設計
+
+### データ設計
+```
+Contract (基本勤務時間) + Adjustment (個別調整) = 統合表示
+```
+
+### リアルタイム通信
+```
+フロントエンド ←→ WebSocket ←→ バックエンド ←→ PostgreSQL
+```
+
+---
+
+## 🚨 重要な制限事項
+
+### ⚠️ デモ版の制限
+- **認証システム**: 簡略化（実際はJWT完全実装）
+- **CSVインポート**: 削除済み（実際は225人規模対応）
+- **運用機能**: 監視・バックアップ等は非実装
+- **データ永続化**: 保証なし
+
+### 🏢 フル機能版との違い
+- エンタープライズ認証（SSO・LDAP連携）
+- 大量データインポート・エクスポート
+- 詳細な監査ログ・レポート機能
+- 本格運用向けDevOps設定
 
 ---
 
@@ -150,146 +155,63 @@ docker exec -it callstatus-app_frontend_1 bash -c \"cd /app && npm run dev\"
 
 ### E2Eテスト実行
 ```bash
-# 全テストケース実行（19テスト）
-npm run test
+# 全テストケース（基本機能のみ）
+npm run test:demo
 
-# カテゴリ別実行
-npm run test:basic        # 基本ワークフロー（8テスト）
-npm run test:layers       # データレイヤー（5テスト）
-npm run test:support      # 支援機能（6テスト）
-
-# UIテスト・デバッグ
-npm run test:headed       # ブラウザ表示
-npm run test:ui           # Playwright UIツール
+# UI付きテスト
+npm run test:headed
 ```
-
-### バックエンドテスト
-```bash
-# 単体・統合テスト
-docker exec callstatus-app_backend_1 bash -c \"cd /app && npm run test\"
-
-# E2Eテスト
-docker exec callstatus-app_backend_1 bash -c \"cd /app && npm run test:e2e\"
-
-# カバレッジ測定
-docker exec callstatus-app_backend_1 bash -c \"cd /app && npm run test:cov\"
-```
-
----
-
-## 🏗 アーキテクチャ詳細
-
-### システム構成図
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Frontend      │    │   Backend       │    │   Database      │
-│   (Next.js)     │◄──►│   (NestJS)      │◄──►│  (PostgreSQL)   │
-│                 │    │                 │    │                 │
-│ ・App Router    │    │ ・JWT Auth      │    │ ・Prisma ORM    │
-│ ・WebSocket     │    │ ・WebSocket     │    │ ・マイグレーション│
-│ ・TypeScript    │    │ ・RESTful API   │    │ ・スナップショット│
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-```
-
-### データモデル概要
-- **Staff**: スタッフ基本情報・部署・グループ
-- **Contract**: 基本勤務時間（曜日別パターン）
-- **Adjustment**: 個別調整予定（休暇・残業等）
-- **PendingSchedule**: 承認待ち予定
-- **Snapshot**: 履歴データ保存
-- **AuditLog**: 操作履歴・監査証跡
-
----
-
-## 📈 パフォーマンス・スケーラビリティ
-
-### 実証済みスケール
-- **225名同時利用**: 実際の企業環境での検証済み
-- **1200件/月のpending処理**: 大量ワークフロー処理対応
-- **1分単位精度**: 正確な時間計算による信頼性
-
-### 最適化手法
-- **WebSocket最適化**: 必要な更新のみの効率的な通信
-- **データベースインデックス**: 大量データでの高速検索
-- **クライアントキャッシュ**: 表示設定・プリセットの高速読み込み
-- **横スクロール仮想化**: 大量データ表示での滑らかなUX
-
----
-
-## 🔧 開発・運用
-
-### 開発者向けコマンド
-```bash
-# データベース操作
-docker exec callstatus-app_backend_1 bash -c \"cd /app && npx prisma migrate dev\"
-docker exec callstatus-app_backend_1 bash -c \"cd /app && npm run db:seed\"
-
-# コード品質チェック
-docker exec callstatus-app_frontend_1 bash -c \"cd /app && npm run lint\"
-docker exec callstatus-app_backend_1 bash -c \"cd /app && npm run format\"
-
-# 型チェック
-docker exec callstatus-app_frontend_1 bash -c \"cd /app && npx tsc --noEmit\"
-```
-
-### 運用スクリプト
-- **scripts/operations/**: システム起動・診断ツール
-- **scripts/database/**: データベース操作・メンテナンス
-- **scripts/demo-data/**: テスト用データ生成
-
----
-
-## 🤝 Contributing
-
-1. フォークして機能ブランチ作成
-2. コード変更・テスト追加
-3. Linter・型チェック・テスト実行
-4. プルリクエスト作成
-
-### 品質基準
-- **TypeScript**: 完全な型安全性
-- **テスト**: 新機能には必ずテスト追加
-- **ドキュメント**: APIリファレンス更新
-- **パフォーマンス**: 大量データでの動作確認
-
----
-
-## 📋 今後の計画
-
-### Phase 1: 機能拡張
-- [ ] モバイルアプリ（React Native）
-- [ ] 通知システム（Push・Email）
-- [ ] 詳細分析ダッシュボード
-
-### Phase 2: エンタープライズ機能
-- [ ] SSO統合（SAML/OAuth）
-- [ ] 多言語対応（i18n）
-- [ ] API レート制限・監視
-
-### Phase 3: AI・自動化
-- [ ] 勤務パターン学習・推奨
-- [ ] 異常検知・アラート
-- [ ] スケジュール最適化アルゴリズム
 
 ---
 
 ## 📄 ライセンス
 
-MIT License - 詳細は[LICENSE](LICENSE)をご覧ください。
+**GNU Affero General Public License v3.0**
+
+### 🔒 利用制限
+- ⚠️ **商用利用禁止**（ライセンス違反）
+- ⚠️ **SaaS運用時**: ソースコード公開義務
+- ✅ **ポートフォリオ確認**: 自由
+- ✅ **学習目的**: 自由
+
+本格的な商用利用については別途ご相談ください。
 
 ---
 
 ## 👤 開発者情報
 
-**Hiroshi Takahashi**
+**Hiroshi Takahashi**  
+フルスタックエンジニア・システムアーキテクト
+
+### 💼 技術的な強み
+- **エンタープライズ開発**: 複雑な業務要件の技術実装
+- **アーキテクチャ設計**: スケーラブルなシステム構成
+- **TypeScript**: 大規模アプリでの型安全開発
+- **フルスタック**: Frontend・Backend・DevOps全般
+
+### 📞 連絡先
 - GitHub: [@your-username](https://github.com/your-username)
 - Email: your.email@example.com
-- LinkedIn: [your-linkedin](https://linkedin.com/in/your-profile)
-
-### 💼 転職活動について
-このプロジェクトは実際の企業要件に基づいた本格的な開発経験を示すポートフォリオです。  
-**エンタープライズ環境での複雑な要求解決・大規模システム設計・チーム開発**の実力をご確認いただけます。
+- LinkedIn: [your-profile](https://linkedin.com/in/your-profile)
 
 ---
 
-*⭐ 気に入った場合はスターをお願いします！*
+### 🎯 ポートフォリオとしての価値
+
+このプロジェクトは以下の**実務レベルの技術力**を実証します：
+
+1. **複雑な要件の技術実装力**
+   - 2層データ構造・承認ワークフロー・リアルタイム同期
+
+2. **エンタープライズ級の設計力**
+   - 225名規模での動作実績・型安全性・テスト自動化
+
+3. **ユーザー中心のUI/UX設計**
+   - 実際の業務フローに基づく使いやすいインターフェース
+
+4. **チーム開発対応力**
+   - 保守性・拡張性を考慮したコード品質
+
+---
+
+*⭐ 技術レベルが伝わりましたら、ぜひスターをお願いします！*
