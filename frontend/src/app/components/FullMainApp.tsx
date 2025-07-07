@@ -3366,8 +3366,21 @@ export default function FullMainApp() {
             <div className="flex items-center space-x-2">
                 <button 
                   onClick={() => {
+                    console.log('予定追加ボタンクリック:', { 
+                      isHistoricalMode, 
+                      user: user ? {
+                        role: user.role,
+                        staffId: user.staffId
+                      } : null
+                    });
                     if (!isHistoricalMode) {
                       setSelectedSchedule(null);
+                      // STAFFユーザーの場合は自分のstaffIdを初期値に設定
+                      if (user?.role === 'STAFF' && user?.staffId) {
+                        setDraggedSchedule({ staffId: user.staffId });
+                      } else {
+                        setDraggedSchedule(null);
+                      }
                       handleOpenModal();
                     }
                   }} 

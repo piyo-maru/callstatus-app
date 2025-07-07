@@ -64,14 +64,19 @@ const SYSTEM_PRESETS = {
     name: '夜間担当',
     schedules: [
       { status: 'off', start: 9, end: 12 },
+      { status: 'online', start: 12, end: 13 },
       { status: 'break', start: 17, end: 18 },
       { status: 'night duty', start: 18, end: 21 }
     ]
   },
   substitute_work: {
-    presetId: 'substitute-work-regular',
+    presetId: 'custom-1751466327183',
     name: '振出（出向社員）',
-    schedules: [{ status: 'online', start: 9, end: 18 }]
+    schedules: [
+      { status: '出社', start: 9, end: 12, memo: '月次プランナー: 振出（出向社員）|presetId:custom-1751466327183' },
+      { status: 'break', start: 12, end: 13, memo: '月次プランナー: 振出（出向社員）|presetId:custom-1751466327183' },
+      { status: 'online', start: 13, end: 18, memo: '月次プランナー: 振出（出向社員）|presetId:custom-1751466327183' }
+    ]
   }
 };
 

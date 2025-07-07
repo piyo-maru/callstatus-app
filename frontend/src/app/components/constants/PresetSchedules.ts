@@ -135,7 +135,38 @@ export const DEFAULT_UNIFIED_PRESETS: UnifiedPreset[] = [
     description: '午後の半日休暇',
     category: 'time-off',
     schedules: [
+      { status: 'online', startTime: 12, endTime: 13, memo: '' },
       { status: 'off', startTime: 13, endTime: 18, memo: '' }
+    ],
+    isActive: true,
+    customizable: true,
+    isDefault: false
+  },
+  {
+    id: 'custom-1751466327183',
+    name: 'substitute-work-regular',
+    displayName: '振出（出向社員）',
+    description: '振替出勤の勤務',
+    category: 'general',
+    schedules: [
+      { status: '出社', startTime: 9, endTime: 12, memo: '' },
+      { status: 'break', startTime: 12, endTime: 13, memo: '' },
+      { status: 'online', startTime: 13, endTime: 18, memo: '' }
+    ],
+    isActive: true,
+    customizable: true,
+    isDefault: false
+  },
+  {
+    id: 'custom-1751466335072',
+    name: 'substitute-work-part-time',
+    displayName: '振出（パートタイマー）',
+    description: '振替出勤のパートタイム勤務',
+    category: 'general',
+    schedules: [
+      { status: '出社', startTime: 9, endTime: 12, memo: '' },
+      { status: 'break', startTime: 12, endTime: 13, memo: '' },
+      { status: 'online', startTime: 13, endTime: 17.75, memo: '' }
     ],
     isActive: true,
     customizable: true,
@@ -150,10 +181,11 @@ export const DEFAULT_UNIFIED_PRESETS: UnifiedPreset[] = [
     category: 'night-duty',
     schedules: [
       { status: 'off', startTime: 9, endTime: 12, memo: '' },
+      { status: 'online', startTime: 12, endTime: 13, memo: '' },
       { status: 'break', startTime: 17, endTime: 18, memo: '' },
       { status: 'night duty', startTime: 18, endTime: 21, memo: '' }
     ],
-    representativeScheduleIndex: 2,
+    representativeScheduleIndex: 3,
     isActive: true,
     customizable: true,
     isDefault: false

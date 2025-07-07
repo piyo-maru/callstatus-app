@@ -336,16 +336,100 @@ export function UnifiedSettingsModal({
     { id: 'settings-management' as TabType, name: '設定管理', icon: '💾' }
   ], [canManage]);
 
+  // 部署・グループ設定の変更検知用：初期データを保存
+  const [originalDepartmentSettings, setOriginalDepartmentSettings] = useState<{ departments: any[], groups: any[] }>({ departments: [], groups: [] });
+
+  // 部署・グループ設定の変更検知
+  const isDepartmentSettingsDirty = useMemo(() => {
+    if (originalDepartmentSettings.departments.length === 0 && originalDepartmentSettings.groups.length === 0) {
+      return false; // 初期データが読み込まれていない場合は変更なしとみなす
+    }
+    
+    // 部署設定の比較
+    const departmentsChanged = departments.length !== originalDepartmentSettings.departments.length ||
+      departments.some((dept, index) => {
+        const original = originalDepartmentSettings.departments[index];
+        return !original || 
+          dept.backgroundColor !== original.backgroundColor ||
+          dept.displayOrder !== original.displayOrder ||
+          dept.shortName !== original.shortName;
+      });
+    
+    // グループ設定の比較
+    const groupsChanged = groups.length !== originalDepartmentSettings.groups.length ||
+      groups.some((group, index) => {
+        const original = originalDepartmentSettings.groups[index];
+        return !original ||
+          group.backgroundColor !== original.backgroundColor ||
+          group.displayOrder !== original.displayOrder ||
+          group.shortName !== original.shortName;
+      });
+    
+    return departmentsChanged || groupsChanged;
+  }, [departments, groups, originalDepartmentSettings]);
+
+  // 部署・グループ設定保存
+  const handleSaveDepartments = useCallback(async (silent = false) => {
+    if (!canManage || !authenticatedFetch) return;
+    
+    setIsSavingDepartments(true);
+    try {
+      const currentApiUrl = getApiUrl();
+      const allSettings = [...departments, ...groups];
+      const response = await authenticatedFetch(`${currentApiUrl}/api/department-settings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(allSettings.map(item => ({
+          type: item.type,
+          name: item.name,
+          shortName: item.shortName,
+          backgroundColor: item.backgroundColor,
+          displayOrder: item.displayOrder || 0
+        })))
+      });
+      
+      if (response.ok) {
+        if (!silent) {
+          alert('設定を保存しました');
+        }
+        // 保存後に初期データを更新
+        setOriginalDepartmentSettings({ departments: [...departments], groups: [...groups] });
+      }
+    } catch (error) {
+      console.error('Failed to save settings:', error);
+      if (!silent) {
+        alert('保存に失敗しました');
+      }
+      throw error; // エラーを再スローして呼び出し元で処理
+    } finally {
+      setIsSavingDepartments(false);
+    }
+  }, [canManage, authenticatedFetch, departments, groups]);
+
   // 設定保存とモーダルクローズ
   const handleSaveAndClose = useCallback(async () => {
     console.log('[Debug] 保存して閉じる実行中...', {
       customStatusColors,
       customStatusDisplayNames,
-      isDirty
+      isDirty,
+      isDepartmentSettingsDirty
     });
     
-    if (isDirty) {
-      await saveSettings();
+    try {
+      // プリセット設定の保存
+      if (isDirty) {
+        await saveSettings();
+      }
+      
+      // 部署・グループ設定の保存
+      if (isDepartmentSettingsDirty && canManage) {
+        console.log('[Debug] 部署・グループ設定を保存中...');
+        await handleSaveDepartments(true); // silent=true でアラート表示を抑制
+      }
+    } catch (error) {
+      console.error('設定保存エラー:', error);
+      alert('設定の保存中にエラーが発生しました');
+      return; // エラーが発生した場合はモーダルを閉じない
     }
     
     // 親コンポーネントに設定変更を通知（ページリロードの代わり）
@@ -375,7 +459,7 @@ export function UnifiedSettingsModal({
     }
     
     onClose();
-  }, [isDirty, saveSettings, onSettingsChange, maskingEnabled, timeRange, filteredPresets, departments, onSave, onClose]);
+  }, [isDirty, saveSettings, canManage, onSettingsChange, maskingEnabled, timeRange, filteredPresets, departments, onSave, onClose]);
 
   // サーバーから設定を読み込み
   useEffect(() => {
@@ -761,8 +845,17 @@ export function UnifiedSettingsModal({
       const response = await authenticatedFetch(`${currentApiUrl}/api/department-settings`);
       if (response.ok) {
         const data = await response.json();
-        setDepartments(data.departments || []);
-        setGroups(data.groups || []);
+        const fetchedDepartments = data.departments || [];
+        const fetchedGroups = data.groups || [];
+        
+        setDepartments(fetchedDepartments);
+        setGroups(fetchedGroups);
+        
+        // 初期データとして保存（変更検知用）
+        setOriginalDepartmentSettings({ 
+          departments: [...fetchedDepartments], 
+          groups: [...fetchedGroups] 
+        });
       }
     } catch (error) {
       console.error('Failed to fetch department settings:', error);
@@ -792,37 +885,6 @@ export function UnifiedSettingsModal({
     }
   }, [canManage, authenticatedFetch, fetchDepartmentSettings]);
 
-  // 部署・グループ設定保存
-  const handleSaveDepartments = useCallback(async () => {
-    if (!canManage || !authenticatedFetch) return;
-    
-    setIsSavingDepartments(true);
-    try {
-      const currentApiUrl = getApiUrl();
-      const allSettings = [...departments, ...groups];
-      const response = await authenticatedFetch(`${currentApiUrl}/api/department-settings`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(allSettings.map(item => ({
-          type: item.type,
-          name: item.name,
-          shortName: item.shortName,
-          backgroundColor: item.backgroundColor,
-          displayOrder: item.displayOrder || 0
-        })))
-      });
-      
-      if (response.ok) {
-        alert('設定を保存しました');
-        await fetchDepartmentSettings();
-      }
-    } catch (error) {
-      console.error('Failed to save settings:', error);
-      alert('保存に失敗しました');
-    } finally {
-      setIsSavingDepartments(false);
-    }
-  }, [canManage, authenticatedFetch, departments, groups, fetchDepartmentSettings]);
 
   // 部署設定の更新関数
   const updateDepartmentShortName = useCallback((id: number, shortName: string) => {
@@ -2340,7 +2402,14 @@ export function UnifiedSettingsModal({
         {/* フッター */}
         <div className="flex justify-between items-center p-6 border-t bg-gray-50">
           <div className="text-sm text-gray-500">
-            {isDirty && <span className="text-orange-600">⚠️ 未保存の変更があります</span>}
+            {(isDirty || isDepartmentSettingsDirty) && (
+              <span className="text-orange-600">
+                ⚠️ 未保存の変更があります
+                {isDirty && isDepartmentSettingsDirty && ' (プリセット・部署設定)'}
+                {isDirty && !isDepartmentSettingsDirty && ' (プリセット設定)'}
+                {!isDirty && isDepartmentSettingsDirty && ' (部署・グループ設定)'}
+              </span>
+            )}
           </div>
           <div className="flex space-x-3">
             <button
@@ -2356,10 +2425,14 @@ export function UnifiedSettingsModal({
             </button>
             <button
               onClick={handleSaveAndClose}
-              className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-              disabled={isLoading}
+              className={`px-4 py-2 text-sm rounded transition-colors ${
+                (isDirty || isDepartmentSettingsDirty) 
+                  ? 'bg-green-600 text-white hover:bg-green-700' 
+                  : 'bg-blue-600 text-white hover:bg-blue-700'
+              }`}
+              disabled={isLoading || isSavingDepartments}
             >
-              {isLoading ? '保存中...' : '保存して閉じる'}
+              {(isLoading || isSavingDepartments) ? '保存中...' : '💾 保存して閉じる'}
             </button>
           </div>
         </div>

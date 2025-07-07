@@ -65,20 +65,28 @@ export class ResponsibilitiesService {
       const staffData = staffResponsibilities.get(staffId);
       
       // assignmentTypeに基づいて責任フラグを設定
-      switch (assignment.assignmentType) {
+      // 英語形式と日本語形式の両方に対応
+      const assignmentType = assignment.assignmentType;
+      
+      switch (assignmentType) {
         case 'lunch':
+        case '昼当番':
           staffData.responsibilities.lunch = true;
           break;
         case 'fax':
+        case 'FAX当番':
           staffData.responsibilities.fax = true;
           break;
         case 'cs':
+        case 'CS担当':
           staffData.responsibilities.cs = true;
           break;
         case 'subjectCheck':
+        case '件名チェック担当':
           staffData.responsibilities.subjectCheck = true;
           break;
         case 'custom':
+        case 'その他':
           staffData.responsibilities.custom = assignment.customLabel || '';
           break;
       }

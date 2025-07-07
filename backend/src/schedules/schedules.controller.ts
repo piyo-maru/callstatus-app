@@ -25,7 +25,11 @@ export class SchedulesController {
     try {
       console.log('Creating schedule with data:', createScheduleDto);
       
-      // 権限チェックを一時的にスキップ（認証システム修正まで）
+      // TODO: 権限チェック実装（認証システム修正後）
+      // 現在は一時的にスキップ中だが、以下の権限チェックが必要：
+      // 1. STAFFは自分のstaffIdのみ作成可能
+      // 2. ADMIN・SYSTEM_ADMINは全staffId作成可能
+      // 3. 未認証ユーザーは作成不可
       
       const result = await this.schedulesService.create(createScheduleDto);
       console.log('Schedule created successfully:', result);

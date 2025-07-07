@@ -119,8 +119,8 @@ function generateDemoData() {
   console.log(`📅 対象期間: ${formatDate(startDate)} - ${formatDate(endDate)}`);
   console.log(`📊 平日: ${weekdays.length}日, 土曜日: ${saturdays.length}日`);
   
-  // スタッフID範囲（226-450の225人）
-  const staffIds = Array.from({ length: 225 }, (_, i) => 226 + i);
+  // スタッフID範囲（242-466の225人）
+  const staffIds = Array.from({ length: 225 }, (_, i) => 242 + i);
   
   const applications = [];
   const responsibilities = [];

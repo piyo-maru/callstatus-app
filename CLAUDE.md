@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-このファイルは、このリポジトリでコードを扱う際のClaude Code (claude.ai/code) へのガイダンスを提供します。
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## 会話ガイドライン
 
@@ -84,32 +84,69 @@ curl http://localhost:3002/api/test
 curl http://localhost:3002/api/staff
 ```
 
-### E2Eテスト（Playwright・充実したテストスイート）
+### E2Eテスト（Playwright・包括的テストスイート）
 ```bash
-# 【重要】テスト実行前に必ずサービス起動確認
+# 【重要】テスト実行の前提条件
+# 1. 全サービスが起動していること
 docker-compose up -d
-curl http://localhost:3000 && curl http://localhost:3002/api/test
+docker ps  # 3つのコンテナが全てRunning状態であることを確認
 
-# 全E2Eテスト実行（19テスト：基本8+レイヤー5+支援6）
-npm run test
+# 2. データベースにシードデータが投入されていること
+npm run test:setup  # または docker exec [backend_container] npm run db:seed
 
-# 個別テスト実行
-npm run test:basic        # 基本ワークフローテスト（8テスト）
-npm run test:layers       # 2層データレイヤーテスト（5テスト）
-npm run test:support      # 支援設定機能テスト（6テスト）
+# 3. API接続が正常であること
+curl http://localhost:3002/api/test  # {"message":"API is working"}が返ること
+curl http://localhost:3000  # HTMLが返ること
+
+# 基本テスト実行
+npm run test                 # 全E2Eテスト実行
+
+# カテゴリ別テスト実行
+npm run test:basic           # 基本ワークフローテスト（7テスト）
+npm run test:layers          # 2層データレイヤーテスト（5テスト）
+npm run test:support         # 支援設定機能テスト（6テスト）
+npm run test:drag            # ドラッグ操作テスト
+npm run test:pages           # ページ固有機能テスト
+npm run test:realtime        # リアルタイム通信テスト
+npm run test:ui-consistency  # UI統一性テスト
+npm run test:auth            # 認証・権限テスト
+npm run test:edge            # エッジケーステスト
+
+# 統合テストグループ
+npm run test:core            # コア機能（basic + layers + support）
+npm run test:interaction     # インタラクション（drag + pages + realtime）
+npm run test:quality         # 品質保証（ui-consistency + auth + edge）
+npm run test:comprehensive   # 全カテゴリ包括実行
 
 # デバッグ・UI付きテスト
-npm run test:headed       # ブラウザ表示での実行
-npm run test:ui           # Playwright UIインターフェース
+npm run test:headed          # ブラウザ表示での実行
+npm run test:ui-mode         # Playwright UIインターフェース
+npm run test:debug           # デバッグモード
+npm run test:trace           # トレース記録付き実行
 
-# テスト環境セットアップ
-npm run test:setup        # データベースシード実行（テスト用データ）
+# パフォーマンス・CI向けオプション
+npm run test:parallel        # 並列実行（4ワーカー）
+npm run test:ci              # CI環境用（JUnit形式レポート）
+npm run test:coverage        # カバレッジHTMLレポート
 
 # テスト結果確認
 open playwright-report/index.html  # HTMLレポート
 ls test-results/                   # 失敗ログ・スクリーンショット・動画
 ```
 
+### E2Eテスト構成
+```
+tests/e2e/
+├── basic-workflow.spec.js     # 基本操作・フィルター・表示確認（7テスト）
+├── layer-system.spec.js       # 2層データレイヤー動作（5テスト）
+├── support-features.spec.js   # 支援設定機能（6テスト）
+├── drag-operations.spec.js    # ドラッグ&ドロップ操作
+├── page-specific.spec.js      # 各ページ固有機能
+├── realtime-tests.spec.js     # WebSocketリアルタイム通信
+├── ui-consistency.spec.js     # UI統一性・デザイン整合性
+├── monitoring-auth.spec.js    # システム監視・認証権限
+└── edge-cases.spec.js         # エッジケース・異常系
+```
 ### 運用スクリプト（便利な自動化ツール）
 ```bash
 # 完全起動スクリプト（推奨）- 全サービス起動・Prisma生成・開発サーバー起動を自動化
@@ -165,6 +202,11 @@ docker exec callstatus-app_frontend_1 bash -c "cd /app && npx tsc --noEmit"
 - **ステータス**: 認証基盤完了、権限チェック一時無効化中（段階的有効化）
 - **完了項目**: AuthModule・JWT認証・フロントエンド認証UI
 - **調整中**: 各コントローラーでの権限チェック（一時的にコメントアウト）
+- **⚠️ 重要なセキュリティ問題**: 
+  - フロントエンドでのSTAFF権限制御は正常動作（予定編集・追加・削除の制限）
+  - バックエンドAPI権限チェックは完全無効化（schedules.controller.ts）
+  - 直接API呼び出しでフロントエンド制限を回避可能（開発者ツール等）
+  - STAFFユーザーが他人の予定を操作可能な状態
 - **詳細**: [/docs/projects/authentication-system.md](/docs/projects/authentication-system.md)
 
 ### 日次スナップショット履歴機能 【完了】 ✅
@@ -293,12 +335,21 @@ callstatus-app/
 ```
 ✅ バックエンド認証モジュール: 有効化済み（app.module.ts:40 AuthModule）
 ✅ フロントエンド認証UI: 完全実装済み（AuthProvider.tsx）
-⚠️  権限チェック: 一部コントローラーで一時的にスキップ中（認証と権限分離のため）
+✅ フロントエンドSTAFF権限制御: 正常動作（予定編集・追加・削除制限）
+⚠️  バックエンドAPI権限チェック: 完全無効化中（セキュリティリスクあり）
+🚨 セキュリティ脆弱性: 直接API呼び出しでSTAFF制限を回避可能
 ```
 
 #### 現在一時的に無効化されているコンポーネント
-- JWT認証Guard・Decorator群（全コントローラーでコメントアウト状態）
-- 権限チェック（一時的にスキップ中）
+- JWT認証Guard・Decorator群（schedules.controller.ts等で完全コメントアウト）
+- API権限チェック（POST/PATCH/DELETE全てスキップ中）
+- STAFFユーザーの自己staffId制限（バックエンドレベル）
+
+#### セキュリティ影響範囲
+- **影響API**: `/api/schedules` (POST/PATCH/DELETE)
+- **脆弱性**: STAFFユーザーが開発者ツール等で他人の予定を操作可能
+- **回避方法**: 直接fetch()でstaffIdを変更してAPI呼び出し
+- **対策**: 段階的権限チェック復旧が必要（Phase 1: JWT認証 → Phase 2: STAFF制限）
 
 #### 技術スタック詳細
 **フロントエンド:**
@@ -319,7 +370,7 @@ callstatus-app/
 - **multer** (ファイルアップロード)
 
 **E2Eテスト:**
-- **Playwright** (19テスト実装済み)
+- **Playwright** (包括的テストスイート実装済み)
 - **Jest** (NestJS E2Eテスト)
 
 ### コアアーキテクチャ原則
@@ -468,6 +519,20 @@ docker exec -it callstatus-app_frontend_1 /bin/bash
 cd /app && npm run dev
 ```
 
+### コンテナ名の確認（docker exec実行前に必要）
+```bash
+# 全コンテナの状態確認
+docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+
+# 正確なコンテナ名取得（プロジェクト名によって変わる場合がある）
+docker ps | grep backend   # 例: callstatus-app_backend_1, callstatus-app-backend-1
+docker ps | grep frontend  # 例: callstatus-app_frontend_1, callstatus-app-frontend-1
+docker ps | grep db        # 例: callstatus_app_db
+
+# コンテナ名が異なる場合は、実際の名前に置き換えて実行
+# 例: docker exec [実際のコンテナ名] npm run start:dev
+```
+
 ### よくある問題の即座解決
 ```bash
 1. Prismaエラー → docker exec callstatus-app_backend_1 npx prisma generate
@@ -522,10 +587,12 @@ docker exec callstatus-app_backend_1 bash -c "cd /app && npm run build"
 - 目標達成に絶対必要でない限り、ファイルを作成しない
 - 新しいファイルを作成するよりも、既存のファイルを編集することを常に優先する
 - ドキュメントファイル（*.md）やREADMEファイルを積極的に作成しない
+- **ultrathink: 既存の機能を損なわないように細心の注意を払いながら開発する**
 
 ---
 
 **📝 更新履歴**
+- 2025-07-07: E2Eテストコマンド拡充、テスト構成詳細化、ultrathink原則追加、コンテナ名確認方法強化
 - 2025-07-06: 運用スクリプト情報追加、データベース認証情報追加、コンテナ名確認方法追加、プロジェクト構造追加
 - 2025-07-05: システム監視ダッシュボード・UI統一化完了、TypeScript型安全性完全修正、プロダクト品質UI実現
 - 2025-07-04: 担当設定統一システム完了、個人ページ日付選択📌形式実装、統一責任分離アーキテクチャ確立

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { AuthProvider } from "./components/AuthProvider";
+import ConfigLoader from "./components/ConfigLoader";
 
 export const metadata: Metadata = {
   title: "出社状況管理ボード",
@@ -17,10 +18,8 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ja">
-      <head>
-        <script src="/config.js"></script>
-      </head>
       <body>
+        <ConfigLoader />
         <AuthProvider>
           {children}
         </AuthProvider>

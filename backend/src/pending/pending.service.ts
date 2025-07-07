@@ -467,30 +467,114 @@ export class PendingService {
   async bulkApproval(bulkDto: BulkApprovalDto, actorId: number) {
     console.log(`Bulk ${bulkDto.action} for ${bulkDto.pendingIds.length} pendings`);
 
-    const results = [];
+    const now = new Date();
+    let successCount = 0;
+    let failedCount = 0;
     const errors = [];
 
-    for (const pendingId of bulkDto.pendingIds) {
-      try {
-        const result = bulkDto.action === 'approve'
-          ? await this.approve(pendingId, { reason: bulkDto.reason }, actorId)
-          : await this.reject(pendingId, { reason: bulkDto.reason }, actorId);
-        
-        results.push(result);
-      } catch (error) {
-        console.error(`Error processing pending ${pendingId}:`, error.message);
-        errors.push({
-          pendingId,
-          error: error.message
-        });
+    try {
+      // 対象のPending一覧を事前取得（存在確認とエラー検出）
+      const targetPendings = await this.prisma.adjustment.findMany({
+        where: {
+          id: { in: bulkDto.pendingIds },
+          isPending: true
+        },
+        select: { id: true, staffId: true, approvedAt: true, rejectedAt: true }
+      });
+
+      // 存在しないIDや既に処理済みのIDをエラーとして記録
+      const existingIds = targetPendings.map(p => p.id);
+      const missingIds = bulkDto.pendingIds.filter(id => !existingIds.includes(id));
+      const processedPendings = targetPendings.filter(p => p.approvedAt || p.rejectedAt);
+
+      // エラー記録
+      missingIds.forEach(id => {
+        errors.push({ pendingId: id, error: 'Pendingが見つかりません' });
+        failedCount++;
+      });
+      processedPendings.forEach(p => {
+        errors.push({ pendingId: p.id, error: '既に承認または却下済みです' });
+        failedCount++;
+      });
+
+      // 処理可能なPendingのIDリスト
+      const validPendingIds = targetPendings
+        .filter(p => !p.approvedAt && !p.rejectedAt)
+        .map(p => p.id);
+
+      if (validPendingIds.length > 0) {
+        if (bulkDto.action === 'approve') {
+          // 一括承認
+          const updateResult = await this.prisma.adjustment.updateMany({
+            where: {
+              id: { in: validPendingIds },
+              isPending: true
+            },
+            data: {
+              approvedAt: now,
+              approvedBy: actorId,
+              reason: bulkDto.reason || null,
+              isPending: false,
+              updatedAt: now
+            }
+          });
+          successCount = updateResult.count;
+
+          // 承認ログ一括作成
+          const approvalLogs = validPendingIds.map(id => ({
+            adjustmentId: id,
+            actorId: actorId,
+            action: 'approve' as const,
+            reason: bulkDto.reason || null,
+            createdAt: now
+          }));
+          await this.prisma.pendingApprovalLog.createMany({
+            data: approvalLogs
+          });
+
+        } else {
+          // 一括却下
+          const updateResult = await this.prisma.adjustment.updateMany({
+            where: {
+              id: { in: validPendingIds },
+              isPending: true
+            },
+            data: {
+              rejectedAt: now,
+              rejectedBy: actorId,
+              rejectionReason: bulkDto.reason || null,
+              isPending: false,
+              updatedAt: now
+            }
+          });
+          successCount = updateResult.count;
+
+          // 却下ログ一括作成
+          const rejectionLogs = validPendingIds.map(id => ({
+            adjustmentId: id,
+            actorId: actorId,
+            action: 'reject' as const,
+            reason: bulkDto.reason || null,
+            createdAt: now
+          }));
+          await this.prisma.pendingApprovalLog.createMany({
+            data: rejectionLogs
+          });
+        }
+
+        console.log(`Bulk ${bulkDto.action} completed: ${successCount} processed`);
       }
+
+    } catch (error) {
+      console.error('Bulk approval failed:', error);
+      throw new BadRequestException(`一括${bulkDto.action === 'approve' ? '承認' : '却下'}に失敗しました`);
     }
 
     return {
-      success: results.length,
-      errors: errors.length,
-      results,
-      errorDetails: errors
+      successCount,
+      failedCount,
+      errors,
+      totalProcessed: successCount + failedCount
     };
   }
 

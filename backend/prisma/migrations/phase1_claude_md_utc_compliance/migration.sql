@@ -49,7 +49,7 @@ UPDATE "Adjustment" SET
 WHERE "date_utc" IS NULL;
 
 -- インデックス追加（パフォーマンス保持）
-CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_historical_schedules_date_utc" ON "historical_schedules"("date_utc");
-CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_historical_schedules_date_utc_staff" ON "historical_schedules"("date_utc", "staffId");
-CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_snapshot_logs_target_date_utc" ON "snapshot_logs"("targetDate_utc");
-CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_adjustment_date_utc" ON "Adjustment"("date_utc");
+CREATE INDEX IF NOT EXISTS "idx_historical_schedules_date_utc" ON "historical_schedules"("date_utc");
+CREATE INDEX IF NOT EXISTS "idx_historical_schedules_date_utc_staff" ON "historical_schedules"("date_utc", "staffId");
+CREATE INDEX IF NOT EXISTS "idx_snapshot_logs_target_date_utc" ON "snapshot_logs"("targetDate_utc");
+CREATE INDEX IF NOT EXISTS "idx_adjustment_date_utc" ON "Adjustment"("date_utc");

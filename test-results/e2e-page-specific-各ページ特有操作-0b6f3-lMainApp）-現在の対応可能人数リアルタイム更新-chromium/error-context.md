@@ -1,0 +1,823 @@
+# Page snapshot
+
+```yaml
+- alert
+- heading "出社状況" [level=1]
+- text: テストユーザー（自動ログイン） (システム管理者)
+- link "個人ページ":
+  - /url: /personal
+  - img
+  - text: 個人ページ
+- link "月次計画":
+  - /url: /monthly-planner
+  - img
+  - text: 月次計画
+- link "管理者設定":
+  - /url: /admin/staff-management
+  - img
+  - text: 管理者設定
+- button "ログアウト":
+  - img
+  - text: ログアウト
+- main:
+  - group:
+    - button "<"
+    - button "今日"
+    - button ">"
+  - button "2025年7月7日(月)"
+  - button "予定を追加"
+  - button "設定":
+    - img
+    - text: 設定
+  - button "システム監視":
+    - img
+    - text: システム監視
+  - text: "部分更新:"
+  - 'button "部分更新: ON (システム管理者のみ制御可能)"'
+  - text: 0ok/0err/0fb
+  - 'button "表示密度: 標準"'
+  - img
+  - combobox:
+    - option "すべての部署" [selected]
+    - option "ＯＭＳ・テクニカルサポート課"
+    - option "一次受付サポート課"
+    - option "税務情報システムサポート課"
+    - option "給与計算システムサポート課"
+    - option "財務情報第一システムサポート課"
+    - option "財務情報第二システムサポート課"
+  - combobox:
+    - option "すべてのグループ" [selected]
+    - option "ＦＸ２・ＦＸ４クラウドグループ"
+    - option "ＦＸクラウドグループ"
+    - option "ＯＭＳ・テクニカルサポート課"
+    - option "ＯＭＳグループ"
+    - option "ＰＸ第一グループ"
+    - option "ＰＸ第三グループ"
+    - option "ＰＸ第二グループ"
+    - option "ＳＸ・ＦＭＳグループ"
+    - option "ハードウェアグループ"
+    - option "一次受付グループ"
+    - option "一次受付サポート課"
+    - option "給与計算システムサポート課"
+    - option "業種別システムグループ"
+    - option "財務会計グループ"
+    - option "財務情報第一システムサポート課"
+    - option "財務情報第二システムサポート課"
+    - option "税務情報システムサポート課"
+    - option "税務情報第一システムグループ"
+    - option "税務情報第二システムグループ"
+  - group:
+    - button "すべて"
+    - button "担当設定"
+    - button "支援設定"
+  - group:
+    - button "すべて"
+    - button "対応可能"
+    - button "対応不可"
+  - text: "現在の対応可能人数: 225人"
+  - button
+  - img
+  - button "📊 Line Chart （表示中） ▶"
+  - text: 出社 リモート 夜間対応 休憩 休み 急用 会議 研修 出張
+  - img: 8:00 9:00 10:00 11:00 12:00 13:00 14:00 15:00 16:00 17:00 18:00 19:00 20:00 0 120 240
+  - text: 部署 / グループ / スタッフ名 8:00 9:00 10:00 11:00 12:00 13:00 14:00 15:00 16:00 17:00 18:00 19:00 20:00
+  - heading "ＯＭＳ・テクニカルサポート課" [level=3]
+  - heading "ＯＭＳ・テクニカルサポート課" [level=4]
+  - text: 田中太郎
+  - heading "ＯＭＳグループ" [level=4]
+  - text: 斎藤一郎 中村健一 木村優斗 山田美咲 佐々木千尋 吉田優斗 木村一郎 山田優斗 松本美優 斎藤直樹
+  - heading "ハードウェアグループ" [level=4]
+  - text: 松本優斗 山口美優 木村悠人 清水直樹 山田颯太 木村結衣 木村翔太 渡辺愛 高橋拓海 木村健太 伊藤結衣 山口悠人
+  - heading "一次受付サポート課" [level=3]
+  - heading "一次受付グループ" [level=4]
+  - text: 松本拓海 小林颯太 山本美月 小林悠人 吉田太郎 斎藤拓海 井上美月 松本颯太 山口千尋 山田拓海 山口美月 高橋美月 佐々木美優 高橋結衣 林千尋 木村健一 林美咲 清水葵 佐藤太郎 田中一郎 佐々木悠人 清水悠人 林彩香 山本悠人 加藤真由美 加藤健太 伊藤健一 加藤颯太 田中結衣 渡辺彩香 山田千尋 山口直樹 高橋優斗 吉田美月 小林美優 山口颯太 林葵 山口彩香 佐藤愛 小林直樹 田中悠人 伊藤愛 佐藤直樹
+  - heading "一次受付サポート課" [level=4]
+  - text: 山口花子
+  - heading "税務情報システムサポート課" [level=3]
+  - heading "税務情報システムサポート課" [level=4]
+  - text: 伊藤颯太
+  - heading "税務情報第一システムグループ" [level=4]
+  - text: 佐々木彩香 佐藤優斗 鈴木太郎 鈴木悠人 田中千尋 加藤彩香 中村美咲 伊藤一郎 吉田一郎 田中健太 井上結衣 渡辺翔太 加藤翔太 中村直樹 山口愛 山本健一 松本葵 山本愛 中村優斗
+  - heading "税務情報第二システムグループ" [level=4]
+  - text: 木村真由美 松本結衣 鈴木美月 林結衣 林健太 斎藤美優 佐藤真由美 田中優斗 清水美優 井上健太 木村愛
+  - heading "給与計算システムサポート課" [level=3]
+  - heading "ＰＸ第一グループ" [level=4]
+  - text: 伊藤優斗 渡辺太郎 佐藤拓海 山田一郎 林翔太 小林真由美 山田直樹 佐々木優斗 斎藤翔太
+  - heading "ＰＸ第三グループ" [level=4]
+  - text: 井上美咲 渡辺拓海 田中葵 渡辺花子 斎藤真由美 斎藤花子 小林拓海 山本拓海 井上真由美 佐藤翔太
+  - heading "ＰＸ第二グループ" [level=4]
+  - text: 井上颯太 木村美月 山田翔太 佐藤花子 鈴木美優 佐々木拓海 松本翔太 小林千尋 佐々木颯太 中村一郎 小林健一 小林翔太 鈴木愛 高橋花子 山本優斗 小林健太 鈴木結衣 斎藤優斗
+  - heading "給与計算システムサポート課" [level=4]
+  - text: 佐藤千尋
+  - heading "財務情報第一システムサポート課" [level=3]
+  - heading "ＦＸ２・ＦＸ４クラウドグループ" [level=4]
+  - text: 清水美月 山口一郎 伊藤葵 佐々木一郎 井上悠人 木村千尋 伊藤美優 清水真由美 山田真由美 佐々木葵 井上直樹 田中拓海 吉田美咲 高橋彩香 田中直樹 山田愛 斎藤健一 鈴木拓海 伊藤花子 佐々木翔太 佐藤美優 小林一郎 斎藤颯太 渡辺一郎 井上葵 佐々木真由美 山本翔太
+  - heading "業種別システムグループ" [level=4]
+  - text: 渡辺真由美 佐藤健太 佐々木健太 清水一郎 清水千尋 伊藤真由美 清水颯太 清水結衣 中村結衣 田中健一 斎藤千尋 小林結衣 吉田結衣 渡辺結衣
+  - heading "財務会計グループ" [level=4]
+  - text: 山口葵 小林彩香 山口優斗 佐藤結衣 加藤優斗 吉田美優 高橋千尋
+  - heading "財務情報第一システムサポート課" [level=4]
+  - text: 山田美月
+  - heading "財務情報第二システムサポート課" [level=3]
+  - heading "ＦＸクラウドグループ" [level=4]
+  - text: 田中美優 山田葵 佐々木健一 加藤悠人 加藤健一 山本千尋 山田健一 伊藤美月 吉田悠人 松本直樹 加藤太郎 林直樹 高橋一郎 小林優斗 小林美月 斎藤彩香 吉田花子 田中花子 渡辺颯太 高橋健一 松本悠人 吉田健一 高橋直樹 山本彩香
+  - heading "ＳＸ・ＦＭＳグループ" [level=4]
+  - text: 井上愛 山本真由美 吉田颯太 高橋悠人 渡辺健太 松本美月 斎藤太郎 佐藤美月 高橋美咲 高橋美優 山本花子 林健一 佐藤美咲 山口真由美 吉田拓海
+  - heading "財務情報第二システムサポート課" [level=4]
+  - text: 山口美咲 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+  - text: 出社📝 休憩📝
+  - button "×"
+- heading "予定を追加" [level=3]
+- text: スタッフ
+- combobox "スタッフ":
+  - option "選択してください" [disabled]
+  - option "山田美月" [selected]
+  - option "加藤優斗"
+  - option "高橋千尋"
+  - option "小林彩香"
+  - option "吉田美優"
+  - option "山口葵"
+  - option "山口優斗"
+  - option "佐藤結衣"
+  - option "斎藤健一"
+  - option "佐々木葵"
+  - option "井上悠人"
+  - option "吉田美咲"
+  - option "山口一郎"
+  - option "佐々木真由美"
+  - option "斎藤颯太"
+  - option "山田愛"
+  - option "木村千尋"
+  - option "鈴木拓海"
+  - option "佐藤美優"
+  - option "井上直樹"
+  - option "田中直樹"
+  - option "田中拓海"
+  - option "高橋彩香"
+  - option "山本翔太"
+  - option "渡辺一郎"
+  - option "小林一郎"
+  - option "伊藤花子"
+  - option "伊藤葵"
+  - option "山田真由美"
+  - option "伊藤美優"
+  - option "清水真由美"
+  - option "佐々木一郎"
+  - option "井上葵"
+  - option "佐々木翔太"
+  - option "清水美月"
+  - option "斎藤千尋"
+  - option "吉田結衣"
+  - option "清水颯太"
+  - option "清水千尋"
+  - option "佐々木健太"
+  - option "田中健一"
+  - option "小林結衣"
+  - option "中村結衣"
+  - option "清水一郎"
+  - option "渡辺結衣"
+  - option "清水結衣"
+  - option "伊藤真由美"
+  - option "佐藤健太"
+  - option "渡辺真由美"
+  - option "山口美咲"
+  - option "山本千尋"
+  - option "田中美優"
+  - option "吉田悠人"
+  - option "松本直樹"
+  - option "山田健一"
+  - option "吉田花子"
+  - option "林直樹"
+  - option "小林優斗"
+  - option "小林美月"
+  - option "山田葵"
+  - option "佐々木健一"
+  - option "斎藤彩香"
+  - option "山本彩香"
+  - option "吉田健一"
+  - option "加藤悠人"
+  - option "高橋直樹"
+  - option "松本悠人"
+  - option "田中花子"
+  - option "高橋一郎"
+  - option "加藤健一"
+  - option "渡辺颯太"
+  - option "高橋健一"
+  - option "加藤太郎"
+  - option "伊藤美月"
+  - option "井上愛"
+  - option "佐藤美月"
+  - option "斎藤太郎"
+  - option "松本美月"
+  - option "佐藤美咲"
+  - option "吉田拓海"
+  - option "林健一"
+  - option "山本真由美"
+  - option "高橋悠人"
+  - option "山口真由美"
+  - option "渡辺健太"
+  - option "高橋美咲"
+  - option "高橋美優"
+  - option "山本花子"
+  - option "吉田颯太"
+  - option "伊藤颯太"
+  - option "田中千尋"
+  - option "佐々木彩香"
+  - option "鈴木悠人"
+  - option "鈴木太郎"
+  - option "田中健太"
+  - option "中村優斗"
+  - option "吉田一郎"
+  - option "山口愛"
+  - option "中村直樹"
+  - option "中村美咲"
+  - option "伊藤一郎"
+  - option "松本葵"
+  - option "山本健一"
+  - option "井上結衣"
+  - option "加藤翔太"
+  - option "加藤彩香"
+  - option "山本愛"
+  - option "佐藤優斗"
+  - option "渡辺翔太"
+  - option "井上健太"
+  - option "林健太"
+  - option "松本結衣"
+  - option "木村真由美"
+  - option "斎藤美優"
+  - option "鈴木美月"
+  - option "佐藤真由美"
+  - option "木村愛"
+  - option "林結衣"
+  - option "田中優斗"
+  - option "清水美優"
+  - option "佐藤千尋"
+  - option "渡辺太郎"
+  - option "林翔太"
+  - option "斎藤翔太"
+  - option "小林真由美"
+  - option "山田直樹"
+  - option "山田一郎"
+  - option "伊藤優斗"
+  - option "佐々木優斗"
+  - option "佐藤拓海"
+  - option "鈴木美優"
+  - option "佐藤花子"
+  - option "鈴木結衣"
+  - option "小林翔太"
+  - option "山本優斗"
+  - option "佐々木拓海"
+  - option "山田翔太"
+  - option "佐々木颯太"
+  - option "小林千尋"
+  - option "小林健一"
+  - option "松本翔太"
+  - option "井上颯太"
+  - option "斎藤優斗"
+  - option "鈴木愛"
+  - option "中村一郎"
+  - option "高橋花子"
+  - option "木村美月"
+  - option "小林健太"
+  - option "田中葵"
+  - option "斎藤花子"
+  - option "小林拓海"
+  - option "渡辺花子"
+  - option "渡辺拓海"
+  - option "井上真由美"
+  - option "斎藤真由美"
+  - option "井上美咲"
+  - option "山本拓海"
+  - option "佐藤翔太"
+  - option "田中太郎"
+  - option "斎藤直樹"
+  - option "佐々木千尋"
+  - option "木村一郎"
+  - option "吉田優斗"
+  - option "山田優斗"
+  - option "山田美咲"
+  - option "中村健一"
+  - option "松本美優"
+  - option "斎藤一郎"
+  - option "木村優斗"
+  - option "木村結衣"
+  - option "山田颯太"
+  - option "山口悠人"
+  - option "伊藤結衣"
+  - option "渡辺愛"
+  - option "清水直樹"
+  - option "木村翔太"
+  - option "山口美優"
+  - option "木村悠人"
+  - option "高橋拓海"
+  - option "木村健太"
+  - option "松本優斗"
+  - option "山口花子"
+  - option "山田千尋"
+  - option "田中一郎"
+  - option "山口彩香"
+  - option "山本美月"
+  - option "加藤健太"
+  - option "松本颯太"
+  - option "高橋優斗"
+  - option "高橋美月"
+  - option "山口直樹"
+  - option "山口美月"
+  - option "山口千尋"
+  - option "吉田太郎"
+  - option "佐々木美優"
+  - option "佐々木悠人"
+  - option "佐藤愛"
+  - option "伊藤健一"
+  - option "林千尋"
+  - option "小林悠人"
+  - option "林美咲"
+  - option "林葵"
+  - option "小林颯太"
+  - option "斎藤拓海"
+  - option "佐藤直樹"
+  - option "田中結衣"
+  - option "渡辺彩香"
+  - option "山本悠人"
+  - option "井上美月"
+  - option "林彩香"
+  - option "小林美優"
+  - option "松本拓海"
+  - option "高橋結衣"
+  - option "田中悠人"
+  - option "山田拓海"
+  - option "加藤颯太"
+  - option "山口颯太"
+  - option "木村健一"
+  - option "吉田美月"
+  - option "小林直樹"
+  - option "佐藤太郎"
+  - option "伊藤愛"
+  - option "加藤真由美"
+  - option "清水悠人"
+  - option "清水葵"
+- text: ステータス
+- combobox "ステータス":
+  - option "出社" [selected]
+  - option "リモート"
+  - option "夜間対応"
+  - option "休憩"
+  - option "休み"
+  - option "急用"
+  - option "会議"
+  - option "研修"
+  - option "出張"
+- text: 開始時刻
+- textbox "開始時刻": 10:17
+- text: 終了時刻
+- textbox "終了時刻": 11:17
+- button "キャンセル"
+- button "保存"
+```
