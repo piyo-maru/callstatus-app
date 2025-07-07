@@ -2432,8 +2432,7 @@ export function UnifiedSettingsModal({
               }`}
               disabled={isLoading || isSavingDepartments}
             >
-              {(isLoading || isSavingDepartments) ? '保存中...' : 
-               (isDirty || isDepartmentSettingsDirty) ? '💾 保存して閉じる' : '閉じる'}
+              {(isLoading || isSavingDepartments) ? '保存中...' : '💾 保存して閉じる'}
             </button>
           </div>
         </div>
