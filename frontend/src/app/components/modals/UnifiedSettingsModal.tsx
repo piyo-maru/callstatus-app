@@ -392,7 +392,6 @@ export function UnifiedSettingsModal({
         if (!silent) {
           alert('設定を保存しました');
         }
-        await fetchDepartmentSettings();
         // 保存後に初期データを更新
         setOriginalDepartmentSettings({ departments: [...departments], groups: [...groups] });
       }
@@ -405,7 +404,7 @@ export function UnifiedSettingsModal({
     } finally {
       setIsSavingDepartments(false);
     }
-  }, [canManage, authenticatedFetch, departments, groups, fetchDepartmentSettings]);
+  }, [canManage, authenticatedFetch, departments, groups]);
 
   // 設定保存とモーダルクローズ
   const handleSaveAndClose = useCallback(async () => {
