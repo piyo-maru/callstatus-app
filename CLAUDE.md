@@ -203,6 +203,11 @@ docker exec callstatus-app_frontend_1 bash -c "cd /app && npx tsc --noEmit"
 - **ステータス**: 認証基盤完了、権限チェック一時無効化中（段階的有効化）
 - **完了項目**: AuthModule・JWT認証・フロントエンド認証UI
 - **調整中**: 各コントローラーでの権限チェック（一時的にコメントアウト）
+- **⚠️ 重要なセキュリティ問題**: 
+  - フロントエンドでのSTAFF権限制御は正常動作（予定編集・追加・削除の制限）
+  - バックエンドAPI権限チェックは完全無効化（schedules.controller.ts）
+  - 直接API呼び出しでフロントエンド制限を回避可能（開発者ツール等）
+  - STAFFユーザーが他人の予定を操作可能な状態
 - **詳細**: [/docs/projects/authentication-system.md](/docs/projects/authentication-system.md)
 
 ### 日次スナップショット履歴機能 【完了】 ✅
@@ -331,12 +336,21 @@ callstatus-app/
 ```
 ✅ バックエンド認証モジュール: 有効化済み（app.module.ts:40 AuthModule）
 ✅ フロントエンド認証UI: 完全実装済み（AuthProvider.tsx）
-⚠️  権限チェック: 一部コントローラーで一時的にスキップ中（認証と権限分離のため）
+✅ フロントエンドSTAFF権限制御: 正常動作（予定編集・追加・削除制限）
+⚠️  バックエンドAPI権限チェック: 完全無効化中（セキュリティリスクあり）
+🚨 セキュリティ脆弱性: 直接API呼び出しでSTAFF制限を回避可能
 ```
 
 #### 現在一時的に無効化されているコンポーネント
-- JWT認証Guard・Decorator群（全コントローラーでコメントアウト状態）
-- 権限チェック（一時的にスキップ中）
+- JWT認証Guard・Decorator群（schedules.controller.ts等で完全コメントアウト）
+- API権限チェック（POST/PATCH/DELETE全てスキップ中）
+- STAFFユーザーの自己staffId制限（バックエンドレベル）
+
+#### セキュリティ影響範囲
+- **影響API**: `/api/schedules` (POST/PATCH/DELETE)
+- **脆弱性**: STAFFユーザーが開発者ツール等で他人の予定を操作可能
+- **回避方法**: 直接fetch()でstaffIdを変更してAPI呼び出し
+- **対策**: 段階的権限チェック復旧が必要（Phase 1: JWT認証 → Phase 2: STAFF制限）
 
 #### 技術スタック詳細
 **フロントエンド:**

@@ -294,7 +294,7 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
     }
 
     // トークンを取得して認証ヘッダーに追加
-    const token = localStorage.getItem('access_token');
+    const token = localStorage.getItem('auth_token');
     if (token) {
       headers.Authorization = `Bearer ${token}`;
     }
@@ -545,6 +545,27 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
   const { settings: globalDisplaySettings, isLoading: isSettingsLoading } = useGlobalDisplaySettings(authenticatedFetch);
 
   // 権限チェック関数
+  // 出社状況ページと同じ権限チェック方式を採用
+  const hasPermission = useCallback((requiredRole: string | string[], targetStaffId?: number) => {
+    if (!user) return false;
+    
+    // ADMIN は常にアクセス可能
+    if (user.role === 'ADMIN' || user.role === 'SYSTEM_ADMIN') return true;
+    
+    const roles = Array.isArray(requiredRole) ? requiredRole : [requiredRole];
+    
+    // STAFF の場合、自分のスタッフIDと一致する場合のみ編集可能
+    if (user.role === 'STAFF' && targetStaffId !== undefined) {
+      return targetStaffId === user.staffId;
+    }
+    
+    return roles.includes(user.role);
+  }, [user]);
+
+  const canEdit = useCallback((targetStaffId?: number) => {
+    return hasPermission(['STAFF', 'ADMIN', 'SYSTEM_ADMIN'], targetStaffId);
+  }, [hasPermission]);
+
   const canManage = useCallback(() => {
     return user?.role === 'ADMIN' || user?.role === 'SYSTEM_ADMIN';
   }, [user?.role]);
@@ -1224,10 +1245,26 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
       });
       
       if (response.ok) {
-        // データを再取得して更新
-        await fetchSchedules();
-        // スクロール位置を復元
-        restoreScrollPosition();
+        if (isDebugMode) console.log('スケジュール更新成功');
+        
+        // まずローカル状態を即座に更新（楽観的更新）
+        setSchedules(prevSchedules => 
+          prevSchedules.map(schedule => 
+            schedule.id === scheduleId 
+              ? { ...schedule, ...updateData }
+              : schedule
+          )
+        );
+        
+        // currentStaffが確実に設定されている場合のみサーバーから再取得
+        if (currentStaff) {
+          if (isDebugMode) console.log('サーバーからデータ再取得中...');
+          await fetchSchedules();
+          // スクロール位置を復元
+          restoreScrollPosition();
+        } else {
+          if (isDev) console.warn('currentStaffが設定されていないため、サーバー再取得をスキップ（ローカル更新のみ）');
+        }
       } else {
         console.error('スケジュール更新失敗:', response.status);
         const errorData = await response.json().catch(() => ({}));
@@ -1237,7 +1274,11 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
       console.error('スケジュール更新エラー:', error);
       setError('スケジュールの更新に失敗しました');
     }
-  }, [authenticatedFetch, getApiUrl]);
+  }, [authenticatedFetch, getApiUrl, currentStaff, fetchSchedules, restoreScrollPosition]);
+
+  // クリック判定のための状態
+  const [mouseDownTime, setMouseDownTime] = useState<number>(0);
+  const [isDragIntended, setIsDragIntended] = useState<boolean>(false);
 
   // ドロップハンドラー（メイン画面と同じ）
   const handleDrop = useCallback((e: React.DragEvent, day: Date) => {
@@ -1891,20 +1932,38 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
 
   // メイン画面と同じスケジュールクリック処理
   const handleScheduleClick = useCallback((schedule: Schedule, scheduleLayer: string, scheduleDate: Date) => {
-    if (schedule.layer === 'contract') return; // 契約レイヤーは編集不可
+    console.log('handleScheduleClick実行開始:', { scheduleId: schedule.id, layer: scheduleLayer });
+    
+    if (schedule.layer === 'contract') {
+      console.log('契約レイヤーのためスキップ');
+      return;
+    }
     
     // 過去の日付は編集不可
     const isPastDate = scheduleDate < new Date(new Date().setHours(0, 0, 0, 0));
-    if (isPastDate) return;
+    console.log('日付チェック:', { scheduleDate, isPastDate });
+    if (isPastDate) {
+      console.log('過去の日付のためスキップ');
+      return;
+    }
     
-    // 権限チェック
-    if (!canManage()) return;
+    // 権限チェック（個人ページでは既にonClick条件でチェック済みだが念のため）
+    const canEditResult = canEdit(schedule.staffId);
+    console.log('権限チェック:', { user: user?.role, scheduleStaffId: schedule.staffId, canEdit: canEditResult });
+    if (!canEditResult) {
+      console.log('権限不足のためスキップ');
+      return;
+    }
     
+    console.log('選択状態チェック開始');
     const currentSelection = selectedSchedule;
+    console.log('現在の選択状態:', currentSelection);
+    
     if (currentSelection && 
         currentSelection.schedule.id === schedule.id && 
         currentSelection.layer === scheduleLayer) {
       // 同じ予定を再クリック → 編集モーダルを開く前にスクロール位置をキャプチャ
+      console.log('同じ予定を再クリック - モーダルを開く');
       captureScrollPosition();
       setEditingSchedule(schedule);
       setDraggedSchedule(null);
@@ -1912,6 +1971,7 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
       setSelectedSchedule(null);
     } else {
       // 異なる予定をクリック → 選択状態にする
+      console.log('新しい予定をクリック - 選択状態にする');
       setSelectedSchedule({ schedule, layer: scheduleLayer });
     }
   }, [selectedSchedule]);
@@ -2619,16 +2679,38 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
                             }}
                             onClick={(e) => {
                               e.stopPropagation();
+                              // ドラッグが意図されていた場合はクリック処理をスキップ
+                              console.log('クリック時のドラッグ意図フラグ:', isDragIntended);
+                              if (isDragIntended) {
+                                console.log('ドラッグ意図のためクリック処理をスキップ');
+                                setIsDragIntended(false);
+                                return;
+                              }
                               console.log('スケジュールクリック:', { id: schedule.id, layer: scheduleLayer, isContract, isHistorical });
-                              if (!isContract && !isHistorical) {
+                              console.log('クリック条件チェック:', { 
+                                isContract, 
+                                isHistorical, 
+                                canEditResult: canEdit(schedule.staffId),
+                                conditionPassed: !isContract && !isHistorical && canEdit(schedule.staffId)
+                              });
+                              // 出社状況ページと同じ条件チェック
+                              if (!isContract && !isHistorical && canEdit(schedule.staffId)) {
+                                console.log('handleScheduleClick呼び出し開始');
                                 // モーダル開く前にスクロール位置をキャプチャ
                                 captureScrollPosition();
                                 handleScheduleClick(schedule, scheduleLayer, day);
+                              } else {
+                                console.log('クリック処理スキップ - 条件不適合');
                               }
                             }}
                             onDragStart={(e) => {
                               if (!isContract && !isHistorical) {
                                 console.log('ドラッグ開始:', schedule.id);
+                                setIsDragIntended(true); // ドラッグが実際に開始されたらフラグを設定
+                                
+                                // 出社状況ページと同様に、ドラッグ開始時に選択状態をクリア
+                                setSelectedSchedule(null);
+                                
                                 const scheduleElement = e.currentTarget as HTMLElement;
                                 const scheduleRect = scheduleElement.getBoundingClientRect();
                                 const mouseOffsetX = e.clientX - scheduleRect.left;
@@ -2639,13 +2721,20 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
                                   sourceDate: format(day, 'yyyy-MM-dd')
                                 }));
                                 e.dataTransfer.effectAllowed = 'move';
+                              } else {
+                                // 契約レイヤーや履歴データの場合はドラッグを無効化
+                                e.preventDefault();
                               }
                             }}
                             onDragEnd={(e) => {
                               console.log('ドラッグ終了:', schedule.id);
                               setDragOffset(0);
+                              // ドラッグ終了後、少し遅延してからフラグをリセット
+                              setTimeout(() => setIsDragIntended(false), 50);
                             }}
                             onMouseDown={(e) => {
+                              setMouseDownTime(Date.now());
+                              setIsDragIntended(false);
                               if (isContract || isHistorical) {
                                 if (isContract) {
                                   console.log('契約レイヤー要素マウスダウン - ドラッグ許可');
@@ -2654,6 +2743,20 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
                                 }
                               } else {
                                 e.stopPropagation();
+                              }
+                            }}
+                            onMouseMove={(e) => {
+                              // マウスダウンから一定時間経過していたらドラッグ意図と判定
+                              if (mouseDownTime > 0 && (Date.now() - mouseDownTime) > 100) {
+                                setIsDragIntended(true);
+                              }
+                            }}
+                            onMouseUp={(e) => {
+                              const mouseHoldTime = Date.now() - mouseDownTime;
+                              setMouseDownTime(0);
+                              // 100ms以下の短いクリックはクリック意図と判定
+                              if (mouseHoldTime <= 100) {
+                                setIsDragIntended(false);
                               }
                             }}
                           >

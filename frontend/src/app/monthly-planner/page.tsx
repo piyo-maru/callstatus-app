@@ -517,6 +517,27 @@ function MonthlyPlannerPageContent() {
   const canManage = useCallback(() => {
     return user?.role === 'SYSTEM_ADMIN' || user?.role === 'ADMIN';
   }, [user?.role]);
+
+  // STAFF権限チェック関数（出社状況・個人ページと統一）
+  const hasPermission = useCallback((requiredRole: string | string[], targetStaffId?: number) => {
+    if (!user) return false;
+    
+    // ADMIN・SYSTEM_ADMIN は常にアクセス可能
+    if (user.role === 'ADMIN' || user.role === 'SYSTEM_ADMIN') return true;
+    
+    const roles = Array.isArray(requiredRole) ? requiredRole : [requiredRole];
+    
+    // STAFF の場合、自分のスタッフIDと一致する場合のみ編集可能
+    if (user.role === 'STAFF' && targetStaffId !== undefined) {
+      return targetStaffId === user.staffId;
+    }
+    
+    return roles.includes(user.role);
+  }, [user]);
+
+  const canEdit = useCallback((targetStaffId?: number) => {
+    return hasPermission(['STAFF', 'ADMIN', 'SYSTEM_ADMIN'], targetStaffId);
+  }, [hasPermission]);
   
   // 統一プリセットシステム
   const { getPresetsForPage } = usePresetSettings();
@@ -1104,6 +1125,12 @@ function MonthlyPlannerPageContent() {
         alert('承認済み予定があるため編集できません。');
         return;
       }
+
+      // STAFF権限チェック：自分のスタッフID以外は編集不可
+      if (!canEdit(staff.id)) {
+        alert('自分の予定のみ申請できます。');
+        return;
+      }
       
       // モーダル開く前にスクロール位置をキャプチャ（統一関数を使用）
       captureScrollPosition();
@@ -1116,6 +1143,12 @@ function MonthlyPlannerPageContent() {
       });
       setShowModal(true);
     } else {
+      // STAFF権限チェック：自分のスタッフID以外は選択不可
+      if (!canEdit(staff.id)) {
+        alert('自分の予定のみ申請できます。');
+        return;
+      }
+      
       // 初回クリックまたは別のセルクリック時は選択状態にする
       setSelectedCellForHighlight({
         staffId: staff.id,
@@ -2849,11 +2882,8 @@ function MonthlyPlannerPageContent() {
                         pendingType: 'monthly-planner' as const
                       };
 
-                      const response = await fetch(`${currentApiUrl}/api/schedules/pending`, {
+                      const response = await authenticatedFetch(`${currentApiUrl}/api/schedules/pending`, {
                         method: 'POST',
-                        headers: { 
-                          'Content-Type': 'application/json' 
-                        },
                         body: JSON.stringify(pendingData)
                       });
 
@@ -3218,11 +3248,8 @@ function MonthlyPlannerPageContent() {
                         pendingType: 'monthly-planner' as const
                       };
 
-                      const response = await fetch(`${currentApiUrl}/api/schedules/pending`, {
+                      const response = await authenticatedFetch(`${currentApiUrl}/api/schedules/pending`, {
                         method: 'POST',
-                        headers: { 
-                          'Content-Type': 'application/json' 
-                        },
                         body: JSON.stringify(pendingData)
                       });
 

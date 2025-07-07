@@ -23,8 +23,24 @@ export const ScheduleModal = ({ isOpen, onClose, staffList, onSave, scheduleToEd
   const [memo, setMemo] = useState('');
   const [isClient, setIsClient] = useState(false);
   
-  // 一般ユーザーの場合は自分のスタッフ情報のみに制限（一時的に無効化）
+  // 一般ユーザーの場合は自分のスタッフ情報のみに制限
   const filteredStaffList = useMemo(() => {
+    // 認証コンテキストから現在のユーザー情報を取得
+    if (typeof window !== 'undefined') {
+      const storedUser = localStorage.getItem('auth_user');
+      if (storedUser) {
+        try {
+          const user = JSON.parse(storedUser);
+          // STAFFの場合は自分のスタッフ情報のみ表示
+          if (user.role === 'STAFF' && user.staffId) {
+            return staffList.filter(staff => staff.id === user.staffId);
+          }
+        } catch (error) {
+          console.error('ユーザー情報の解析エラー:', error);
+        }
+      }
+    }
+    // ADMIN・SYSTEM_ADMINまたは認証情報がない場合は全スタッフ表示
     return staffList;
   }, [staffList]);
   
