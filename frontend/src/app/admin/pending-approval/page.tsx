@@ -252,69 +252,65 @@ export default function PendingApprovalPage() {
         setProcessingItemId(null);
       }
     } else {
-      // 一括処理（進行状況追跡付き）
+      // 一括処理（真の一括API使用）
       const itemsToProcess = Array.from(selectedItems);
       const totalItems = itemsToProcess.length;
       
       setIsProcessing(true);
       setProcessingType(approvalAction);
       setProcessingProgress({ current: 0, total: totalItems });
-      setProcessingResults({ success: 0, failed: 0, errors: [] });
       setShowApprovalModal(false);
       
-      let successCount = 0;
-      let failedCount = 0;
-      const errors: string[] = [];
-      
       try {
-        for (let i = 0; i < itemsToProcess.length; i++) {
-          const itemId = itemsToProcess[i];
-          const item = pendingList.find(p => p.id === itemId);
+        
+        // 一括承認API呼び出し
+        const response = await fetch(`${currentApiUrl}/api/admin/pending-schedules/bulk-approval`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            pendingIds: itemsToProcess,
+            action: approvalAction,
+            reason: approvalReason
+          })
+        });
+        
+        if (response.ok) {
+          const result = await response.json();
           
-          try {
-            const endpoint = approvalAction === 'approve' ? 'approve' : 'reject';
-            const response = await fetch(`${currentApiUrl}/api/schedules/pending/${itemId}/${endpoint}`, {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({ reason: approvalReason })
-            });
-            
-            if (response.ok) {
-              successCount++;
+          // 進行状況を完了状態に更新
+          setProcessingProgress({ current: totalItems, total: totalItems });
+          const successCount = result.successCount || 0;
+          const failedCount = result.failedCount || 0;
+          const errors = result.errors || [];
+          
+          const errorMessages = errors.map(err => `ID${err.pendingId}: ${err.error}`);
+          setProcessingResults({ 
+            success: successCount, 
+            failed: failedCount, 
+            errors: errorMessages
+          });
+          
+          // 少し表示時間を確保してから結果を表示
+          setTimeout(() => {
+            const resultMessage = `処理完了: 成功 ${successCount}件 / 失敗 ${failedCount}件`;
+            if (failedCount > 0) {
+              const detailMessage = `${resultMessage}\n\n失敗詳細:\n${errorMessages.slice(0, 5).join('\n')}${errorMessages.length > 5 ? '\n...他' + (errorMessages.length - 5) + '件' : ''}`;
+              alert(detailMessage);
             } else {
-              failedCount++;
-              const errorText = await response.text();
-              errors.push(`${item?.staffName || itemId}: ${errorText}`);
+              alert(resultMessage);
             }
-          } catch (error) {
-            failedCount++;
-            errors.push(`${item?.staffName || itemId}: ネットワークエラー`);
-          }
+          }, 500); // 0.5秒後に結果表示
           
-          // 進行状況更新
-          setProcessingProgress({ current: i + 1, total: totalItems });
-          setProcessingResults({ success: successCount, failed: failedCount, errors });
+          setSelectedItems(new Set());
+          await fetchPendingList();
           
-          // API負荷軽減のため少し待機
-          if (i < itemsToProcess.length - 1) {
-            await new Promise(resolve => setTimeout(resolve, 100));
-          }
-        }
-        
-        // 処理完了後の結果表示
-        const resultMessage = `処理完了: 成功 ${successCount}件 / 失敗 ${failedCount}件`;
-        if (failedCount > 0) {
-          const detailMessage = `${resultMessage}\n\n失敗詳細:\n${errors.slice(0, 5).join('\n')}${errors.length > 5 ? '\n...他' + (errors.length - 5) + '件' : ''}`;
-          alert(detailMessage);
         } else {
-          alert(resultMessage);
+          const errorText = await response.text();
+          alert(`一括処理に失敗しました: ${errorText}`);
         }
-        
-        setSelectedItems(new Set());
-        await fetchPendingList();
         
       } catch (error) {
         console.error('Bulk approval failed:', error);
@@ -980,24 +976,64 @@ export default function PendingApprovalPage() {
             <div className="text-center">
               {/* タイトル */}
               <h3 className="text-lg font-medium text-gray-900 mb-4">
-                {processingType === 'approve' ? '一括承認中' : '一括却下中'}
+                {processingProgress.current === processingProgress.total && processingProgress.total > 0 ? (
+                  <span className={processingType === 'approve' ? 'text-green-600' : 'text-red-600'}>
+                    {processingType === 'approve' ? '一括承認完了' : '一括却下完了'}
+                  </span>
+                ) : (
+                  <span>
+                    {processingType === 'approve' ? '一括承認中' : '一括却下中'}
+                  </span>
+                )}
               </h3>
               
               {/* ローディングスピナー */}
               <div className="mb-4">
-                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+                {processingProgress.current === processingProgress.total && processingProgress.total > 0 ? (
+                  // 完了アイコン
+                  processingType === 'approve' ? (
+                    <div className="inline-flex items-center justify-center w-8 h-8 bg-green-100 rounded-full">
+                      <svg className="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                  ) : (
+                    <div className="inline-flex items-center justify-center w-8 h-8 bg-red-100 rounded-full">
+                      <svg className="w-5 h-5 text-red-600" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                  )
+                ) : (
+                  // ローディングスピナー
+                  <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+                )}
               </div>
               
               {/* 進行状況 */}
               <div className="mb-4">
-                <div className="text-sm text-gray-600 mb-2">
-                  {processingProgress.current} / {processingProgress.total} 件処理中
-                </div>
+                {processingProgress.current === processingProgress.total && processingProgress.total > 0 ? (
+                  // 完了状態
+                  <div className={`text-sm mb-2 font-medium ${
+                    processingType === 'approve' ? 'text-green-600' : 'text-red-600'
+                  }`}>
+                    処理完了: {processingProgress.total} 件
+                  </div>
+                ) : (
+                  // 処理中状態
+                  <div className="text-sm text-gray-600 mb-2">
+                    {processingProgress.total} 件を一括処理中...
+                  </div>
+                )}
                 
                 {/* 進行状況バー */}
                 <div className="w-full bg-gray-200 rounded-full h-2.5">
                   <div 
-                    className="bg-indigo-600 h-2.5 rounded-full transition-all duration-300 ease-out"
+                    className={`h-2.5 rounded-full transition-all duration-300 ease-out ${
+                      processingProgress.current === processingProgress.total && processingProgress.total > 0
+                        ? (processingType === 'approve' ? 'bg-green-600' : 'bg-red-600')
+                        : 'bg-indigo-600'
+                    }`}
                     style={{ 
                       width: `${processingProgress.total > 0 ? (processingProgress.current / processingProgress.total) * 100 : 0}%` 
                     }}
