@@ -135,6 +135,7 @@ export const DEFAULT_UNIFIED_PRESETS: UnifiedPreset[] = [
     description: '午後の半日休暇',
     category: 'time-off',
     schedules: [
+      { status: 'online', startTime: 12, endTime: 13, memo: '' },
       { status: 'off', startTime: 13, endTime: 18, memo: '' }
     ],
     isActive: true,
