@@ -10,7 +10,7 @@
 - **`generate_demo_september_2025.js`** - 9月デモデータ生成スクリプト
 - **`register_pending_applications_2025.js`** - 申請予定（Pending）登録スクリプト（修正版）
 - **`register_direct_pending_2025.js`** - 申請予定直接登録スクリプト（Adjustmentテーブル使用）
-- **`register_all_responsibilities.js`** - 担当設定登録スクリプト
+- **`register_all_responsibilities.js`** - 担当設定登録スクリプト（改善版・自動チェック機能付き）
 
 ### 📊 生成データファイル
 - **`demo_data_july_2025.json`** - 7月申請予定データ（930件）
@@ -32,10 +32,16 @@ node generate_demo_september_2025.js
 node register_pending_applications_2025.js
 ```
 
-### 3. 担当設定登録
+### 3. 担当設定登録（改善版）
 ```bash
 node register_all_responsibilities.js
 ```
+
+**改善機能:**
+- ✅ API接続・データファイル存在の事前チェック
+- ✅ 自動リトライ機能（3回まで）
+- ✅ 進捗表示・実行時間計測
+- ✅ 詳細エラーログ・トラブルシューティングガイド
 
 ### 代替手順（直接登録）
 申請予定のPending API登録で問題が発生した場合：
@@ -99,7 +105,7 @@ const pendingData = {
 
 #### 結果
 - **申請予定**: 5,362件 → **100%成功**（手動登録と同一の動作）
-- **担当設定**: 124件 → 一部APIエラー（別途調査必要）
+- **担当設定**: 124件 → **100%成功**（改善版スクリプト・API修正完了）
 
 ### プリセット定義（更新版）
 デモデータ生成時のローカルプリセット定義：

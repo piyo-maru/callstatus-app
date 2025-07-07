@@ -1,8 +1,8 @@
 // プリセット対応Pending APIでデモデータ登録スクリプト
 const fs = require('fs');
 
-// デモデータを読み込み（7月全期間・システムプリセット準拠）
-const demoData = JSON.parse(fs.readFileSync('demo_data_july_system_presets.json', 'utf8'));
+// デモデータを読み込み（8月全期間・システムプリセット準拠）
+const demoData = JSON.parse(fs.readFileSync('demo_data_august_system_presets.json', 'utf8'));
 
 const API_BASE_URL = 'http://localhost:3002/api';
 
