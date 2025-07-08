@@ -173,7 +173,7 @@ const ManagerPermissionEditModal: React.FC<ManagerPermissionEditProps> = ({
                 className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
               />
               <label htmlFor="isManager" className="ml-2 font-medium text-gray-900">
-                部署管理者権限を付与する
+                管理者権限を付与する
               </label>
             </div>
 
@@ -466,6 +466,10 @@ export default function StaffManagementPage() {
   // フィルター適用とソート
   const filteredStaff = sortStaffByDisplayOrder(
     staffList.filter(staff => {
+      // 論理削除されたスタッフを除外
+      if (!staff.isActive) {
+        return false;
+      }
       if (filterDepartment !== 'all' && staff.department !== filterDepartment) {
         return false;
       }
@@ -479,8 +483,8 @@ export default function StaffManagementPage() {
     })
   );
 
-  // 部署リストも表示順でソート
-  const departments = Array.from(new Set(staffList.map(s => s.department))).sort((a, b) => {
+  // 部署リストも表示順でソート（アクティブなスタッフのみ）
+  const departments = Array.from(new Set(staffList.filter(s => s.isActive).map(s => s.department))).sort((a, b) => {
     const deptA = departmentSettings.departments.find(d => d.name === a);
     const deptB = departmentSettings.departments.find(d => d.name === b);
     const orderA = deptA?.displayOrder ?? 999;
@@ -489,10 +493,10 @@ export default function StaffManagementPage() {
     return a.localeCompare(b);
   });
 
-  // グループリストも表示順でソート（部署フィルターに応じて絞り込み）
+  // グループリストも表示順でソート（部署フィルターに応じて絞り込み、アクティブなスタッフのみ）
   const groups = Array.from(new Set(
     staffList
-      .filter(s => filterDepartment === 'all' || s.department === filterDepartment)
+      .filter(s => s.isActive && (filterDepartment === 'all' || s.department === filterDepartment))
       .map(s => s.group)
   )).sort((a, b) => {
     // 部署順 → グループ順でソート
@@ -559,7 +563,7 @@ export default function StaffManagementPage() {
                 <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" clipRule="evenodd" />
                 </svg>
-                承認管理
+                申請承認管理
               </a>
               <button
                 onClick={() => router.back()}
@@ -611,7 +615,7 @@ export default function StaffManagementPage() {
             <div className="text-right bg-green-50 px-3 rounded-lg border border-green-200 h-7 flex items-center">
               <span className="text-xs text-green-700 font-medium mr-2">表示中:</span>
               <span className="text-sm font-bold text-green-600">{filteredStaff.length}</span>
-              <span className="text-xs text-green-700 ml-1">/ {staffList.length}件</span>
+              <span className="text-xs text-green-700 ml-1">/ {staffList.filter(s => s.isActive).length}件</span>
             </div>
           </div>
         </div>
