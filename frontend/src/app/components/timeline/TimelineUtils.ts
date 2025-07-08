@@ -88,13 +88,18 @@ export const timeToPositionPercent = (time: number): number => {
 };
 
 /**
- * 位置パーセンテージを時間（小数点）に変換
+ * 位置パーセンテージを時間（小数点）に変換（1分単位精度）
  * @param percent 位置パーセンテージ（0-100）
  * @returns 時間（例: 9.5 = 9:30）
  */
 export const positionPercentToTime = (percent: number): number => {
   const minutesFromStart = (percent / 100) * TIMELINE_CONFIG.TOTAL_MINUTES;
-  return TIMELINE_CONFIG.START_HOUR + minutesFromStart / 60;
+  const totalMinutes = TIMELINE_CONFIG.START_HOUR * 60 + minutesFromStart;
+  
+  // 1分単位にスナップ
+  const snappedMinutes = Math.round(totalMinutes / TIMELINE_CONFIG.MINUTES_STEP) * TIMELINE_CONFIG.MINUTES_STEP;
+  
+  return snappedMinutes / 60;
 };
 
 /**

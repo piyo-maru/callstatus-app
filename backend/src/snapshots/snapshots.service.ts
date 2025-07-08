@@ -44,8 +44,8 @@ export class SnapshotsService {
       return;
     }
 
-    const yesterday = this.getYesterdayUTC();
-    const existingSnapshot = await this.checkExistingSnapshot(yesterday);
+    const targetDate = this.getTargetDateUTC();
+    const existingSnapshot = await this.checkExistingSnapshot(targetDate);
 
     if (existingSnapshot && existingSnapshot.status === 'COMPLETED') {
       this.logger.log('既に完了したスナップショットが存在するため、リトライを停止');
@@ -63,7 +63,7 @@ export class SnapshotsService {
       this.logger.error(`スナップショット リトライ失敗: ${error.message}`);
       
       // 3回失敗したらリトライを停止
-      const failedCount = await this.getFailedRetryCount(yesterday);
+      const failedCount = await this.getFailedRetryCount(targetDate);
       if (failedCount >= 3) {
         this.logger.error('リトライ回数上限に達したため、リトライを停止');
         this.isRetryRunning = false;
@@ -90,16 +90,17 @@ export class SnapshotsService {
   }
 
   /**
-   * 前日分のスナップショットを自動作成（Cron用）
+   * 対象日分のスナップショットを自動作成（Cron用）
+   * UTC 15:05実行でUTC当日データ取得 = JST 00:05実行でJST前日データ取得
    */
   async createDailySnapshot() {
-    const yesterday = this.getYesterdayUTC();
+    const targetDate = this.getTargetDateUTC();
     const batchId = this.generateBatchId();
     
-    this.logger.log(`日次スナップショット作成開始: ${yesterday.toDateString()} (BatchID: ${batchId})`);
+    this.logger.log(`日次スナップショット作成開始: ${targetDate.toDateString()} (BatchID: ${batchId})`);
     
     try {
-      return await this.executeSnapshot(yesterday, batchId);
+      return await this.executeSnapshot(targetDate, batchId);
     } catch (error) {
       this.logger.error(`日次スナップショット作成失敗: ${error.message}`);
       await this.handleSnapshotError(batchId, error);
@@ -273,19 +274,20 @@ export class SnapshotsService {
   }
 
   /**
-   * 昨日の日付を取得（UTC基準）
+   * 対象日の日付を取得（UTC基準）
+   * UTC 15:05実行時にUTC当日データ取得 = JST 00:05実行時にJST前日データ取得
    * CLAUDE.md厳格ルール準拠：内部時刻は完全UTC
    */
-  private getYesterdayUTC(): Date {
+  private getTargetDateUTC(): Date {
     const utcNow = new Date();
-    const utcYesterday = new Date(Date.UTC(
+    const utcTargetDate = new Date(Date.UTC(
       utcNow.getUTCFullYear(),
       utcNow.getUTCMonth(),
-      utcNow.getUTCDate() - 1,
+      utcNow.getUTCDate(), // 前日ではなく当日（UTC基準）
       0, 0, 0, 0
     ));
-    this.logger.log(`UTC基準での昨日: ${utcYesterday.toISOString()} (現在UTC: ${utcNow.toISOString()})`);
-    return utcYesterday;
+    this.logger.log(`UTC基準での対象日: ${utcTargetDate.toISOString()} (現在UTC: ${utcNow.toISOString()})`);
+    return utcTargetDate;
   }
 
   /**
