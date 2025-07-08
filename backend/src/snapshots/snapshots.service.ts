@@ -12,10 +12,10 @@ export class SnapshotsService {
   constructor(private prisma: PrismaService) {}
 
   /**
-   * 日次スナップショット自動実行（毎日UTC 15:05 = JST翌日00:05）
+   * 日次スナップショット自動実行（毎日UTC 06:05 = JST当日15:05）
    * CLAUDE.md厳格ルール準拠：内部処理は完全UTC
    */
-  @Cron('5 15 * * *', {
+  @Cron('5 6 * * *', {
     name: 'daily-snapshot',
     timeZone: 'UTC'
   })

@@ -1107,7 +1107,12 @@ export function UnifiedSettingsModal({
         <div className="flex justify-between items-center p-6 border-b">
           <h2 className="text-xl font-semibold text-gray-900">設定</h2>
           <button
-            onClick={handleSaveAndClose}
+            onClick={() => {
+              if (isDirty) {
+                discardChanges();
+              }
+              onClose();
+            }}
             className="text-gray-400 hover:text-gray-600 transition-colors"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">

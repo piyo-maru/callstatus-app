@@ -2050,12 +2050,13 @@ export default function FullMainApp() {
         status: 'Online' // デフォルトステータス
       };
       
-      // ユーザーロールに関係なく、自分のスタッフIDを初期値として自動設定
-      if (user?.staffId) {
+      // 権限別のstaffId設定：STAFFのみ自己制限、管理者は制限なし
+      if (user?.role === 'STAFF' && user?.staffId) {
         finalInitialData.staffId = user.staffId;
-        // console.log(`${user.role}ユーザー用に自分のstaffId自動設定:`, user.staffId);
-      } else if (user?.role === 'ADMIN') {
-        // console.log('管理者がスタッフデータに未登録のため、手動選択が必要です');
+        // console.log(`STAFFユーザー用に自分のstaffId自動設定:`, user.staffId);
+      } else if (user?.role === 'ADMIN' || user?.role === 'SYSTEM_ADMIN') {
+        // 管理者権限：staffIdを自動設定せず、モーダルで全スタッフから選択可能
+        // console.log('管理者権限：全スタッフ選択可能');
       }
       
       // console.log('自動時刻設定:', { startTime, endTime });
@@ -2110,15 +2111,6 @@ export default function FullMainApp() {
     const payload = { ...processedScheduleData, date };
     const currentApiUrl = getApiUrl();
     
-    // === Phase 2b: 楽観的UX - 即座にモーダル閉じて処理中通知 ===
-    const operationType = scheduleData.id ? '更新' : '作成';
-    const notificationId = addNotification('processing', `スケジュール${operationType}中...`, false);
-    
-    // モーダルを即座に閉じる（楽観的UX）
-    setIsModalOpen(false);
-    setEditingSchedule(null);
-    setDraggedSchedule(null);
-    
     try {
       // console.log('=== handleSaveSchedule START ===');
       // console.log('Original scheduleData:', scheduleData);
@@ -2154,28 +2146,23 @@ export default function FullMainApp() {
       // console.log('Schedule saved successfully:', result);
       // console.log('=== handleSaveSchedule SUCCESS ===');
       
-      // === Phase 2b: 成功通知 ===
-      updateNotification(notificationId, 'success', `スケジュール${operationType}が完了しました`);
+      // 成功通知（シンプル版）
+      // updateNotification(notificationId, 'success', `スケジュール${operationType}が完了しました`);
       
       // データを再取得してUIを更新
       // console.log('Fetching updated data...');
       // console.log('復元予定のスクロール位置:', savedScrollPosition);
       await fetchData(displayDate);
+      
       // fetchData完了後、保存した位置に復元 - 縦・横両対応
       const restoreScroll = () => {
         if (topScrollRef.current && bottomScrollRef.current) {
           // console.log('スクロール復元実行:', savedScrollPosition, 'current横:', topScrollRef.current.scrollLeft, 'current縦:', window.scrollY);
           
           // 横スクロール復元
-          // 横スクロール復元
           if (savedScrollPosition.x > 0) {
             topScrollRef.current.scrollLeft = savedScrollPosition.x;
             bottomScrollRef.current.scrollLeft = savedScrollPosition.x;
-          }
-          
-          // 縦スクロール復元
-          if (savedScrollPosition.y >= 0) {
-            window.scrollTo(savedScrollPosition.x || 0, savedScrollPosition.y);
           }
           
           // 縦スクロール復元
@@ -2190,14 +2177,17 @@ export default function FullMainApp() {
       setTimeout(restoreScroll, 50);
       setTimeout(restoreScroll, 200);
       setTimeout(restoreScroll, 500);
+      
+      // データ更新・スクロール復元後にモーダルを閉じる
+      setIsModalOpen(false);
       setEditingSchedule(null);
       setDraggedSchedule(null);
     } catch (error) {
       console.error('=== handleSaveSchedule ERROR ===');
       console.error('Error details:', error);
       
-      // === Phase 2b: エラー通知 ===
-      updateNotification(notificationId, 'error', `スケジュール${operationType}に失敗しました。再度お試しください。`);
+      // エラー通知（シンプル版）
+      // updateNotification(notificationId, 'error', `スケジュール${operationType}に失敗しました。再度お試しください。`);
       
       // エラー時は従来のアラート表示も維持（重要な情報なので）
       alert('スケジュールの保存に失敗しました。再度お試しください。\n詳細: ' + (error instanceof Error ? error.message : String(error)));
@@ -3021,7 +3011,6 @@ export default function FullMainApp() {
       return statusFiltered.filter(staff => {
         if (selectedSettingFilter === 'all') return true;
         if (selectedSettingFilter === 'responsibility') {
-          console.log(`[デバッグ] 担当設定フィルター: ${staff.name} => hasResponsibilities=${staff.hasResponsibilities}`);
           return staff.hasResponsibilities;
         }
         if (selectedSettingFilter === 'support') return staff.isSupporting;
@@ -3375,13 +3364,11 @@ export default function FullMainApp() {
                     });
                     if (!isHistoricalMode) {
                       setSelectedSchedule(null);
-                      // STAFFユーザーの場合は自分のstaffIdを初期値に設定
-                      if (user?.role === 'STAFF' && user?.staffId) {
-                        setDraggedSchedule({ staffId: user.staffId });
-                      } else {
-                        setDraggedSchedule(null);
-                      }
-                      handleOpenModal();
+                      // 権限別のinitialData設定
+                      const initialData = (user?.role === 'STAFF' && user?.staffId) 
+                        ? { staffId: user.staffId } 
+                        : {}; // 管理者は空オブジェクト（全スタッフ選択可能）
+                      handleOpenModal(null, initialData, false);
                     }
                   }} 
                   disabled={isHistoricalMode}

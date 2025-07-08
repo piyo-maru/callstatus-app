@@ -101,6 +101,7 @@ export const ScheduleModal = ({ isOpen, onClose, staffList, onSave, scheduleToEd
       memo: (status === 'meeting' || status === 'training') ? memo : undefined
     };
     console.log('Schedule data prepared:', scheduleData);
+    
     onSave(isEditMode ? { ...scheduleData, id: scheduleToEdit.id } : scheduleData);
     onClose();
   };

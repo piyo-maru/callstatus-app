@@ -82,7 +82,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           email: 'auto@test.com',
           name: 'テストユーザー（自動ログイン）',
           role: 'SYSTEM_ADMIN',
-          staffId: 1,
+          staffId: null, // 管理者権限はstaffId制限なし
           isActive: true
         };
         

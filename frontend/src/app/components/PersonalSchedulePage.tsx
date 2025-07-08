@@ -652,15 +652,24 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
           targetStaff = staffList.find(staff => staff.id === initialStaffId);
           if (isDev) console.log(`指定されたスタッフID: ${initialStaffId}, 見つかったスタッフ:`, targetStaff);
         } else {
-          // initialStaffIdが指定されていない場合は、ログインユーザーに対応する社員を表示
-          targetStaff = staffList.find(staff => {
-            // Contract テーブルのemailとマッチング
-            return staff.name.includes(user.email.split('@')[0]) || 
-                   staff.empNo === user.email.split('@')[0];
-          });
+          // 権限別の処理：STAFFは自分のみ、管理者は最初のスタッフ
+          if (user.role === 'STAFF') {
+            // STAFFの場合：自分に対応する社員を表示
+            targetStaff = staffList.find(staff => {
+              // Contract テーブルのemailとマッチング
+              return staff.name.includes(user.email.split('@')[0]) || 
+                     staff.empNo === user.email.split('@')[0];
+            });
+          } else if (user.role === 'ADMIN' || user.role === 'SYSTEM_ADMIN') {
+            // 管理者の場合：最初のスタッフを表示（後でスタッフ選択可能）
+            if (staffList.length > 0) {
+              targetStaff = staffList[0];
+              if (isDev) console.log('管理者権限：最初のスタッフを選択');
+            }
+          }
           
           if (!targetStaff && staffList.length > 0) {
-            if (isDev) console.log('ユーザーに対応する社員が見つからないため、最初の社員を使用');
+            if (isDev) console.log('対応する社員が見つからないため、最初の社員を使用');
             targetStaff = staffList[0];
           }
         }
