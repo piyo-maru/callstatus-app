@@ -152,6 +152,7 @@ export class SnapshotsService {
     
     // 通常のAdjustmentと承認済みPendingレコードの両方を取得
     // CLAUDE.md厳格ルール準拠：UTC範囲でのクエリ
+    // 論理削除対応: アクティブ社員のみを対象
     return await tx.adjustment.findMany({
       where: {
         date: {
@@ -161,7 +162,8 @@ export class SnapshotsService {
         OR: [
           { isPending: false },                    // 通常のAdjustment
           { isPending: true, approvedAt: { not: null } }  // 承認済みPending
-        ]
+        ],
+        Staff: { isActive: true }  // アクティブ社員のみ対象
       },
       include: {
         Staff: true
@@ -322,13 +324,22 @@ export class SnapshotsService {
 
     this.logger.log(`履歴スケジュール取得: ${dateString} (UTC範囲: ${startOfDayUTC.toISOString()} 〜 ${endOfDayUTC.toISOString()})`);
 
+    // 論理削除対応: アクティブ社員のIDリストを取得
+    const activeStaff = await this.prisma.staff.findMany({
+      where: { isActive: true },
+      select: { id: true }
+    });
+    const activeStaffIds = activeStaff.map(staff => staff.id);
+
     // CLAUDE.md厳格ルール準拠：UTC範囲でのクエリ、将来的にdate_utcに移行
+    // 論理削除対応: アクティブ社員のみを対象
     const historicalData = await this.prisma.historicalSchedule.findMany({
       where: {
         date: {  // 現在は既存カラム使用、将来的にdate_utcに移行
           gte: startOfDayUTC,
           lte: endOfDayUTC
-        }
+        },
+        staffId: { in: activeStaffIds }  // アクティブ社員のみ対象
       },
       orderBy: [
         { staffName: 'asc' },
@@ -336,7 +347,7 @@ export class SnapshotsService {
       ]
     });
 
-    this.logger.log(`履歴スケジュール取得完了: ${historicalData.length}件`);
+    this.logger.log(`履歴スケジュール取得完了: ${historicalData.length}件（アクティブ社員 ${activeStaffIds.length}名）`);
     return historicalData;
   }
 
