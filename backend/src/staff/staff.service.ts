@@ -196,7 +196,10 @@ export class StaffService {
     }
 
     return this.prisma.staff.create({
-      data: createStaffDto
+      data: {
+        ...createStaffDto,
+        workArrangement: '正社員'
+      }
     });
   }
 
@@ -223,7 +226,10 @@ export class StaffService {
     for (const staffData of staffArray) {
       try {
         const staff = await this.prisma.staff.create({
-          data: staffData
+          data: {
+            ...staffData,
+            workArrangement: '正社員'
+          }
         });
         createdStaff.push(staff);
         console.log(`Created staff: ${staff.name}`);

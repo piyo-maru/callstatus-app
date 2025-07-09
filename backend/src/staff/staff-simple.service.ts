@@ -33,6 +33,7 @@ export class StaffSimpleService {
             name: emp.name,
             department: emp.dept || emp.department,
             group: emp.team,
+            workArrangement: '正社員',
             isActive: true
           }
         });
