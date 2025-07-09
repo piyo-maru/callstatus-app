@@ -11,6 +11,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PendingService, CreatePendingDto, ApprovalDto, BulkApprovalDto } from './pending.service';
+import { PrismaService } from '../prisma.service';
 // 認証関連を一時的に無効化（認証システム修正まで）
 // import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 // import { RolesGuard } from '../auth/roles.guard';
@@ -19,7 +20,20 @@ import { PendingService, CreatePendingDto, ApprovalDto, BulkApprovalDto } from '
 @Controller('schedules/pending')
 // @UseGuards(JwtAuthGuard) // 一時的に無効化
 export class PendingController {
-  constructor(private readonly pendingService: PendingService) {}
+  constructor(
+    private readonly pendingService: PendingService,
+    private readonly prisma: PrismaService
+  ) {}
+
+  /**
+   * 実際に存在する最初のスタッフIDを動的に取得（認証システム修正まで）
+   */
+  private async getMockStaffId(): Promise<number> {
+    const firstStaff = await this.prisma.staff.findFirst({ 
+      orderBy: { id: 'asc' } 
+    });
+    return firstStaff?.id || 1;
+  }
 
   /**
    * Pending作成
@@ -27,7 +41,7 @@ export class PendingController {
   @Post()
   async create(@Body() createPendingDto: CreatePendingDto) {
     // 一時的に固定のstaffIdを使用（認証システム修正まで）
-    const mockStaffId = 1;
+    const mockStaffId = await this.getMockStaffId();
     return this.pendingService.create(createPendingDto, mockStaffId);
   }
 
@@ -76,7 +90,7 @@ export class PendingController {
    */
   @Get(':id')
   async findOne(@Param('id', ParseIntPipe) id: number) {
-    const mockStaffId = 1;
+    const mockStaffId = await this.getMockStaffId();
     return this.pendingService.findOne(id, mockStaffId, true); // admin権限で取得
   }
 
@@ -88,7 +102,7 @@ export class PendingController {
     @Param('id', ParseIntPipe) id: number,
     @Body() updatePendingDto: Partial<CreatePendingDto>
   ) {
-    const mockStaffId = 1;
+    const mockStaffId = await this.getMockStaffId();
     return this.pendingService.update(id, updatePendingDto, mockStaffId);
   }
 
@@ -97,7 +111,7 @@ export class PendingController {
    */
   @Delete(':id')
   async remove(@Param('id', ParseIntPipe) id: number) {
-    const mockStaffId = 1;
+    const mockStaffId = await this.getMockStaffId();
     return this.pendingService.remove(id, mockStaffId);
   }
 
@@ -111,7 +125,7 @@ export class PendingController {
     @Param('id', ParseIntPipe) id: number,
     @Body() approvalDto: ApprovalDto
   ) {
-    const mockStaffId = 1;
+    const mockStaffId = await this.getMockStaffId();
     return this.pendingService.approve(id, approvalDto, mockStaffId);
   }
 
@@ -125,7 +139,7 @@ export class PendingController {
     @Param('id', ParseIntPipe) id: number,
     @Body() approvalDto: ApprovalDto
   ) {
-    const mockStaffId = 1;
+    const mockStaffId = await this.getMockStaffId();
     return this.pendingService.reject(id, approvalDto, mockStaffId);
   }
 
@@ -139,7 +153,7 @@ export class PendingController {
     @Param('id', ParseIntPipe) id: number,
     @Body() approvalDto: ApprovalDto
   ) {
-    const mockStaffId = 1;
+    const mockStaffId = await this.getMockStaffId();
     return this.pendingService.unapprove(id, approvalDto.reason || '承認取り消し', mockStaffId);
   }
 }
@@ -148,7 +162,20 @@ export class PendingController {
 // @UseGuards(JwtAuthGuard, RolesGuard) // 一時的に無効化
 // @Roles('ADMIN') // 一時的に無効化
 export class AdminPendingController {
-  constructor(private readonly pendingService: PendingService) {}
+  constructor(
+    private readonly pendingService: PendingService,
+    private readonly prisma: PrismaService
+  ) {}
+
+  /**
+   * 実際に存在する最初のスタッフIDを動的に取得（認証システム修正まで）
+   */
+  private async getMockStaffId(): Promise<number> {
+    const firstStaff = await this.prisma.staff.findFirst({ 
+      orderBy: { id: 'asc' } 
+    });
+    return firstStaff?.id || 1;
+  }
 
   /**
    * 管理者用：全pending一覧
@@ -175,7 +202,7 @@ export class AdminPendingController {
    */
   @Get(':id')
   async findOneForAdmin(@Param('id', ParseIntPipe) id: number) {
-    const mockStaffId = 1;
+    const mockStaffId = await this.getMockStaffId();
     return this.pendingService.findOne(id, mockStaffId, true);
   }
 
@@ -192,7 +219,8 @@ export class AdminPendingController {
       throw new BadRequestException('action must be approve or reject');
     }
 
-    const mockStaffId = 1;
+    // 実際に存在するスタッフIDを動的に取得（認証システム修正まで）
+    const mockStaffId = await this.getMockStaffId();
     return this.pendingService.bulkApproval(bulkDto, mockStaffId);
   }
 }

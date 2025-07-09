@@ -84,8 +84,8 @@ const SYSTEM_PRESETS = {
 };
 
 // スタッフID範囲
-const STAFF_ID_MIN = 1;
-const STAFF_ID_MAX = 225;
+const STAFF_ID_MIN = 73;
+const STAFF_ID_MAX = 297;
 const TOTAL_STAFF = STAFF_ID_MAX - STAFF_ID_MIN + 1;
 
 // ユーティリティ関数

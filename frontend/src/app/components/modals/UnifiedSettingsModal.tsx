@@ -1077,15 +1077,21 @@ export function UnifiedSettingsModal({
   // モーダルの外側クリックでクローズ
   const handleBackdropClick = useCallback((e: React.MouseEvent) => {
     if (e.target === e.currentTarget) {
-      handleSaveAndClose();
+      if (isDirty) {
+        discardChanges();
+      }
+      onClose();
     }
-  }, [handleSaveAndClose]);
+  }, [isDirty, discardChanges, onClose]);
 
   // ESCキーでクローズ
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        handleSaveAndClose();
+        if (isDirty) {
+          discardChanges();
+        }
+        onClose();
       }
     };
     
@@ -1093,7 +1099,7 @@ export function UnifiedSettingsModal({
       document.addEventListener('keydown', handleKeyDown);
       return () => document.removeEventListener('keydown', handleKeyDown);
     }
-  }, [isOpen, handleSaveAndClose]);
+  }, [isOpen, isDirty, discardChanges, onClose]);
 
   // モーダルが開かれていない場合は何も表示しない
   if (!isOpen) return null;

@@ -70,13 +70,18 @@ export class LayerManagerService {
     
     const dayColumn = dayColumns[dayOfWeek];
     
-    // 全ての契約データを取得してフィルタリング
-    const allContracts = await this.prisma.contract.findMany();
+    // 全ての契約データを取得してフィルタリング（論理削除対応: アクティブ社員のみ）
+    const allContracts = await this.prisma.contract.findMany({
+      include: {
+        Staff: true
+      }
+    });
     
-    // 該当曜日に勤務時間が設定されている契約をフィルタ
+    // 該当曜日に勤務時間が設定されている契約をフィルタ（アクティブ社員のみ）
     const contracts = allContracts.filter(contract => {
       const workHours = contract[dayColumn as keyof typeof contract];
-      return workHours !== null && workHours !== undefined && workHours !== '';
+      return workHours !== null && workHours !== undefined && workHours !== '' && 
+             contract.Staff.isActive;  // アクティブ社員のみ対象
     });
 
     // 各契約から勤務時間スケジュールを生成
@@ -198,17 +203,18 @@ export class LayerManagerService {
     
     const dayColumn = dayColumns[dayOfWeek];
     
-    // 退職者を含む全ての契約データを取得
+    // 論理削除対応: アクティブ社員の契約データのみを取得
     const allContracts = await this.prisma.contract.findMany({
       include: {
-        Staff: true // スタッフ情報も取得（退職者判定用）
+        Staff: true // スタッフ情報も取得（アクティブ社員判定用）
       }
     });
     
-    // 該当曜日に勤務時間が設定されている契約をフィルタ
+    // 該当曜日に勤務時間が設定されている契約をフィルタ（アクティブ社員のみ）
     const contracts = allContracts.filter(contract => {
       const workHours = contract[dayColumn as keyof typeof contract];
-      return workHours !== null && workHours !== undefined && workHours !== '';
+      return workHours !== null && workHours !== undefined && workHours !== '' && 
+             contract.Staff.isActive;  // アクティブ社員のみ対象
     });
 
     // 各契約から勤務時間スケジュールを生成

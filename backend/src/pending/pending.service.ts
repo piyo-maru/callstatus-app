@@ -543,7 +543,7 @@ export class PendingService {
               rejectedAt: now,
               rejectedBy: actorId,
               rejectionReason: bulkDto.reason || null,
-              // isPending: true を維持（月次計画で却下済み予定を表示するため）
+              // isPending: true を維持（月次計画で却下済み予定も表示するため）
               updatedAt: now
             }
           });

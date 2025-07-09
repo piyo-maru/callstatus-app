@@ -26,19 +26,17 @@ model Adjustment {
   rejectedAt      DateTime?
   rejectedBy      Int?
   rejectionReason String?
-  date_utc        DateTime?            @db.Timestamptz(6)
-  start_utc       DateTime?            @db.Timestamptz(6)
-  end_utc         DateTime?            @db.Timestamptz(6)
-  createdAt_utc   DateTime?            @default(now()) @db.Timestamptz(6)
-  updatedAt_utc   DateTime?            @default(now()) @db.Timestamptz(6)
-  approvedAt_utc  DateTime?            @db.Timestamptz(6)
-  rejectedAt_utc  DateTime?            @db.Timestamptz(6)
+  date_utc        DateTime?
+  start_utc       DateTime?
+  end_utc         DateTime?
+  createdAt_utc   DateTime?
+  updatedAt_utc   DateTime?
+  approvedAt_utc  DateTime?
+  rejectedAt_utc  DateTime?
   ApprovedBy      Staff?               @relation("ApprovedAdjustments", fields: [approvedBy], references: [id])
   RejectedBy      Staff?               @relation("RejectedAdjustments", fields: [rejectedBy], references: [id])
   Staff           Staff                @relation(fields: [staffId], references: [id])
   ApprovalLogs    PendingApprovalLog[]
-
-  @@index([date_utc], map: "idx_adjustment_date_utc")
 }
 
 model Contract {
@@ -301,18 +299,16 @@ model HistoricalSchedule {
   reason          String?
   snapshotAt      DateTime  @default(now())
   version         String    @default("1.0")
-  date_utc        DateTime? @db.Timestamptz(6)
-  start_utc       DateTime? @db.Timestamptz(6)
-  end_utc         DateTime? @db.Timestamptz(6)
-  snapshotAt_utc  DateTime? @default(now()) @db.Timestamptz(6)
+  date_utc        DateTime?
+  start_utc       DateTime?
+  end_utc         DateTime?
+  snapshotAt_utc  DateTime?
 
   @@index([date])
   @@index([date, staffDepartment])
   @@index([date, staffId])
   @@index([staffEmpNo])
   @@index([batchId])
-  @@index([date_utc], map: "idx_historical_schedules_date_utc")
-  @@index([date_utc, staffId], map: "idx_historical_schedules_date_utc_staff")
   @@map("historical_schedules")
 }
 
@@ -325,13 +321,12 @@ model SnapshotLog {
   startedAt       DateTime       @default(now())
   completedAt     DateTime?
   errorMessage    String?
-  targetDate_utc  DateTime?      @db.Timestamptz(6)
-  startedAt_utc   DateTime?      @default(now()) @db.Timestamptz(6)
-  completedAt_utc DateTime?      @db.Timestamptz(6)
+  targetDate_utc  DateTime?
+  startedAt_utc   DateTime?
+  completedAt_utc DateTime?
 
   @@index([targetDate])
   @@index([status])
-  @@index([targetDate_utc], map: "idx_snapshot_logs_target_date_utc")
   @@map("snapshot_logs")
 }
 
@@ -452,7 +447,6 @@ model AdminAuditLog {
 
 model GlobalDisplaySettings {
   id                       Int      @id @default(1)
-  viewMode                 String   @default("normal")
   maskingEnabled           Boolean  @default(false)
   timeRange                String   @default("standard")
   customStatusColors       Json     @default("{}")
@@ -470,12 +464,12 @@ model GlobalPresetSettings {
   presets            Json     @default("[]")
   categories         Json     @default("[]")
   pagePresetSettings Json     @default("{}")
+  displaySettings    Json     @default("{}")
+  departmentSettings Json     @default("[]")
   version            String   @default("1.0.0")
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
   updatedBy          Int?
-  departmentSettings Json     @default("[]")
-  displaySettings    Json     @default("{}")
   UpdatedByStaff     Staff?   @relation("GlobalPresetUpdates", fields: [updatedBy], references: [id])
 
   @@map("global_preset_settings")

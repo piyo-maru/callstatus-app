@@ -147,7 +147,6 @@ tests/e2e/
 ├── monitoring-auth.spec.js    # システム監視・認証権限
 └── edge-cases.spec.js         # エッジケース・異常系
 ```
-
 ### 運用スクリプト（便利な自動化ツール）
 ```bash
 # 完全起動スクリプト（推奨）- 全サービス起動・Prisma生成・開発サーバー起動を自動化
@@ -541,6 +540,16 @@ docker ps | grep db        # 例: callstatus_app_db
 3. メモリ不足 → free -h で確認、Docker再起動
 4. ポート競合 → lsof -i :3000 -i :3002 で確認
 5. API接続失敗 → curl http://localhost:3002/api/test
+```
+
+### コンテナ名の確認（docker exec実行前に必要）
+```bash
+# 全コンテナの状態確認
+docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+
+# 正確なコンテナ名取得
+docker ps | grep backend
+docker ps | grep frontend
 ```
 
 ### プロセス競合防止（重要）

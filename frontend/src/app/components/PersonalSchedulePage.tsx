@@ -279,6 +279,11 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
 }) => {
   const { user, loading: authLoading, logout } = useAuth();
   
+  // デバッグ: 認証状態をログ出力
+  useEffect(() => {
+    console.log('PersonalSchedulePage 認証状態:', { user, authLoading });
+  }, [user, authLoading]);
+  
   // 統一プリセットシステム
   const { getPresetsForPage } = usePresetSettings();
   
@@ -315,6 +320,11 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
   const [selectedDate, setSelectedDate] = usePersonalPageDate();
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [currentStaff, setCurrentStaff] = useState<Staff | null>(null);
+  
+  // デバッグ: currentStaff状態をログ出力
+  useEffect(() => {
+    console.log('PersonalSchedulePage currentStaff状態:', { currentStaff });
+  }, [currentStaff]);
   const [contractData, setContractData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -635,22 +645,16 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
     }
 
     try {
-      if (isDev) {
-      }
-      
       const response = await authenticatedFetch(`${getApiUrl()}/api/staff`);
-      if (isDev) console.log('スタッフAPI レスポンス状態:', response.status);
       
       if (response.ok) {
         const staffList: Staff[] = await response.json();
-        if (isDev) console.log('取得したスタッフリスト:', staffList);
         
         let targetStaff: Staff | undefined;
         
         // initialStaffIdが指定されている場合は、指定されたスタッフを表示
         if (initialStaffId) {
           targetStaff = staffList.find(staff => staff.id === initialStaffId);
-          if (isDev) console.log(`指定されたスタッフID: ${initialStaffId}, 見つかったスタッフ:`, targetStaff);
         } else {
           // 権限別の処理：STAFFは自分のみ、管理者は最初のスタッフ
           if (user.role === 'STAFF') {
@@ -675,7 +679,6 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
         }
         
         if (targetStaff) {
-          if (isDev) console.log('選択された社員:', targetStaff);
           setCurrentStaff(targetStaff);
           
           // 契約データを取得
@@ -683,10 +686,8 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
             const contractResponse = await authenticatedFetch(`${getApiUrl()}/api/contracts/staff/${targetStaff.id}`);
             if (contractResponse.ok) {
               const contract = await contractResponse.json();
-              if (isDev) console.log('取得した契約データ:', contract);
               setContractData(contract);
             } else {
-              if (isDev) console.log('契約データが見つかりません');
               setContractData(null);
             }
           } catch (err) {
@@ -1271,8 +1272,6 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
           await fetchSchedules();
           // スクロール位置を復元
           restoreScrollPosition();
-        } else {
-          if (isDev) console.warn('currentStaffが設定されていないため、サーバー再取得をスキップ（ローカル更新のみ）');
         }
       } else {
         console.error('スケジュール更新失敗:', response.status);
@@ -1293,7 +1292,6 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
   const handleDrop = useCallback((e: React.DragEvent, day: Date) => {
     try {
       const scheduleData = JSON.parse(e.dataTransfer.getData('application/json'));
-      console.log('ドロップされたスケジュール:', scheduleData);
       
       // ドロップ位置から時刻を計算
       const rect = e.currentTarget.getBoundingClientRect();
@@ -1722,6 +1720,14 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
   const handleDeleteSchedule = useCallback(async (scheduleId: number | string) => {
     if (isDev) console.log('スケジュール削除:', scheduleId, typeof scheduleId);
     
+    // 削除処理開始時にcurrentStaffを保存
+    const staffAtDeletion = currentStaff;
+    if (!staffAtDeletion) {
+      console.error('削除時にcurrentStaffが設定されていません');
+      setError('社員情報が設定されていないため削除できません');
+      return;
+    }
+    
     try {
       let actualId: number;
       
@@ -1747,7 +1753,49 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
       
       if (response.ok) {
         if (isDev) console.log('スケジュール削除成功');
-        await fetchSchedules();
+        
+        // 削除成功時にスケジュール再取得を強制実行
+        if (isDev) console.log('削除後スケジュール再取得開始 - staffId:', staffAtDeletion.id);
+        setLoading(true);
+        setError(null);
+
+        try {
+          const promises = monthDays.map(async (day) => {
+            const dateStr = format(day, 'yyyy-MM-dd');
+            const url = `${getApiUrl()}/api/schedules/unified?staffId=${staffAtDeletion.id}&date=${dateStr}&includeMasking=false`;
+            if (isDebugMode) console.log(`削除後API呼び出し: ${url}`);
+            
+            const response = await authenticatedFetch(url);
+            
+            if (response.ok) {
+              const data = await response.json();
+              const schedules = data.schedules || [];
+              
+              const schedulesWithDate = schedules.map((schedule: any) => ({
+                ...schedule,
+                date: dateStr,
+                start: typeof schedule.start === 'number' ? schedule.start : new Date(schedule.start),
+                end: typeof schedule.end === 'number' ? schedule.end : new Date(schedule.end)
+              }));
+              
+              return schedulesWithDate;
+            } else {
+              console.error(`${dateStr}のAPI呼び出し失敗:`, response.status);
+              return [];
+            }
+          });
+
+          const results = await Promise.all(promises);
+          const allSchedules = results.flat();
+          if (isDev) console.log('削除後スケジュール再取得完了:', allSchedules.length, '件');
+          
+          setSchedules(allSchedules);
+        } catch (err) {
+          console.error('削除後スケジュール再取得失敗:', err);
+        } finally {
+          setLoading(false);
+        }
+
         // スクロール位置を復元
         restoreScrollPosition();
         setDeletingScheduleId(null);
@@ -1760,7 +1808,7 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
       console.error('スケジュール削除エラー:', err); // エラーログは保持
       setError('スケジュールの削除中にエラーが発生しました');
     }
-  }, [getApiUrl, authenticatedFetch]);
+  }, [currentStaff, monthDays, getApiUrl, authenticatedFetch, restoreScrollPosition]);
 
   // 月変更ハンドラー
   const handleMonthChange = useCallback((direction: 'prev' | 'next') => {
@@ -1958,7 +2006,7 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
     
     // 権限チェック（個人ページでは既にonClick条件でチェック済みだが念のため）
     const canEditResult = canEdit(schedule.staffId);
-    console.log('権限チェック:', { user: user?.role, scheduleStaffId: schedule.staffId, canEdit: canEditResult });
+    console.log('権限チェック:', { user: user, userRole: user?.role, scheduleStaffId: schedule.staffId, canEdit: canEditResult });
     if (!canEditResult) {
       console.log('権限不足のためスキップ');
       return;
@@ -1983,7 +2031,7 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
       console.log('新しい予定をクリック - 選択状態にする');
       setSelectedSchedule({ schedule, layer: scheduleLayer });
     }
-  }, [selectedSchedule]);
+  }, [selectedSchedule, user, canEdit]);
 
   // キーボード操作（削除）
   useEffect(() => {

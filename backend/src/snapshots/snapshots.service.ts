@@ -44,8 +44,8 @@ export class SnapshotsService {
       return;
     }
 
-    const yesterday = this.getYesterdayUTC();
-    const existingSnapshot = await this.checkExistingSnapshot(yesterday);
+    const targetDate = this.getTargetDateUTC();
+    const existingSnapshot = await this.checkExistingSnapshot(targetDate);
 
     if (existingSnapshot && existingSnapshot.status === 'COMPLETED') {
       this.logger.log('既に完了したスナップショットが存在するため、リトライを停止');
@@ -63,7 +63,7 @@ export class SnapshotsService {
       this.logger.error(`スナップショット リトライ失敗: ${error.message}`);
       
       // 3回失敗したらリトライを停止
-      const failedCount = await this.getFailedRetryCount(yesterday);
+      const failedCount = await this.getFailedRetryCount(targetDate);
       if (failedCount >= 3) {
         this.logger.error('リトライ回数上限に達したため、リトライを停止');
         this.isRetryRunning = false;
@@ -90,16 +90,17 @@ export class SnapshotsService {
   }
 
   /**
-   * 前日分のスナップショットを自動作成（Cron用）
+   * 対象日分のスナップショットを自動作成（Cron用）
+   * UTC 15:05実行でUTC当日データ取得 = JST 00:05実行でJST前日データ取得
    */
   async createDailySnapshot() {
-    const yesterday = this.getYesterdayUTC();
+    const targetDate = this.getTargetDateUTC();
     const batchId = this.generateBatchId();
     
-    this.logger.log(`日次スナップショット作成開始: ${yesterday.toDateString()} (BatchID: ${batchId})`);
+    this.logger.log(`日次スナップショット作成開始: ${targetDate.toDateString()} (BatchID: ${batchId})`);
     
     try {
-      return await this.executeSnapshot(yesterday, batchId);
+      return await this.executeSnapshot(targetDate, batchId);
     } catch (error) {
       this.logger.error(`日次スナップショット作成失敗: ${error.message}`);
       await this.handleSnapshotError(batchId, error);
@@ -151,6 +152,7 @@ export class SnapshotsService {
     
     // 通常のAdjustmentと承認済みPendingレコードの両方を取得
     // CLAUDE.md厳格ルール準拠：UTC範囲でのクエリ
+    // 論理削除対応: アクティブ社員のみを対象
     return await tx.adjustment.findMany({
       where: {
         date: {
@@ -160,7 +162,8 @@ export class SnapshotsService {
         OR: [
           { isPending: false },                    // 通常のAdjustment
           { isPending: true, approvedAt: { not: null } }  // 承認済みPending
-        ]
+        ],
+        Staff: { isActive: true }  // アクティブ社員のみ対象
       },
       include: {
         Staff: true
@@ -273,19 +276,20 @@ export class SnapshotsService {
   }
 
   /**
-   * 昨日の日付を取得（UTC基準）
+   * 対象日の日付を取得（UTC基準）
+   * UTC 15:05実行時にUTC当日データ取得 = JST 00:05実行時にJST前日データ取得
    * CLAUDE.md厳格ルール準拠：内部時刻は完全UTC
    */
-  private getYesterdayUTC(): Date {
+  private getTargetDateUTC(): Date {
     const utcNow = new Date();
-    const utcYesterday = new Date(Date.UTC(
+    const utcTargetDate = new Date(Date.UTC(
       utcNow.getUTCFullYear(),
       utcNow.getUTCMonth(),
-      utcNow.getUTCDate() - 1,
+      utcNow.getUTCDate(), // 前日ではなく当日（UTC基準）
       0, 0, 0, 0
     ));
-    this.logger.log(`UTC基準での昨日: ${utcYesterday.toISOString()} (現在UTC: ${utcNow.toISOString()})`);
-    return utcYesterday;
+    this.logger.log(`UTC基準での対象日: ${utcTargetDate.toISOString()} (現在UTC: ${utcNow.toISOString()})`);
+    return utcTargetDate;
   }
 
   /**
@@ -320,13 +324,22 @@ export class SnapshotsService {
 
     this.logger.log(`履歴スケジュール取得: ${dateString} (UTC範囲: ${startOfDayUTC.toISOString()} 〜 ${endOfDayUTC.toISOString()})`);
 
+    // 論理削除対応: アクティブ社員のIDリストを取得
+    const activeStaff = await this.prisma.staff.findMany({
+      where: { isActive: true },
+      select: { id: true }
+    });
+    const activeStaffIds = activeStaff.map(staff => staff.id);
+
     // CLAUDE.md厳格ルール準拠：UTC範囲でのクエリ、将来的にdate_utcに移行
+    // 論理削除対応: アクティブ社員のみを対象
     const historicalData = await this.prisma.historicalSchedule.findMany({
       where: {
         date: {  // 現在は既存カラム使用、将来的にdate_utcに移行
           gte: startOfDayUTC,
           lte: endOfDayUTC
-        }
+        },
+        staffId: { in: activeStaffIds }  // アクティブ社員のみ対象
       },
       orderBy: [
         { staffName: 'asc' },
@@ -334,7 +347,7 @@ export class SnapshotsService {
       ]
     });
 
-    this.logger.log(`履歴スケジュール取得完了: ${historicalData.length}件`);
+    this.logger.log(`履歴スケジュール取得完了: ${historicalData.length}件（アクティブ社員 ${activeStaffIds.length}名）`);
     return historicalData;
   }
 
