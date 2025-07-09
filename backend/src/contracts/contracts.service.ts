@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
+import { TimeUtils } from '../utils/time-utils';
 
 @Injectable()
 export class ContractsService {
@@ -12,8 +13,8 @@ export class ContractsService {
    * @returns 各スタッフ・各日の契約勤務時間有無情報
    */
   async getMonthlyContractSchedules(year: number, month: number) {
-    // 指定月の全日数を取得
-    const daysInMonth = new Date(year, month, 0).getDate();
+    // 指定月の全日数を取得（UTC基準）
+    const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
     const dateArray = Array.from({ length: daysInMonth }, (_, i) => i + 1);
     
     // 全契約データを取得（staffとの結合）
@@ -41,43 +42,24 @@ export class ContractsService {
     
     for (const contract of contracts) {
       for (const day of dateArray) {
-        const date = new Date(year, month - 1, day);
-        const dayOfWeek = date.getDay(); // 0: 日曜日, 1: 月曜日, ..., 6: 土曜日
+        // UTC基準での曜日判定（重要な修正）
+        const dayOfWeek = TimeUtils.getUTCDayOfWeek(year, month, day);
         
         // 曜日に対応する勤務時間を取得
-        let workingHours: string | null = null;
-        switch (dayOfWeek) {
-          case 0: // 日曜日
-            workingHours = contract.sundayHours;
-            break;
-          case 1: // 月曜日
-            workingHours = contract.mondayHours;
-            break;
-          case 2: // 火曜日
-            workingHours = contract.tuesdayHours;
-            break;
-          case 3: // 水曜日
-            workingHours = contract.wednesdayHours;
-            break;
-          case 4: // 木曜日
-            workingHours = contract.thursdayHours;
-            break;
-          case 5: // 金曜日
-            workingHours = contract.fridayHours;
-            break;
-          case 6: // 土曜日
-            workingHours = contract.saturdayHours;
-            break;
-        }
+        const dayColumn = TimeUtils.getContractDayColumn(dayOfWeek);
+        const workingHours = contract[dayColumn] as string | null;
         
         // 勤務時間が設定されている場合のみデータに追加
         if (workingHours) {
+          // UTC基準での日付文字列生成
+          const dateString = TimeUtils.createUTCDateString(year, month, day);
+          
           scheduleData.push({
             staffId: contract.Staff.id,
             staffName: contract.Staff.name,
             department: contract.Staff.department,
             group: contract.Staff.group,
-            date: `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
+            date: TimeUtils.formatDateOnly(dateString), // YYYY-MM-DD形式
             day: day,
             dayOfWeek: dayOfWeek,
             workingHours: workingHours,

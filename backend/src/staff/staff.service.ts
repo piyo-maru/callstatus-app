@@ -23,6 +23,8 @@ interface EmployeeData {
   department?: string;  // 旧形式（後方互換性）
   team: string;
   email?: string;
+  position?: string;         // 役職（新規追加）
+  workArrangement?: string;  // 勤務形態（新規追加）
   mondayHours?: string;
   tuesdayHours?: string;
   wednesdayHours?: string;
@@ -970,6 +972,8 @@ export class StaffService {
               name: emp.name,
               department: department,
               group: team,
+              position: emp.position || null,
+              workArrangement: emp.workArrangement || null,
               isActive: true,
               deletedAt: null // 論理削除解除
             },
@@ -978,6 +982,8 @@ export class StaffService {
               name: emp.name,
               department: department,
               group: team,
+              position: emp.position || null,
+              workArrangement: emp.workArrangement || null,
               isActive: true
             },
             include: {
@@ -1452,6 +1458,8 @@ export class StaffService {
           name: emp.name,
           department: department,
           group: team,
+          position: emp.position || null,
+          workArrangement: emp.workArrangement || null,
           isActive: true,
           deletedAt: null
         },
@@ -1460,6 +1468,8 @@ export class StaffService {
           name: emp.name,
           department: department,
           group: team,
+          position: emp.position || null,
+          workArrangement: emp.workArrangement || null,
           isActive: true
         },
         include: {

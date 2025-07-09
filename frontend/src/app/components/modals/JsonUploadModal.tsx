@@ -75,7 +75,7 @@ export const JsonUploadModal: React.FC<JsonUploadModalProps> = ({ isOpen, onClos
             指定フォーマットのJSONファイルをアップロードして社員情報を一括投入します。
           </p>
           <p className="text-xs text-gray-500 mb-3">
-            フォーマット：{"{"} "employeeData": [{"{"} "name": "名前", "dept": "部署", "team": "グループ" {"}"}] {"}"}
+            フォーマット：{"{"} "employeeData": [{"{"} "empNo": "社員番号", "name": "名前", "dept": "部署", "team": "グループ", "email": "メールアドレス", "position": "役職", "workArrangement": "勤務形態", "mondayHours": "09:00-18:00", "tuesdayHours": "09:00-18:00", ... {"}"}] {"}"}
           </p>
         </div>
 

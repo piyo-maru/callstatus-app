@@ -2269,7 +2269,9 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
                   <div className="flex items-center gap-4">
                     <div className="flex items-center">
                       <div className="w-2 h-2 bg-indigo-500 rounded-full mr-3"></div>
-                      <div className="text-sm font-medium text-gray-700 uppercase tracking-wide">契約勤務時間</div>
+                      <div className="text-sm font-medium text-gray-700 uppercase tracking-wide">
+                        {currentStaff?.workArrangement ? `${currentStaff.workArrangement} / 契約勤務時間` : '契約勤務時間'}
+                      </div>
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {contractData ? (

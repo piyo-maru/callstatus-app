@@ -56,6 +56,8 @@ model Contract {
   thursdayHours  String?
   tuesdayHours   String?
   wednesdayHours String?
+  createdAt_utc  DateTime?
+  updatedAt_utc  DateTime?
   Staff          Staff    @relation(fields: [staffId], references: [id])
 }
 
@@ -133,6 +135,8 @@ model Staff {
   name                  String
   department            String
   group                 String
+  position              String?
+  workArrangement       String?
   authGracePeriod       DateTime?
   empNo                 String?                 @unique
   isActive              Boolean                 @default(true)

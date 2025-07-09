@@ -260,13 +260,26 @@ export const ImportModal: React.FC<ImportModalProps> = ({
       "dept": "システム開発部",
       "team": "基盤開発チーム",
       "email": "tanaka@example.com",
+      "position": "課長",
+      "workArrangement": "正社員",
       "mondayHours": "09:00-18:00",
       "tuesdayHours": "09:00-18:00",
-      ...
+      "wednesdayHours": "09:00-18:00",
+      "thursdayHours": "09:00-18:00",
+      "fridayHours": "09:00-18:00",
+      "saturdayHours": null,
+      "sundayHours": null
     }
   ]
 }`}
           </pre>
+          <div className="mt-2 text-xs text-gray-600">
+            <p><strong>新規追加フィールド:</strong></p>
+            <ul className="ml-4 list-disc">
+              <li><code>position</code>: 役職（オプション）</li>
+              <li><code>workArrangement</code>: 勤務形態（オプション）</li>
+            </ul>
+          </div>
         </div>
 
         {/* ボタン */}
