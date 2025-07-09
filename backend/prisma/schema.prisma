@@ -136,7 +136,7 @@ model Staff {
   department            String
   group                 String
   position              String?
-  workArrangement       String?
+  workArrangement       String
   authGracePeriod       DateTime?
   empNo                 String?                 @unique
   isActive              Boolean                 @default(true)
