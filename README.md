@@ -1,7 +1,7 @@
-# 📊 CallStatus - Enterprise Staff Schedule Management System
+# 📊 CallStatus - Staff Schedule Management System
 
-> **エンタープライズ級のスタッフスケジュール管理システム**  
-> リアルタイム同期、複雑なワークフロー、高度なデータ管理機能を備えた本格的なWebアプリケーション
+> **スタッフスケジュール管理システム**  
+> リアルタイム同期、承認ワークフロー、データ管理機能を備えたWebアプリケーション
 
 [![Next.js](https://img.shields.io/badge/Next.js-14-black?logo=next.js)](https://nextjs.org/)
 [![NestJS](https://img.shields.io/badge/NestJS-10-e0234e?logo=nestjs)](https://nestjs.com/)
@@ -12,10 +12,12 @@
 
 ![Main Dashboard](assets/main-dashboard.png)
 
+> ※ スクリーンショット内の人名・部署名・グループ名は全て架空のものです
+
 ## 🎯 プロジェクト概要
 
 **CallStatus**は、300名規模の企業での実際の要件に基づいて開発されたスタッフスケジュール管理システムです。  
-複雑な勤務パターン、承認ワークフロー、リアルタイム更新など、エンタープライズレベルの要求を満たす本格的なアプリケーションです。
+複雑な勤務パターン、承認ワークフロー、リアルタイム更新など、実用的な業務要求に対応したアプリケーションです。
 
 ### 🏢 想定利用シーン
 - **企業の勤務管理**: 複数部署・グループでの勤務時間管理
@@ -34,7 +36,7 @@
 
 ### 📅 **高度なスケジュール管理**
 - **2層データレイヤー**: 基本契約時間 + 個別調整の組み合わせ
-- **1分単位精度**: Excel Online互換の正確な時間計算
+- **1分単位精度**: 正確な時間計算
 - **複合予定**: 1日に複数の勤務パターンを組み合わせ可能
 - **プリセット機能**: よく使う勤務パターンの保存・再利用
 
@@ -56,10 +58,10 @@
 - **マスキング機能**: 過去データの個人情報保護
 
 ### 🎨 **Modern UI/UX**
-- **商用製品クオリティ**: Airシフト風の洗練されたデザイン
+- **実用的なデザイン**: シフト管理システムを参考にした使いやすいデザイン
 - **デスクトップ最適化**: 大画面での効率的な操作を重視
 - **横スクロール統一**: 大量データの効率的な表示
-- **統一カードデザイン**: モダンなUI/UXパターン実装
+- **統一カードデザイン**: 一貫性のあるUI/UXパターン
 
 ---
 
@@ -81,7 +83,7 @@
 
 ### **Infrastructure & DevOps**
 - **Docker & Docker Compose** - コンテナ化による環境一致
-- **Playwright** - E2Eテスト自動化（19テストケース実装）
+- **Playwright 1.53** - E2Eテスト自動化（10カテゴリ98テストケース実装）
 - **Jest** - ユニット・統合テスト
 - **GitHub Actions** - CI/CDパイプライン
 
@@ -103,21 +105,32 @@
 ### インストール・起動
 ```bash
 # リポジトリクローン
-git clone https://github.com/your-username/callstatus-app.git
+git clone https://github.com/piyopiyo-maru/callstatus-app.git
 cd callstatus-app
 
-# 全サービス起動（一発コマンド）
-docker-compose up -d
+# 全サービス起動（初回は--buildオプション推奨）
+docker-compose up -d --build
 
 # Prismaクライアント生成（必須）
-docker exec callstatus-app_backend_1 npx prisma generate
+docker exec callstatus-app-backend-1 npx prisma generate
 
-# バックエンド開発サーバー起動
-docker exec -it callstatus-app_backend_1 bash -c \"cd /app && npm run start:dev\"
+# バックエンド開発サーバー起動（バックグラウンド）
+docker exec callstatus-app-backend-1 bash -c "cd /app && nohup npm run start:dev > /tmp/backend.log 2>&1 &"
 
-# フロントエンド開発サーバー起動（別ターミナル）
-docker exec -it callstatus-app_frontend_1 bash -c \"cd /app && npm run dev\"
+# 起動待機（15秒）
+sleep 15
+
+# フロントエンド開発サーバー起動（バックグラウンド）
+docker exec callstatus-app-frontend-1 bash -c "cd /app && nohup npm run dev > /tmp/frontend.log 2>&1 &"
+
+# 起動待機（10秒）
+sleep 10
 ```
+
+**注意:**
+- 初回起動や問題発生時は `--build` オプションを使用
+- コンテナ名は `callstatus-app-backend-1`, `callstatus-app-frontend-1` に注意
+- バックエンド起動には約15秒、フロントエンド起動には約10秒かかります
 
 ### 接続確認
 - **フロントエンド**: http://localhost:3000
@@ -136,9 +149,9 @@ docker exec -it callstatus-app_frontend_1 bash -c \"cd /app && npm run dev\"
 ![Monthly Planner](assets/monthly-planner.png)
 *カレンダー形式での月間予定管理・申請ワークフロー*
 
-### 承認管理画面
+### プリセット選択
 ![Approval Management](assets/pending.png)
-*管理者向け一括承認・詳細な申請内容確認*
+*月次計画のプリセット選択*
 
 ### 個人スケジュール
 ![Personal Schedule](assets/personal-schedule.png)
@@ -146,11 +159,66 @@ docker exec -it callstatus-app_frontend_1 bash -c \"cd /app && npm run dev\"
 
 ---
 
+## 🎯 ポートフォリオ用50人データセット
+
+### 📋 概要
+ポートフォリオ閲覧者向けに、50人規模のリアルなデータセットを簡単に投入できるスクリプトを用意しています。  
+**動的日付対応**により、実行日から60日間の申請データを自動生成し、実際の運用環境に近い体験を提供します。
+
+### 🚀 クイック投入（4コマンド）
+
+```bash
+# 1. 50人スタッフデータ投入（統一配色6部署・グループ）
+docker exec callstatus-app-backend-1 bash -c "cd /app && node prisma/seed_portfolio.js"
+
+# 2. 60日分申請データ生成（実行日基準・動的日付）
+cd scripts/demo-data && node generate_portfolio_demo_60days.js
+
+# 3. 申請データ投入（pending状態）
+node register_portfolio_pending_60days.js
+
+# 4. 前半30日分承認処理（承認ワークフロー体験用）
+node approve_first_30days_portfolio.js
+```
+
+### 📊 データセット詳細
+
+#### スタッフ構成（50人・ID範囲: PostgreSQL自動採番）
+- **システム部** (12人): 開発グループ・インフラグループ
+- **営業部** (10人): 法人営業グループ・個人営業グループ
+- **管理部** (8人): 人事グループ・経理グループ
+- **マーケティング部** (8人): デジタルマーケティンググループ・ブランドマーケティンググループ
+- **カスタマーサポート部** (7人): テクニカルサポートグループ・カスタマーサクセスグループ
+- **受付チーム** (5人): 受付グループ
+
+#### 申請データ（60日分・動的生成）
+- **平日申請**: 休暇・午前休・午後休・在宅勤務・夜間担当（13件/日）
+- **土曜申請**: 振替出勤（2件/日）
+- **担当設定**: FAX当番・件名チェック担当（80%確率）
+- **承認状態**: 前半30日承認済み・後半30日承認待ち
+
+### 📈 ポートフォリオ活用方法
+
+1. **出社状況ページ**: 50人の多様な勤務状況をリアルタイム表示
+2. **月次計画ページ**: 承認済み・承認待ちの予定を視覚的に確認
+3. **個人スケジュール**: 各スタッフの詳細な勤務パターン
+4. **承認ワークフロー**: 管理者権限での承認・却下操作体験
+
+### ⚠️ 注意事項
+
+- **ID範囲**: PostgreSQLの自動採番により連番で生成（過去データがあれば最大ID+1から開始）
+- **日付**: 実行日から60日間の動的生成（過去データではない）
+- **承認状態**: 前半30日は承認済み・後半30日は承認待ち状態
+- **データ量**: 約540件の申請データ・60件の担当設定
+- **リセット**: 再度seed_portfolio.jsを実行すれば新しい50人データセットで上書き可能
+
+---
+
 ## 🧪 テスト
 
 ### E2Eテスト実行
 ```bash
-# 全テストケース実行（19テスト）
+# 全テストケース実行（10カテゴリ98テスト）
 npm run test
 
 # カテゴリ別実行
@@ -203,10 +271,10 @@ docker exec callstatus-app_backend_1 bash -c \"cd /app && npm run test:cov\"
 
 ## 📈 パフォーマンス・スケーラビリティ
 
-### 実証済みスケール
-- **300名企業対応**: 実際の企業環境での運用設計
-- **1200件/月のpending処理**: 大量ワークフロー処理対応
-- **1分単位精度**: 正確な時間計算による信頼性
+### 想定スケール
+- **300名企業対応**: 実際の企業環境を想定した設計
+- **1200件/月のpending処理**: 月次計画ワークフローの処理
+- **1分単位精度**: 正確な時間計算
 
 ### 最適化手法
 - **WebSocket最適化**: 必要な更新のみの効率的な通信
@@ -257,13 +325,12 @@ docker exec callstatus-app_frontend_1 bash -c \"cd /app && npx tsc --noEmit\"
 ## 📋 今後の計画
 
 ### Phase 1: 機能拡張
-- [ ] モバイルアプリ（React Native）
+- [ ] モバイルアプリ対応（中継フロントエンドサーバー経由でネットワーク制約解決）
 - [ ] 通知システム（Push・Email）
 - [ ] 詳細分析ダッシュボード
 
 ### Phase 2: エンタープライズ機能
 - [ ] SSO統合（SAML/OAuth）
-- [ ] 多言語対応（i18n）
 - [ ] API レート制限・監視
 
 ### Phase 3: AI・自動化
@@ -281,15 +348,11 @@ MIT License - 詳細は[LICENSE](LICENSE)をご覧ください。
 
 ## 👤 開発者情報
 
-**Hiroshi Takahashi**
-- GitHub: [@your-username](https://github.com/your-username)
-- Email: your.email@example.com
-- LinkedIn: [your-linkedin](https://linkedin.com/in/your-profile)
+**Atsushi Machida**
+- GitHub: [@piyopiyo-maru](https://github.com/piyopiyo-maru)
 
 ### 💼 転職活動について
-このプロジェクトは実際の企業要件に基づいた本格的な開発経験を示すポートフォリオです。  
-**エンタープライズ環境での複雑な要求解決・大規模システム設計・チーム開発**の実力をご確認いただけます。
+このプロジェクトは実際の企業要件に基づいた開発経験を示すポートフォリオです。  
+**実際の業務要件への対応・システム設計・開発プロセス**の経験をご確認いただけます。
 
 ---
-
-*⭐ 気に入った場合はスターをお願いします！*
