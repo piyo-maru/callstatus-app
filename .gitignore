@@ -66,3 +66,38 @@ backend/dist/
 backend/prisma/dev.db
 backend/prisma/dev.db-journal
 
+#----------------------------------------------------------------
+# AI Development Files (Claude Code)
+#----------------------------------------------------------------
+# Claude Code project guides and documentation
+CLAUDE.md
+*_CLAUDE.md
+*_claude.md
+claude_*.md
+*.claude.md
+
+# Claude development backups and archives
+CLAUDE.md.backup
+*_CLAUDE.md.backup
+docs/CLAUDE.md.backup
+archive/docs/*CLAUDE*
+
+# AI development notes and conversations
+ai_notes/
+claude_notes/
+conversation_*.md
+chat_*.md
+prompt_*.md
+prompts/
+instructions/
+dev_notes/
+notes/
+*.memo.md
+*_notes.md
+
+# AI-generated temporary files
+ai_generated/
+*_ai_draft.*
+*.ai.backup
+claude_*.backup
+
