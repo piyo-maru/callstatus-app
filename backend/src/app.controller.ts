@@ -88,14 +88,8 @@ export class AppController {
 
       const todayScheduleCount = adjustmentCount + contractCount;
 
-      // アクティブ接続数推定
-      const baseConnections = Math.min(activeStaffCount * 0.15, 30); // 基本15%
-      const activityBonus = Math.min(todayScheduleCount * 0.05, 15); // アクティビティ5%
-      const estimatedConnections = Math.ceil(baseConnections + activityBonus);
-
       return {
         responseTime: responseTime,
-        estimatedConnections: estimatedConnections,
         totalStaffCount: totalStaffCount,
         activeStaffCount: activeStaffCount,
         todayScheduleCount: todayScheduleCount,
@@ -105,7 +99,6 @@ export class AppController {
       console.error('Database metrics error:', error);
       return {
         responseTime: 999,
-        estimatedConnections: 0,
         totalStaffCount: 0,
         activeStaffCount: 0,
         todayScheduleCount: 0,
@@ -183,7 +176,6 @@ export class AppController {
       },
       database: {
         responseTime: dbStats.responseTime,
-        estimatedConnections: dbStats.estimatedConnections,
         recentErrors: dbStats.errors,
         totalStaffCount: dbStats.totalStaffCount,
         activeStaffCount: dbStats.activeStaffCount,

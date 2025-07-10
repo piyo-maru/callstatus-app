@@ -130,9 +130,8 @@ function SignInForm() {
           <div className="mt-6 pt-4 border-t border-gray-200">
             <p className="text-xs text-gray-500 text-center">
               テストアカウント<br />
-              管理者: admin@example.com<br />
-              一般ユーザー: tanaka@example.com<br />
-              新規ユーザー: test-new-user@example.com
+              管理者: admin@test.com / admin123<br />
+              一般ユーザー: staff@test.com / staff123
             </p>
           </div>
         </div>

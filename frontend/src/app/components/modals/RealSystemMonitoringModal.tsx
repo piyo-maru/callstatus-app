@@ -20,7 +20,6 @@ interface SystemMetrics {
   };
   database: {
     responseTime: number;
-    estimatedConnections: number;
     recentErrors: number;
     totalStaffCount: number;
     activeStaffCount: number;
@@ -311,11 +310,6 @@ export const RealSystemMonitoringModal = ({ isOpen, onClose }: RealSystemMonitor
                       <h4 className="text-sm font-medium text-gray-600 mb-1">応答時間</h4>
                       <p className="text-lg font-bold text-blue-600">{metrics.database.responseTime}ms</p>
                       <p className="text-xs text-gray-500 mt-1">実測値（SELECT 1実行）</p>
-                    </div>
-                    <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
-                      <h4 className="text-sm font-medium text-gray-600 mb-1">接続数</h4>
-                      <p className="text-lg font-bold text-green-600">{metrics.database.estimatedConnections}</p>
-                      <p className="text-xs text-gray-500 mt-1">推定値（スタッフ数基準）</p>
                     </div>
                     <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
                       <h4 className="text-sm font-medium text-gray-600 mb-1">エラー数</h4>

@@ -109,12 +109,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     console.log('=== ログイン試行開始 ===', { email, apiUrl: getApiUrl() });
     
     // テスト用認証（認証APIが無効化されている間の代替手段）
-    if (email === 'test@test.com' && password === 'test123') {
+    if (email === 'admin@test.com' && password === 'admin123') {
       console.log('テスト用認証（システム管理者）を使用します');
       const testUser: AuthUser = {
         id: 'test-user-id',
-        email: 'test@test.com',
-        name: 'テストユーザー',
+        email: 'admin@test.com',
+        name: 'テスト管理者',
         role: 'ADMIN',
         staffId: 1,
         isActive: true
@@ -133,19 +133,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    // 一般ユーザーテスト認証（高橋千尋さん）
-    if (email === 'takahashi-chihiro@abc.co.jp' && password === 'takahashi123') {
+    // 一般ユーザーテスト認証
+    if (email === 'staff@test.com' && password === 'staff123') {
       console.log('テスト用認証（一般ユーザー）を使用します');
       const testUser: AuthUser = {
-        id: 'takahashi-user-id',
-        email: 'takahashi-chihiro@abc.co.jp',
-        name: '高橋千尋',
+        id: 'staff-user-id',
+        email: 'staff@test.com',
+        name: 'テストスタッフ',
         role: 'STAFF',
         staffId: 228,
         isActive: true
       };
       
-      const testToken = 'takahashi-token-' + Date.now();
+      const testToken = 'staff-token-' + Date.now();
       
       setToken(testToken);
       setUser(testUser);
