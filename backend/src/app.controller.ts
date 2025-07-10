@@ -51,32 +51,53 @@ export class AppController {
       const responseTime = Date.now() - startTime;
       
       // 実際のスタッフ数取得
-      const staffCount = await this.prisma.staff.count();
+      const totalStaffCount = await this.prisma.staff.count(); // 総スタッフ数（論理削除含む）
+      const activeStaffCount = await this.prisma.staff.count({
+        where: { isActive: true }
+      }); // アクティブスタッフ数
       
-      // 今日のスケジュール数取得
+      // 今日のスケジュール数取得（2層データレイヤー対応）
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       const tomorrow = new Date(today);
       tomorrow.setDate(tomorrow.getDate() + 1);
       
-      const todayScheduleCount = await this.prisma.schedule.count({
+      // Adjustment層の今日のデータ数
+      const adjustmentCount = await this.prisma.adjustment.count({
         where: {
-          start: {
+          date: {
             gte: today,
             lt: tomorrow
           }
         }
       });
 
+      // Contract層の今日のデータ数（activeStaffCountと同じ）
+      // 各スタッフは今日の曜日に対応する契約があれば1件としてカウント
+      const weekday = today.getDay(); // 0:日曜, 1:月曜, ..., 6:土曜
+      const dayColumns = ['sundayHours', 'mondayHours', 'tuesdayHours', 'wednesdayHours', 'thursdayHours', 'fridayHours', 'saturdayHours'];
+      const todayColumn = dayColumns[weekday];
+      
+      const contractCount = await this.prisma.contract.count({
+        where: {
+          [todayColumn]: {
+            not: null
+          }
+        }
+      });
+
+      const todayScheduleCount = adjustmentCount + contractCount;
+
       // アクティブ接続数推定
-      const baseConnections = Math.min(staffCount * 0.15, 30); // 基本15%
+      const baseConnections = Math.min(activeStaffCount * 0.15, 30); // 基本15%
       const activityBonus = Math.min(todayScheduleCount * 0.05, 15); // アクティビティ5%
       const estimatedConnections = Math.ceil(baseConnections + activityBonus);
 
       return {
         responseTime: responseTime,
         estimatedConnections: estimatedConnections,
-        staffCount: staffCount,
+        totalStaffCount: totalStaffCount,
+        activeStaffCount: activeStaffCount,
         todayScheduleCount: todayScheduleCount,
         errors: 0 // エラーカウンターは後で実装
       };
@@ -85,7 +106,8 @@ export class AppController {
       return {
         responseTime: 999,
         estimatedConnections: 0,
-        staffCount: 0,
+        totalStaffCount: 0,
+        activeStaffCount: 0,
         todayScheduleCount: 0,
         errors: 1
       };
@@ -146,7 +168,7 @@ export class AppController {
     
     // 正常時のメッセージ
     if (healthStatus === 'healthy') {
-      issues.push(`システム正常稼働中 - スタッフ${dbStats.staffCount}名・今日の予定${dbStats.todayScheduleCount}件`);
+      issues.push(`システム正常稼働中 - アクティブスタッフ${dbStats.activeStaffCount}名（総${dbStats.totalStaffCount}名）・今日の予定${dbStats.todayScheduleCount}件`);
     }
 
     return {
@@ -163,7 +185,8 @@ export class AppController {
         responseTime: dbStats.responseTime,
         estimatedConnections: dbStats.estimatedConnections,
         recentErrors: dbStats.errors,
-        staffCount: dbStats.staffCount,
+        totalStaffCount: dbStats.totalStaffCount,
+        activeStaffCount: dbStats.activeStaffCount,
         todayScheduleCount: dbStats.todayScheduleCount,
       },
       health: {

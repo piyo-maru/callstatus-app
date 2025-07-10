@@ -22,14 +22,14 @@ async function main() {
   // テスト用スタッフデータ作成
   console.log('スタッフデータ作成中...');
   const staffData = [
-    { empNo: "1001", name: "田中太郎", department: "システム部", group: "開発グループ" },
-    { empNo: "1002", name: "佐藤花子", department: "システム部", group: "運用グループ" },
-    { empNo: "1003", name: "山田次郎", department: "営業部", group: "営業一課" },
-    { empNo: "1004", name: "鈴木美咲", department: "営業部", group: "営業二課" },
-    { empNo: "1005", name: "高橋健太", department: "経理部", group: "会計グループ" },
-    { empNo: "1006", name: "渡辺雅子", department: "経理部", group: "財務グループ" },
-    { empNo: "1007", name: "中村慎也", department: "人事部", group: "採用グループ" },
-    { empNo: "1008", name: "小林知美", department: "人事部", group: "労務グループ" },
+    { empNo: "1001", name: "田中太郎", department: "システム部", group: "開発グループ", workArrangement: "出社" },
+    { empNo: "1002", name: "佐藤花子", department: "システム部", group: "運用グループ", workArrangement: "リモート" },
+    { empNo: "1003", name: "山田次郎", department: "営業部", group: "営業一課", workArrangement: "出社" },
+    { empNo: "1004", name: "鈴木美咲", department: "営業部", group: "営業二課", workArrangement: "ハイブリッド" },
+    { empNo: "1005", name: "高橋健太", department: "経理部", group: "会計グループ", workArrangement: "出社" },
+    { empNo: "1006", name: "渡辺雅子", department: "経理部", group: "財務グループ", workArrangement: "リモート" },
+    { empNo: "1007", name: "中村慎也", department: "人事部", group: "採用グループ", workArrangement: "出社" },
+    { empNo: "1008", name: "小林知美", department: "人事部", group: "労務グループ", workArrangement: "ハイブリッド" },
   ];
 
   const createdStaff = [];

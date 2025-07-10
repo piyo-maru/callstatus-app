@@ -6,6 +6,31 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - 常に日本語で会話する
 
+## 🚨 緊急時対応
+
+### 即座実行すべきコマンド（復旧優先）
+```bash
+# サービス状態確認
+docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+
+# プロセス残存確認・停止
+docker exec callstatus-app_backend_1 pkill -f "nest|node"
+docker restart callstatus-app_backend_1
+
+# DB接続確認
+docker exec callstatus-app_backend_1 bash -c "cd /app && npx prisma db pull"
+
+# 最終手段：完全リセット
+docker-compose down && docker-compose up -d
+docker exec callstatus-app_backend_1 npx prisma generate
+```
+
+### 受付チーム業務継続最優先対応
+- フロントエンド単独でも最低限動作（API接続失敗時の表示維持）
+- WebSocket切断時の自動再接続確認
+- 個人ページでの現在時刻表示維持
+- 表示日付に関係なく今日のリアルタイム更新は絶対維持
+
 ## 🚀 開発環境クイックスタート
 
 ### 必須起動コマンド
@@ -83,6 +108,32 @@ docker exec callstatus-app_backend_1 bash -c "cd /app && npx prisma migrate dev"
 curl http://localhost:3002/api/test
 curl http://localhost:3002/api/staff
 ```
+
+## 📊 負荷テスト実行
+
+### WebSocket接続テスト
+```bash
+# Artillery.ioでの基本負荷テスト（要事前インストール）
+npm install -g artillery
+
+# 段階的接続増加テスト
+for i in 10 20 30 40 50; do
+  echo "Testing $i connections..."
+  # WebSocket接続テスト実行
+  sleep 30
+done
+```
+
+### API負荷テスト
+```bash
+# 統合APIの負荷確認
+ab -n 1000 -c 10 "http://localhost:3002/api/schedules/unified?date=2025-07-10"
+
+# CRUD操作負荷テスト
+ab -n 500 -c 5 -p schedule.json -T "application/json" "http://localhost:3002/api/schedules"
+```
+
+**詳細**: docs/outsourcing/load_testing_specification.md 参照
 
 ### E2Eテスト（Playwright・包括的テストスイート）
 ```bash
@@ -302,7 +353,7 @@ callstatus-app/
 ```
 
 ### 🏢 重要な業務コンテキスト
-- **225名規模の企業**: 実際の企業環境での運用要件に基づく設計
+- **300名規模の企業**: 実際の企業環境での運用要件に基づく設計
 - **受付チームの特別要件**: 来客対応のため、表示日付に関係なく今日のリアルタイム状況把握が必須
 - **部署・グループ構造**: `Staff.department`と`Staff.group`で組織構造を管理
 - **業務継続性**: 受付業務の中断は顧客満足度に直接影響するため、技術最適化より業務確実性を優先
@@ -326,6 +377,40 @@ callstatus-app/
 - 統一担当設定システム（FAX・昼当番・CS担当等）
 - システム監視ダッシュボード（CPU・メモリ・DB応答時間・実データのみ）
 - 部分更新システム（WebSocket差分更新、受付業務継続性重視）
+
+## ⚠️ 重要な開発制約（ultrathink）
+
+- **受付チーム業務への影響を最小化**: 表示日付に関係なく今日のリアルタイム更新は絶対維持
+- **WebSocket変更時の慎重さ**: 全クライアントブロードキャストの変更は段階的に
+- **時刻処理変更禁止**: TimeUtils以外での時刻計算は行わない
+- **認証システム復旧**: 段階的にセキュリティ機能を有効化（一度に全て変更しない）
+- **既存機能保護**: 既存の機能を損なわないように細心の注意を払いながら開発する
+
+## 🏗️ 重要なアーキテクチャ理解
+
+### 2層データレイヤーシステム
+```
+Contract (基本勤務時間) 
+    ↓
+Adjustment (個別調整) 
+    ↓  
+統合API (/api/schedules/unified)
+    ↓
+フロントエンド表示
+```
+
+### WebSocket通信フロー
+```
+スケジュール変更 → Backend → 全クライアントブロードキャスト → リアルタイム更新
+※ N×N通信問題: 接続数の二乗に比例して負荷増加
+```
+
+### 認証システム現状
+```
+✅ 認証基盤: 完了（AuthModule、JWT、フロントエンドUI）
+⚠️  API権限チェック: 核心機能で無効化中（schedules.controller.ts等）
+🚨 セキュリティリスク: 直接API呼び出しで制限回避可能
+```
 
 ## 🏛️ システム全体アーキテクチャ
 

@@ -1,0 +1,36 @@
+{
+  "employeeData": [
+    {
+      "empNo": "8339",
+      "name": "山田美月",
+      "dept": "財務情報第一サポート課",
+      "team": "財務情報第一サポート課",
+      "email": "yamada-mitsuki@abc.co.jp",
+      "position": "課長",
+      "workArrangement": "正社員",
+      "mondayHours": "09:00-18:00",
+      "tuesdayHours": "09:00-18:00",
+      "wednesdayHours": "09:00-18:00",
+      "thursdayHours": "09:00-18:00",
+      "fridayHours": "09:00-18:00",
+      "saturdayHours": null,
+      "sundayHours": null
+    },
+    {
+      "empNo": "5408",
+      "name": "山口優斗",
+      "dept": "財務情報第一サポート課",
+      "team": "財務会計管理チーム",
+      "email": "yamaguchi-yuto@abc.co.jp",
+      "position": null,
+      "workArrangement": "パートタイマー",
+      "mondayHours": "09:00-17:45",
+      "tuesdayHours": "09:00-17:45",
+      "wednesdayHours": "09:00-17:45",
+      "thursdayHours": "09:00-17:45",
+      "fridayHours": "09:00-17:45",
+      "saturdayHours": null,
+      "sundayHours": null
+    }
+  ]
+}

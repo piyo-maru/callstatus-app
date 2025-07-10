@@ -1,0 +1,764 @@
+{
+  "version": "1.0.0",
+  "exportedAt": "2025-07-09T05:59:38.552Z",
+  "exportedBy": "テストユーザー（自動ログイン）",
+  "appVersion": "1.0.0",
+  "settings": {
+    "display": {
+      "maskingEnabled": false,
+      "timeRange": "standard",
+      "customStatusColors": {
+        "online": "#22c55e",
+        "remote": "#10b981",
+        "night duty": "#4f46e5",
+        "break": "#f97316",
+        "off": "#ef4444",
+        "unplanned": "#dc2626",
+        "meeting": "#f59e0b",
+        "training": "#3b82f6",
+        "trip": "#ec4899"
+      },
+      "customStatusDisplayNames": {
+        "online": "出社",
+        "remote": "リモート",
+        "night duty": "夜間対応",
+        "break": "休憩",
+        "off": "休み",
+        "unplanned": "突発休",
+        "meeting": "会議",
+        "training": "研修",
+        "trip": "出張"
+      }
+    },
+    "presets": {
+      "presets": [
+        {
+          "id": "early-shift",
+          "name": "earlyShift",
+          "category": "general",
+          "isActive": true,
+          "createdAt": "2025-07-02T13:35:39.899Z",
+          "isDefault": false,
+          "schedules": [
+            {
+              "memo": "",
+              "status": "出社",
+              "endTime": 12,
+              "startTime": 9
+            },
+            {
+              "memo": "",
+              "status": "break",
+              "endTime": 13,
+              "startTime": 12
+            },
+            {
+              "memo": "",
+              "status": "online",
+              "endTime": 18,
+              "startTime": 13
+            }
+          ],
+          "updatedAt": "2025-07-02T14:24:29.891Z",
+          "description": "",
+          "displayName": "通常勤務（出向社員）",
+          "customizable": true,
+          "representativeScheduleIndex": 0
+        },
+        {
+          "id": "paid-leave",
+          "name": "paidLeave",
+          "category": "time-off",
+          "isActive": true,
+          "createdAt": "2025-07-02T13:35:39.899Z",
+          "isDefault": false,
+          "schedules": [
+            {
+              "memo": "",
+              "status": "off",
+              "endTime": 18,
+              "startTime": 9
+            }
+          ],
+          "updatedAt": "2025-07-02T13:43:42.838Z",
+          "description": "",
+          "displayName": "休暇",
+          "customizable": true,
+          "representativeScheduleIndex": 0
+        },
+        {
+          "id": "night-duty",
+          "name": "nightDuty",
+          "category": "night-duty",
+          "isActive": true,
+          "createdAt": "2025-07-02T13:35:39.899Z",
+          "isDefault": false,
+          "schedules": [
+            {
+              "memo": "",
+              "status": "off",
+              "endTime": 12,
+              "startTime": 9
+            },
+            {
+              "memo": "",
+              "status": "break",
+              "endTime": 18,
+              "startTime": 17
+            },
+            {
+              "memo": "",
+              "status": "night duty",
+              "endTime": 21,
+              "startTime": 18
+            }
+          ],
+          "updatedAt": "2025-07-02T14:25:55.846Z",
+          "description": "",
+          "displayName": "夜間担当",
+          "customizable": true,
+          "representativeScheduleIndex": 2
+        },
+        {
+          "id": "custom-1751377820182",
+          "name": "custom-1751377820182",
+          "category": "time-off",
+          "isActive": true,
+          "createdAt": "2025-07-02T01:04:08.456Z",
+          "isDefault": false,
+          "schedules": [
+            {
+              "memo": "",
+              "status": "unplanned",
+              "endTime": 18,
+              "startTime": 9
+            }
+          ],
+          "updatedAt": "2025-07-02T12:25:53.105Z",
+          "description": "",
+          "displayName": "突発休",
+          "customizable": true,
+          "representativeScheduleIndex": 0
+        },
+        {
+          "id": "custom-1751379600413",
+          "name": "custom-1751379600413",
+          "category": "special",
+          "isActive": true,
+          "createdAt": "2025-07-02T01:04:08.456Z",
+          "isDefault": false,
+          "schedules": [
+            {
+              "memo": "",
+              "status": "trip",
+              "endTime": 14,
+              "startTime": 9
+            }
+          ],
+          "updatedAt": "2025-07-02T01:04:08.456Z",
+          "description": "",
+          "displayName": "人間ドック",
+          "customizable": true
+        },
+        {
+          "id": "custom-1751379703893",
+          "name": "custom-1751379703893",
+          "category": "special",
+          "isActive": true,
+          "createdAt": "2025-07-02T01:04:08.456Z",
+          "isDefault": false,
+          "schedules": [
+            {
+              "memo": "",
+              "status": "trip",
+              "endTime": 18,
+              "startTime": 9
+            }
+          ],
+          "updatedAt": "2025-07-02T01:04:08.456Z",
+          "description": "",
+          "displayName": "出張",
+          "customizable": true
+        },
+        {
+          "id": "custom-1751459171314",
+          "name": "paidLeave-copy",
+          "category": "time-off",
+          "isActive": true,
+          "createdAt": "2025-07-02T12:26:11.314Z",
+          "isDefault": false,
+          "schedules": [
+            {
+              "memo": "",
+              "status": "off",
+              "endTime": 14,
+              "startTime": 9
+            }
+          ],
+          "updatedAt": "2025-07-02T12:26:11.314Z",
+          "description": "",
+          "displayName": "午前休",
+          "customizable": true,
+          "representativeScheduleIndex": 0
+        },
+        {
+          "id": "custom-1751459196532",
+          "name": "paidLeave-copy-copy",
+          "category": "time-off",
+          "isActive": true,
+          "createdAt": "2025-07-02T12:26:36.532Z",
+          "isDefault": false,
+          "schedules": [
+            {
+              "memo": "",
+              "status": "off",
+              "endTime": 18,
+              "startTime": 13
+            }
+          ],
+          "updatedAt": "2025-07-02T12:26:36.532Z",
+          "description": "",
+          "displayName": "午後休",
+          "customizable": true,
+          "representativeScheduleIndex": 0
+        },
+        {
+          "id": "custom-1751459461345",
+          "name": "custom-1751459461345",
+          "category": "time-off",
+          "isActive": true,
+          "createdAt": "2025-07-02T12:31:01.345Z",
+          "isDefault": false,
+          "schedules": [
+            {
+              "memo": "",
+              "status": "off",
+              "endTime": 18,
+              "startTime": 9
+            }
+          ],
+          "updatedAt": "2025-07-02T12:31:01.345Z",
+          "description": "",
+          "displayName": "夏季休暇",
+          "customizable": true,
+          "representativeScheduleIndex": 0
+        },
+        {
+          "id": "custom-1751459477450",
+          "name": "custom-1751459477450",
+          "category": "time-off",
+          "isActive": true,
+          "createdAt": "2025-07-02T12:31:17.450Z",
+          "isDefault": false,
+          "schedules": [
+            {
+              "memo": "",
+              "status": "off",
+              "endTime": 18,
+              "startTime": 9
+            }
+          ],
+          "updatedAt": "2025-07-02T12:31:17.450Z",
+          "description": "",
+          "displayName": "リフレッシュ休暇",
+          "customizable": true,
+          "representativeScheduleIndex": 0
+        },
+        {
+          "id": "custom-1751459497713",
+          "name": "paidLeave-copy-copy",
+          "category": "time-off",
+          "isActive": true,
+          "createdAt": "2025-07-02T12:31:37.713Z",
+          "isDefault": false,
+          "schedules": [
+            {
+              "memo": "",
+              "status": "trip",
+              "endTime": 14,
+              "startTime": 9
+            },
+            {
+              "memo": "",
+              "status": "off",
+              "endTime": 18,
+              "startTime": 14
+            }
+          ],
+          "updatedAt": "2025-07-02T12:31:50.707Z",
+          "description": "",
+          "displayName": "人間ドック休",
+          "customizable": true,
+          "representativeScheduleIndex": 0
+        },
+        {
+          "id": "custom-1751459685077",
+          "name": "nightDuty-copy",
+          "category": "night-duty",
+          "isActive": true,
+          "createdAt": "2025-07-02T12:34:45.077Z",
+          "isDefault": false,
+          "schedules": [
+            {
+              "memo": "",
+              "status": "night duty",
+              "endTime": 21,
+              "startTime": 18
+            }
+          ],
+          "updatedAt": "2025-07-02T12:34:45.077Z",
+          "description": "",
+          "displayName": "夜間担当のみ",
+          "customizable": true,
+          "representativeScheduleIndex": 2
+        },
+        {
+          "id": "custom-1751466294233",
+          "name": "earlyShift-copy",
+          "category": "general",
+          "isActive": true,
+          "createdAt": "2025-07-02T14:24:54.233Z",
+          "isDefault": false,
+          "schedules": [
+            {
+              "memo": "",
+              "status": "出社",
+              "endTime": 12,
+              "startTime": 9
+            },
+            {
+              "memo": "",
+              "status": "break",
+              "endTime": 13,
+              "startTime": 12
+            },
+            {
+              "memo": "",
+              "status": "online",
+              "endTime": 17.75,
+              "startTime": 13
+            }
+          ],
+          "updatedAt": "2025-07-02T14:24:54.233Z",
+          "description": "",
+          "displayName": "通常勤務（パートタイマー）",
+          "customizable": true,
+          "representativeScheduleIndex": 0
+        },
+        {
+          "id": "custom-1751466304586",
+          "name": "full-time-employee-copy-copy",
+          "category": "general",
+          "isActive": true,
+          "createdAt": "2025-07-02T14:25:04.586Z",
+          "isDefault": false,
+          "schedules": [
+            {
+              "memo": "",
+              "status": "remote",
+              "endTime": 12,
+              "startTime": 9
+            },
+            {
+              "memo": "",
+              "status": "break",
+              "endTime": 13,
+              "startTime": 12
+            },
+            {
+              "memo": "",
+              "status": "remote",
+              "endTime": 18,
+              "startTime": 13
+            }
+          ],
+          "updatedAt": "2025-07-02T14:25:04.586Z",
+          "description": "",
+          "displayName": "在宅勤務（出向社員）",
+          "customizable": true,
+          "representativeScheduleIndex": 0
+        },
+        {
+          "id": "custom-1751466316908",
+          "name": "part-time-employee-copy-copy",
+          "category": "general",
+          "isActive": true,
+          "createdAt": "2025-07-02T14:25:16.908Z",
+          "isDefault": false,
+          "schedules": [
+            {
+              "memo": "",
+              "status": "remote",
+              "endTime": 12,
+              "startTime": 9
+            },
+            {
+              "memo": "",
+              "status": "break",
+              "endTime": 13,
+              "startTime": 12
+            },
+            {
+              "memo": "",
+              "status": "remote",
+              "endTime": 17.75,
+              "startTime": 13
+            }
+          ],
+          "updatedAt": "2025-07-02T14:25:16.908Z",
+          "description": "",
+          "displayName": "在宅勤務（パートタイマー）",
+          "customizable": true,
+          "representativeScheduleIndex": 0
+        },
+        {
+          "id": "custom-1751466327183",
+          "name": "standardWork-copy-copy",
+          "category": "general",
+          "isActive": true,
+          "createdAt": "2025-07-02T14:25:27.183Z",
+          "isDefault": false,
+          "schedules": [
+            {
+              "memo": "",
+              "status": "出社",
+              "endTime": 12,
+              "startTime": 9
+            },
+            {
+              "memo": "",
+              "status": "break",
+              "endTime": 13,
+              "startTime": 12
+            },
+            {
+              "memo": "",
+              "status": "online",
+              "endTime": 18,
+              "startTime": 13
+            }
+          ],
+          "updatedAt": "2025-07-02T14:25:27.183Z",
+          "description": "",
+          "displayName": "振出（出向社員）",
+          "customizable": true,
+          "representativeScheduleIndex": 0
+        },
+        {
+          "id": "custom-1751466335072",
+          "name": "earlyShift-copy-copy",
+          "category": "general",
+          "isActive": true,
+          "createdAt": "2025-07-02T14:25:35.072Z",
+          "isDefault": false,
+          "schedules": [
+            {
+              "memo": "",
+              "status": "出社",
+              "endTime": 12,
+              "startTime": 9
+            },
+            {
+              "memo": "",
+              "status": "break",
+              "endTime": 13,
+              "startTime": 12
+            },
+            {
+              "memo": "",
+              "status": "online",
+              "endTime": 17.75,
+              "startTime": 13
+            }
+          ],
+          "updatedAt": "2025-07-02T14:25:35.072Z",
+          "description": "",
+          "displayName": "振出（パートタイマー）",
+          "customizable": true,
+          "representativeScheduleIndex": 0
+        }
+      ],
+      "categories": [
+        {
+          "id": "general",
+          "name": "general",
+          "displayName": "一般勤務",
+          "description": "通常の勤務パターン",
+          "color": "#22c55e",
+          "icon": "💼"
+        },
+        {
+          "id": "time-off",
+          "name": "time-off",
+          "displayName": "休暇・休み",
+          "description": "休暇、半休、その他の休み",
+          "color": "#ef4444",
+          "icon": "🏖️"
+        },
+        {
+          "id": "night-duty",
+          "name": "night-duty",
+          "displayName": "夜間担当",
+          "description": "夜間・深夜時間帯の勤務",
+          "color": "#4f46e5",
+          "icon": "🌙"
+        },
+        {
+          "id": "special",
+          "name": "special",
+          "displayName": "その他",
+          "description": "研修、会議など",
+          "color": "#3b82f6",
+          "icon": "⭐"
+        }
+      ],
+      "pagePresetSettings": {
+        "monthlyPlanner": {
+          "enabledPresetIds": [
+            "night-duty",
+            "paid-leave",
+            "custom-1751459171314",
+            "custom-1751459196532",
+            "custom-1751466304586",
+            "custom-1751466316908",
+            "custom-1751466327183",
+            "custom-1751466335072",
+            "custom-1751459477450",
+            "custom-1751379703893"
+          ],
+          "defaultPresetId": "night-duty",
+          "presetDisplayOrder": [
+            "night-duty",
+            "paid-leave",
+            "custom-1751459171314",
+            "custom-1751459196532",
+            "custom-1751466304586",
+            "custom-1751466316908",
+            "custom-1751466327183",
+            "custom-1751466335072",
+            "custom-1751379703893",
+            "custom-1751459477450"
+          ]
+        },
+        "personalPage": {
+          "enabledPresetIds": [
+            "night-duty",
+            "custom-1751466304586",
+            "custom-1751466316908",
+            "paid-leave",
+            "custom-1751459171314",
+            "custom-1751459196532"
+          ],
+          "defaultPresetId": "late-shift",
+          "presetDisplayOrder": [
+            "night-duty",
+            "custom-1751466304586",
+            "custom-1751466316908",
+            "paid-leave",
+            "custom-1751459171314",
+            "custom-1751459196532"
+          ]
+        }
+      },
+      "lastModified": "2025-07-02T14:30:15.953Z"
+    },
+    "management": {
+      "departments": [
+        {
+          "id": 13,
+          "type": "department",
+          "name": "財務情報第一サポート課",
+          "shortName": "財務第一",
+          "backgroundColor": "#ffcccc",
+          "displayOrder": 10
+        },
+        {
+          "id": 14,
+          "type": "department",
+          "name": "財務情報第二サポート課",
+          "shortName": "財務第二",
+          "backgroundColor": "#fbe4f0",
+          "displayOrder": 10
+        },
+        {
+          "id": 15,
+          "type": "department",
+          "name": "税務システムサポート課",
+          "shortName": "税務情報",
+          "backgroundColor": "#ffe699",
+          "displayOrder": 30
+        },
+        {
+          "id": 16,
+          "type": "department",
+          "name": "給与システムサポート課",
+          "shortName": "給与計算",
+          "backgroundColor": "#d6dce4",
+          "displayOrder": 40
+        },
+        {
+          "id": 17,
+          "type": "department",
+          "name": "業務管理システムサポート課",
+          "shortName": "業務管理",
+          "backgroundColor": "#e8ffe5",
+          "displayOrder": 50
+        },
+        {
+          "id": 18,
+          "type": "department",
+          "name": "受付サポート課",
+          "shortName": "受付",
+          "backgroundColor": "#90caf9",
+          "displayOrder": 60
+        }
+      ],
+      "groups": [
+        {
+          "id": 19,
+          "type": "group",
+          "name": "受付サポート課",
+          "shortName": "受付",
+          "backgroundColor": "#bbdefb",
+          "displayOrder": 10
+        },
+        {
+          "id": 20,
+          "type": "group",
+          "name": "業務管理システムサポート課",
+          "shortName": "業務管理",
+          "backgroundColor": "#dbf9d7",
+          "displayOrder": 10
+        },
+        {
+          "id": 21,
+          "type": "group",
+          "name": "税務システムサポート課",
+          "shortName": "財務情報",
+          "backgroundColor": "#faf2d7",
+          "displayOrder": 10
+        },
+        {
+          "id": 22,
+          "type": "group",
+          "name": "給与システムサポート課",
+          "shortName": "給与計算",
+          "backgroundColor": "#d9e1f2",
+          "displayOrder": 10
+        },
+        {
+          "id": 23,
+          "type": "group",
+          "name": "財務情報第一サポート課",
+          "shortName": "財務第一",
+          "backgroundColor": "#f8cbad",
+          "displayOrder": 10
+        },
+        {
+          "id": 24,
+          "type": "group",
+          "name": "財務情報第二サポート課",
+          "shortName": "財務第二",
+          "backgroundColor": "#f8bbd0",
+          "displayOrder": 10
+        },
+        {
+          "id": 25,
+          "type": "group",
+          "name": "受付サポート",
+          "shortName": "受付",
+          "backgroundColor": "#8af4e8",
+          "displayOrder": 20
+        },
+        {
+          "id": 26,
+          "type": "group",
+          "name": "税務システム第一サポート",
+          "shortName": "税務第一",
+          "backgroundColor": "#fff59d",
+          "displayOrder": 20
+        },
+        {
+          "id": 27,
+          "type": "group",
+          "name": "給与システム第一サポート",
+          "shortName": "給与第一",
+          "backgroundColor": "#d1c4e9",
+          "displayOrder": 20
+        },
+        {
+          "id": 28,
+          "type": "group",
+          "name": "財務クラウドシリーズ",
+          "shortName": "財務CS",
+          "backgroundColor": "#f48fb1",
+          "displayOrder": 20
+        },
+        {
+          "id": 29,
+          "type": "group",
+          "name": "財務会計管理チーム",
+          "shortName": "財務会計",
+          "backgroundColor": "#ffeedd",
+          "displayOrder": 20
+        },
+        {
+          "id": 30,
+          "type": "group",
+          "name": "ハードウェアサポート",
+          "shortName": "ハード",
+          "backgroundColor": "#c6e0b4",
+          "displayOrder": 30
+        },
+        {
+          "id": 31,
+          "type": "group",
+          "name": "税務システム第二サポート",
+          "shortName": "税務第二",
+          "backgroundColor": "#fff9c4",
+          "displayOrder": 30
+        },
+        {
+          "id": 32,
+          "type": "group",
+          "name": "給与システム第二サポート",
+          "shortName": "給与第二",
+          "backgroundColor": "#b39ddb",
+          "displayOrder": 30
+        },
+        {
+          "id": 33,
+          "type": "group",
+          "name": "財務クラウドシステム",
+          "shortName": "財務C",
+          "backgroundColor": "#ffcc80",
+          "displayOrder": 30
+        },
+        {
+          "id": 34,
+          "type": "group",
+          "name": "財務管理分析システム",
+          "shortName": "財務管理",
+          "backgroundColor": "#fce4ec",
+          "displayOrder": 30
+        },
+        {
+          "id": 35,
+          "type": "group",
+          "name": "業種特化システム",
+          "shortName": "業種別",
+          "backgroundColor": "#fff3e0",
+          "displayOrder": 40
+        },
+        {
+          "id": 36,
+          "type": "group",
+          "name": "給与システム第三サポート",
+          "shortName": "給与第三",
+          "backgroundColor": "#ede7f6",
+          "displayOrder": 40
+        }
+      ]
+    }
+  }
+}

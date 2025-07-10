@@ -22,7 +22,8 @@ interface SystemMetrics {
     responseTime: number;
     estimatedConnections: number;
     recentErrors: number;
-    staffCount: number;
+    totalStaffCount: number;
+    activeStaffCount: number;
     todayScheduleCount: number;
   };
   health: {
@@ -322,9 +323,14 @@ export const RealSystemMonitoringModal = ({ isOpen, onClose }: RealSystemMonitor
                       <p className="text-xs text-gray-500 mt-1">実測値</p>
                     </div>
                     <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
-                      <h4 className="text-sm font-medium text-gray-600 mb-1">登録スタッフ数</h4>
-                      <p className="text-lg font-bold text-purple-600">{metrics.database.staffCount}名</p>
-                      <p className="text-xs text-gray-500 mt-1">実測値（DB COUNT）</p>
+                      <h4 className="text-sm font-medium text-gray-600 mb-1">総スタッフ数</h4>
+                      <p className="text-lg font-bold text-purple-600">{metrics.database.totalStaffCount}名</p>
+                      <p className="text-xs text-gray-500 mt-1">実測値（論理削除含む）</p>
+                    </div>
+                    <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+                      <h4 className="text-sm font-medium text-gray-600 mb-1">アクティブスタッフ数</h4>
+                      <p className="text-lg font-bold text-green-600">{metrics.database.activeStaffCount}名</p>
+                      <p className="text-xs text-gray-500 mt-1">実測値（論理削除除く）</p>
                     </div>
                     <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
                       <h4 className="text-sm font-medium text-gray-600 mb-1">今日の予定数</h4>
