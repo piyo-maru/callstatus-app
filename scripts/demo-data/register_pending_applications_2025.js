@@ -138,8 +138,8 @@ async function registerResponsibilities(responsibilities) {
         body: JSON.stringify({
           staffId: resp.staffId,
           date: resp.date,
-          responsibilities: resp.responsibilities,
-          description: resp.description
+          assignmentType: resp.responsibilities[0],
+          customLabel: resp.responsibilities.length > 1 ? resp.responsibilities.slice(1).join(', ') : undefined
         })
       });
       

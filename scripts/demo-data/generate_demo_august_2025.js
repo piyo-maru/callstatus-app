@@ -83,19 +83,20 @@ const SYSTEM_PRESETS = {
   }
 };
 
-// スタッフID範囲
-const STAFF_ID_MIN = 73;
-const STAFF_ID_MAX = 297;
-const TOTAL_STAFF = STAFF_ID_MAX - STAFF_ID_MIN + 1;
+// スタッフID範囲（アクティブなスタッフのみ：ID 9-233）
+const STAFF_ID_MIN = 9;
+const STAFF_ID_MAX = 233;
+const TOTAL_STAFF = 225; // アクティブなスタッフ数
+
+// アクティブなスタッフIDリスト（論理削除されたスタッフを除外）
+const ACTIVE_STAFF_IDS = [];
+for (let i = STAFF_ID_MIN; i <= STAFF_ID_MAX; i++) {
+  ACTIVE_STAFF_IDS.push(i);
+}
 
 // ユーティリティ関数
 function getRandomStaffIds(count, exclude = []) {
-  const availableIds = [];
-  for (let i = STAFF_ID_MIN; i <= STAFF_ID_MAX; i++) {
-    if (!exclude.includes(i)) {
-      availableIds.push(i);
-    }
-  }
+  const availableIds = ACTIVE_STAFF_IDS.filter(id => !exclude.includes(id));
   
   const selected = [];
   for (let i = 0; i < Math.min(count, availableIds.length); i++) {
