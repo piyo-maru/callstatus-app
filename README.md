@@ -85,7 +85,7 @@
 - **Docker & Docker Compose** - コンテナ化による環境一致
 - **Playwright 1.53** - E2Eテスト自動化（10カテゴリ98テストケース実装）
 - **Jest** - ユニット・統合テスト
-- **GitHub Actions** - CI/CDパイプライン
+- **Playwright E2E** - 包括的自動テスト（10カテゴリ98テストケース）
 
 ### **Architecture Patterns**
 - **マイクロサービス風モジュラー設計**
@@ -347,6 +347,7 @@ docker exec callstatus-app_frontend_1 bash -c \"cd /app && npx tsc --noEmit\"
 - [ ] 詳細分析ダッシュボード
 
 ### Phase 2: エンタープライズ機能
+- [ ] GitHub Actions CI/CDパイプライン
 - [ ] SSO統合（SAML/OAuth）
 - [ ] API レート制限・監視
 
