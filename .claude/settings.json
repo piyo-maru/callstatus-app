@@ -1,0 +1,20 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command", 
+            "command": "/root/callstatus-app/.claude/hooks/hook_stop_words.sh"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": {
+      "Bash": {
+        "script": "/root/callstatus-app/.claude/hooks/hook_pre_commands.sh"
+      }
+    }
+  }
+}

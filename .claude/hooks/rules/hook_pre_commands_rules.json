@@ -1,0 +1,12 @@
+{
+  "rules": [
+    {
+      "commands": ["rm -rf", "sudo rm"],
+      "message": "危険な削除コマンドが検出されました。安全な方法で削除を行ってください。"
+    },
+    {
+      "commands": ["git reset --hard"],
+      "message": "危険なGitコマンドが検出されました。ユーザーの明示的な許可が必要です。"
+    }
+  ]
+}
