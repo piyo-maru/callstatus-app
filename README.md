@@ -85,7 +85,7 @@
 - **Docker & Docker Compose** - コンテナ化による環境一致
 - **Playwright 1.53** - E2Eテスト自動化（10カテゴリ98テストケース実装）
 - **Jest** - ユニット・統合テスト
-- **GitHub Actions** - CI/CDパイプライン
+- **Playwright E2E** - 包括的自動テスト（10カテゴリ98テストケース）
 
 ### **Architecture Patterns**
 - **マイクロサービス風モジュラー設計**
@@ -149,13 +149,21 @@ sleep 10
 ![Monthly Planner](assets/monthly-planner.png)
 *カレンダー形式での月間予定管理・申請ワークフロー*
 
-### プリセット選択
-![Approval Management](assets/pending.png)
-*月次計画のプリセット選択*
+### プリセット設定
+![Preset](assets/preset.png)
+*月次計画のプリセット申請予定の選択*
+
+### 申請承認管理
+![Approval Management](assets/pending-approval.png)
+*管理者による一括承認・却下*
 
 ### 個人スケジュール
 ![Personal Schedule](assets/personal-schedule.png)
 *個人向け予定編集・プリセット活用*
+
+### ログイン画面
+![Login](assets/login.png)
+*ログイン画面*
 
 ---
 
@@ -267,6 +275,30 @@ docker exec callstatus-app_backend_1 bash -c \"cd /app && npm run test:cov\"
 - **Snapshot**: 履歴データ保存
 - **AuditLog**: 操作履歴・監査証跡
 
+### 📋 詳細技術仕様書
+より詳細な技術仕様・設計思想については、こちらをご覧ください：
+
+📖 **[Technical Specification Portfolio](docs/portfolio-specs/README.md)**
+- API設計仕様（80+エンドポイント）
+- データベース設計仕様（27テーブル構成）
+- パフォーマンス分析・負荷テスト
+- デプロイメント要件・運用設計
+
+---
+
+## 🔄 開発手法・プロセス
+
+### **アジャイル開発の実践**
+- **反復的開発**: 段階的機能実装（Phase 1-3）
+- **継続的フィードバック**: 実際の企業要件に基づく仕様変更
+- **動作するソフトウェア優先**: 常にデプロイ可能な状態を維持
+- **変化への対応**: 新要求への柔軟な対応（1分単位精度・カスタム複合予定等）
+
+### **実務要件重視の設計**
+- **業務継続性優先**: 技術最適化より運用確実性を重視
+- **段階的実装**: 認証システム・権限管理の段階的有効化
+- **ユーザーストーリー駆動**: 受付チーム要件等の実際の業務要求対応
+
 ---
 
 ## 📈 パフォーマンス・スケーラビリティ
@@ -330,6 +362,7 @@ docker exec callstatus-app_frontend_1 bash -c \"cd /app && npx tsc --noEmit\"
 - [ ] 詳細分析ダッシュボード
 
 ### Phase 2: エンタープライズ機能
+- [ ] GitHub Actions CI/CDパイプライン
 - [ ] SSO統合（SAML/OAuth）
 - [ ] API レート制限・監視
 

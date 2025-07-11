@@ -10,6 +10,11 @@
           }
         ]
       }
-    ]
+    ],
+    "PreToolUse": {
+      "Bash": {
+        "script": "/root/callstatus-app/.claude/hooks/hook_pre_commands.sh"
+      }
+    }
   }
 }
