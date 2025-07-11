@@ -8,8 +8,8 @@
 
 const fs = require('fs');
 
-// 設定（スタッフID範囲を動的に取得する必要があるが、とりあえず現在の範囲に修正）
-const STAFF_ID_RANGE = { min: 284, max: 333 }; // 50人（最新のseed_portfolio.js実行後の範囲）
+// 設定（スタッフID範囲を最新のseed_portfolio.js実行後の範囲に修正）
+const STAFF_ID_RANGE = { min: 1, max: 50 }; // 50人（最新のseed_portfolio.js実行後の範囲）
 const TOTAL_STAFF = STAFF_ID_RANGE.max - STAFF_ID_RANGE.min + 1;
 const DAYS_TO_GENERATE = 60; // 60日間
 

@@ -16,6 +16,7 @@ import { ContractsModule } from './contracts/contracts.module';
 import { PresetSettingsModule } from './preset-settings/preset-settings.module';
 import { AuthModule } from './auth/auth.module';
 import { MonthlyPlannerModule } from './monthly-planner/monthly-planner.module';
+import { BackupModule } from './backup/backup.module';
 // AuthModule有効化（Phase 2: 段階的導入）
 // import { AssignmentsModule } from './assignments/assignments.module';
 // import { ContractModule } from './contract/contract.module';
@@ -39,6 +40,7 @@ import { MonthlyPlannerModule } from './monthly-planner/monthly-planner.module';
     PresetSettingsModule,
     AuthModule,
     MonthlyPlannerModule,
+    BackupModule,
     // AuthModule有効化完了（Phase 2: 段階的導入）
     // AuditModule, 
     // AssignmentsModule, 

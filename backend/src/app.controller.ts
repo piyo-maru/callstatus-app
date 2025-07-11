@@ -1,12 +1,16 @@
 import { Controller, Get, Post, Body, Query, HttpCode } from '@nestjs/common';
 import { PrismaService } from './prisma.service';
+import { BackupService } from './backup/backup.service';
 import * as bcrypt from 'bcrypt';
 import * as os from 'os';
 import * as process from 'process';
 
 @Controller()
 export class AppController {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private backupService: BackupService
+  ) {}
 
   // 実際のCPU使用率を取得（100ms測定）
   private async getRealCpuUsage(): Promise<number> {
@@ -180,6 +184,13 @@ export class AppController {
         totalStaffCount: dbStats.totalStaffCount,
         activeStaffCount: dbStats.activeStaffCount,
         todayScheduleCount: dbStats.todayScheduleCount,
+      },
+      backup: {
+        ...this.backupService.getBackupStats(),
+        availableSpace: 0, // 仮の値
+        autoBackupEnabled: false,
+        nextScheduledBackup: null,
+        failedBackupsCount: 0
       },
       health: {
         status: healthStatus,

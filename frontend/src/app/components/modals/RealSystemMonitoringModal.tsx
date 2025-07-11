@@ -25,6 +25,16 @@ interface SystemMetrics {
     activeStaffCount: number;
     todayScheduleCount: number;
   };
+  backup: {
+    totalBackups: number;
+    lastBackupTime: string | null;
+    lastBackupStatus: string;
+    totalBackupSize: number;
+    availableSpace: number;
+    autoBackupEnabled: boolean;
+    nextScheduledBackup: string | null;
+    failedBackupsCount: number;
+  };
   health: {
     status: 'healthy' | 'warning' | 'critical';
     issues: string[];
@@ -46,7 +56,7 @@ export const RealSystemMonitoringModal = ({ isOpen, onClose }: RealSystemMonitor
   const [metrics, setMetrics] = useState<SystemMetrics | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedTab, setSelectedTab] = useState<'overview' | 'server' | 'database'>('overview');
+  const [selectedTab, setSelectedTab] = useState<'overview' | 'server' | 'database' | 'backup'>('overview');
   const [autoRefresh, setAutoRefresh] = useState(false);
 
   // 実際のデータ取得
@@ -165,7 +175,8 @@ export const RealSystemMonitoringModal = ({ isOpen, onClose }: RealSystemMonitor
           {[
             { key: 'overview', label: '概要' },
             { key: 'server', label: 'サーバー' },
-            { key: 'database', label: 'データベース' }
+            { key: 'database', label: 'データベース' },
+            { key: 'backup', label: 'バックアップ' }
           ].map(tab => (
             <button
               key={tab.key}
@@ -332,6 +343,156 @@ export const RealSystemMonitoringModal = ({ isOpen, onClose }: RealSystemMonitor
                       <p className="text-xs text-gray-500 mt-1">実測値（DB COUNT）</p>
                     </div>
                   </div>
+                </div>
+              )}
+
+              {/* バックアップタブ */}
+              {selectedTab === 'backup' && (
+                <div className="space-y-6">
+                  {/* バックアップ統計 */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+                      <h4 className="text-sm font-medium text-gray-600 mb-1">総バックアップ数</h4>
+                      <p className="text-lg font-bold text-blue-600">{metrics.backup.totalBackups}件</p>
+                      <p className="text-xs text-gray-500 mt-1">実測値</p>
+                    </div>
+                    <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+                      <h4 className="text-sm font-medium text-gray-600 mb-1">最終バックアップ</h4>
+                      <p className="text-sm font-bold text-green-600">
+                        {metrics.backup.lastBackupTime 
+                          ? new Date(metrics.backup.lastBackupTime).toLocaleString()
+                          : 'なし'}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">実測値</p>
+                    </div>
+                    <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+                      <h4 className="text-sm font-medium text-gray-600 mb-1">バックアップ状態</h4>
+                      <p className={`text-lg font-bold ${
+                        metrics.backup.lastBackupStatus === 'completed' ? 'text-green-600' :
+                        metrics.backup.lastBackupStatus === 'error' ? 'text-red-600' : 'text-gray-600'
+                      }`}>
+                        {metrics.backup.lastBackupStatus === 'completed' ? '✅ 正常' :
+                         metrics.backup.lastBackupStatus === 'error' ? '❌ エラー' : '⏳ 未実行'}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">実測値</p>
+                    </div>
+                    <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+                      <h4 className="text-sm font-medium text-gray-600 mb-1">総バックアップサイズ</h4>
+                      <p className="text-lg font-bold text-purple-600">
+                        {(metrics.backup.totalBackupSize / 1024 / 1024).toFixed(1)} MB
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">実測値</p>
+                    </div>
+                    <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+                      <h4 className="text-sm font-medium text-gray-600 mb-1">自動バックアップ</h4>
+                      <p className={`text-lg font-bold ${
+                        metrics.backup.autoBackupEnabled ? 'text-green-600' : 'text-red-600'
+                      }`}>
+                        {metrics.backup.autoBackupEnabled ? '✅ 有効' : '❌ 無効'}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">実測値</p>
+                    </div>
+                    <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+                      <h4 className="text-sm font-medium text-gray-600 mb-1">失敗回数</h4>
+                      <p className={`text-lg font-bold ${
+                        metrics.backup.failedBackupsCount > 0 ? 'text-red-600' : 'text-green-600'
+                      }`}>
+                        {metrics.backup.failedBackupsCount}件
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">実測値</p>
+                    </div>
+                  </div>
+
+                  {/* 手動バックアップ操作 */}
+                  <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                    <h3 className="text-lg font-bold text-blue-800 mb-3">手動バックアップ操作</h3>
+                    <div className="space-y-3">
+                      <button
+                        onClick={async () => {
+                          try {
+                            const response = await fetch('/api/backup/execute', { method: 'POST' });
+                            const result = await response.json();
+                            if (response.ok) {
+                              alert(`バックアップ成功: ${result.message}`);
+                              fetchMetrics(); // 統計を更新
+                            } else {
+                              alert(`バックアップ失敗: ${result.message}`);
+                            }
+                          } catch (error) {
+                            alert(`バックアップエラー: ${error.message}`);
+                          }
+                        }}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                      >
+                        🗄️ 手動バックアップ実行
+                      </button>
+                      <p className="text-sm text-blue-700">
+                        現在のデータベース状態の完全バックアップを作成します
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* 開発環境専用復元UI */}
+                  {process.env.NODE_ENV === 'development' && (
+                    <div className="bg-orange-50 p-4 rounded-lg border-2 border-orange-300">
+                      <h3 className="text-lg font-bold text-orange-800 mb-3">復元機能（開発環境専用）</h3>
+                      <div className="space-y-3">
+                        <div className="bg-orange-100 p-3 rounded border border-orange-200">
+                          <p className="text-sm text-orange-800 font-medium mb-2">⚠️ 危険な操作</p>
+                          <p className="text-xs text-orange-700">
+                            復元操作はデータベース全体を上書きします。開発環境でのみ利用可能です。
+                          </p>
+                        </div>
+                        <button
+                          onClick={async () => {
+                            if (!confirm('復元操作を実行しますか？現在のデータは失われます。')) return;
+                            
+                            try {
+                              // バックアップ一覧取得
+                              const listResponse = await fetch('/api/backup/list');
+                              const listResult = await listResponse.json();
+                              
+                              if (listResult.backups.length === 0) {
+                                alert('復元可能なバックアップがありません');
+                                return;
+                              }
+                              
+                              // 最新のバックアップを取得
+                              const latestBackup = listResult.backups[0];
+                              
+                              // トークン生成
+                              const tokenResponse = await fetch('/api/backup/generate-token');
+                              const tokenResult = await tokenResponse.json();
+                              
+                              // 復元実行
+                              const restoreResponse = await fetch('/api/backup/restore', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                  fileName: latestBackup.fileName,
+                                  confirmationToken: tokenResult.token
+                                })
+                              });
+                              
+                              const restoreResult = await restoreResponse.json();
+                              
+                              if (restoreResponse.ok) {
+                                alert(`復元成功: ${restoreResult.message}`);
+                                fetchMetrics(); // 統計を更新
+                              } else {
+                                alert(`復元失敗: ${restoreResult.message}`);
+                              }
+                            } catch (error) {
+                              alert(`復元エラー: ${error.message}`);
+                            }
+                          }}
+                          className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors font-medium"
+                        >
+                          🔄 最新バックアップから復元
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </>
