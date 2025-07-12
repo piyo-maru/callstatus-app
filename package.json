@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "date-fns": "^4.1.0",
     "node-fetch": "^2.7.0"
   },
   "name": "callstatus-app",
@@ -14,7 +15,6 @@
     "test:headed": "playwright test --headed",
     "test:ui-mode": "playwright test --ui",
     "test:setup": "cd backend && npm run db:seed",
-    
     "test:basic": "playwright test tests/e2e/basic-workflow.spec.js",
     "test:layers": "playwright test tests/e2e/layer-system.spec.js",
     "test:support": "playwright test tests/e2e/support-features.spec.js",
@@ -24,12 +24,10 @@
     "test:ui-consistency": "playwright test tests/e2e/ui-consistency.spec.js",
     "test:auth": "playwright test tests/e2e/monitoring-auth.spec.js",
     "test:edge": "playwright test tests/e2e/edge-cases.spec.js",
-    
     "test:core": "npm run test:basic && npm run test:layers && npm run test:support",
     "test:interaction": "npm run test:drag && npm run test:pages && npm run test:realtime",
     "test:quality": "npm run test:ui-consistency && npm run test:auth && npm run test:edge",
     "test:comprehensive": "npm run test:core && npm run test:interaction && npm run test:quality",
-    
     "test:parallel": "playwright test --workers=4",
     "test:ci": "playwright test --reporter=junit",
     "test:coverage": "playwright test --reporter=html",
