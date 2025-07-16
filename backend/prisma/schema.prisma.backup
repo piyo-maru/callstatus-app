@@ -8,51 +8,75 @@ datasource db {
 }
 
 model Adjustment {
-  id              Int                    @id @default(autoincrement())
+  id              Int                  @id @default(autoincrement())
   date            DateTime
   status          String
   start           DateTime
   end             DateTime
   memo            String?
   reason          String?
-  createdAt       DateTime               @default(now())
-  updatedAt       DateTime
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
   staffId         Int
   batchId         String?
-  
-  // Pending関連フィールド
-  isPending       Boolean                @default(false)
-  approvedBy      Int?
   approvedAt      DateTime?
-  pendingType     String?                // 'monthly-planner', 'manual'
+  approvedBy      Int?
+  isPending       Boolean              @default(false)
+  pendingType     String?
   rejectedAt      DateTime?
   rejectedBy      Int?
   rejectionReason String?
-  
-  Staff           Staff                  @relation(fields: [staffId], references: [id])
-  ApprovedBy      Staff?                 @relation("ApprovedAdjustments", fields: [approvedBy], references: [id])
-  RejectedBy      Staff?                 @relation("RejectedAdjustments", fields: [rejectedBy], references: [id])
+  date_utc        DateTime?
+  start_utc       DateTime?
+  end_utc         DateTime?
+  createdAt_utc   DateTime?
+  updatedAt_utc   DateTime?
+  approvedAt_utc  DateTime?
+  rejectedAt_utc  DateTime?
+  ApprovedBy      Staff?               @relation("ApprovedAdjustments", fields: [approvedBy], references: [id])
+  RejectedBy      Staff?               @relation("RejectedAdjustments", fields: [rejectedBy], references: [id])
+  Staff           Staff                @relation(fields: [staffId], references: [id])
   ApprovalLogs    PendingApprovalLog[]
 }
 
 model Contract {
-  id             Int      @id @default(autoincrement())
-  empNo          String   @unique
+  id             Int       @id @default(autoincrement())
+  empNo          String    @unique
   name           String
-  dept           String
   team           String
   email          String?
-  mondayHours    String?  // 月曜勤務時間 (例: "09:00-18:00" or null)
-  tuesdayHours   String?  // 火曜勤務時間
-  wednesdayHours String?  // 水曜勤務時間
-  thursdayHours  String?  // 木曜勤務時間
-  fridayHours    String?  // 金曜勤務時間
-  saturdayHours  String?  // 土曜勤務時間
-  sundayHours    String?  // 日曜勤務時間
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
   staffId        Int
-  Staff          Staff    @relation(fields: [staffId], references: [id])
+  dept           String
+  fridayHours    String?
+  mondayHours    String?
+  saturdayHours  String?
+  sundayHours    String?
+  thursdayHours  String?
+  tuesdayHours   String?
+  wednesdayHours String?
+  createdAt_utc  DateTime?
+  updatedAt_utc  DateTime?
+  Staff          Staff     @relation(fields: [staffId], references: [id])
+}
+
+model ContractChangeLog {
+  id               Int       @id @default(autoincrement())
+  staffId          Int
+  changeType       String    @db.VarChar(20)
+  oldWorkingDays   Int[]     @default([])
+  newWorkingDays   Int[]     @default([])
+  oldHours         Json?
+  newHours         Json?
+  changeDate       DateTime  @default(now())
+  processedAt      DateTime?
+  processingStatus String    @default("PENDING")
+  errorMessage     String?
+  createdBy        String?
+  Staff            Staff     @relation(fields: [staffId], references: [id])
+
+  @@index([staffId, changeDate])
 }
 
 model DailyAssignment {
@@ -62,7 +86,7 @@ model DailyAssignment {
   assignmentType String   @db.VarChar(20)
   customLabel    String?  @db.VarChar(50)
   createdAt      DateTime @default(now())
-  updatedAt      DateTime
+  updatedAt      DateTime @updatedAt
   Staff          Staff    @relation(fields: [staffId], references: [id])
 }
 
@@ -75,11 +99,25 @@ model MonthlySchedule {
   memo      String?
   source    String   @default("csv")
   createdAt DateTime @default(now())
-  updatedAt DateTime
+  updatedAt DateTime @updatedAt
   staffId   Int
   Staff     Staff    @relation(fields: [staffId], references: [id])
 
   @@unique([staffId, date, start, end])
+}
+
+model ContractDisplayCache {
+  staffId     Int
+  year        Int
+  month       Int
+  day         Int
+  hasContract Boolean
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  Staff       Staff    @relation(fields: [staffId], references: [id])
+
+  @@id([staffId, year, month, day])
+  @@index([year, month])
 }
 
 model Schedule {
@@ -93,26 +131,36 @@ model Schedule {
 }
 
 model Staff {
-  id                  Int                   @id @default(autoincrement())
-  name                String
-  department          String
-  group               String
-  authGracePeriod     DateTime?
-  empNo               String?               @unique
-  isActive            Boolean               @default(true)
-  deletedAt           DateTime?
-  Adjustment          Adjustment[]
-  Contract            Contract[]
-  DailyAssignment     DailyAssignment[]
-  MonthlySchedule     MonthlySchedule[]
-  Schedule            Schedule[]
-  TemporaryAssignment TemporaryAssignment[]
-  user_auth           user_auth?
-  
-  // Pending関連リレーション
-  ApprovedAdjustments Adjustment[]         @relation("ApprovedAdjustments")
-  RejectedAdjustments Adjustment[]         @relation("RejectedAdjustments")
-  ApprovalActions     PendingApprovalLog[] @relation("ApprovalActions")
+  id                    Int                     @id @default(autoincrement())
+  name                  String
+  department            String
+  group                 String
+  authGracePeriod       DateTime?
+  empNo                 String?                 @unique
+  isActive              Boolean                 @default(true)
+  deletedAt             DateTime?
+  isManager             Boolean                 @default(false)
+  managerActivatedAt    DateTime?
+  managerDepartments    String[]                @default([])
+  managerPermissions    ManagerPermission[]     @default([])
+  position              String?
+  workArrangement       String
+  ApprovedAdjustments   Adjustment[]            @relation("ApprovedAdjustments")
+  RejectedAdjustments   Adjustment[]            @relation("RejectedAdjustments")
+  Adjustment            Adjustment[]
+  Contract              Contract[]
+  ContractChangeLogs    ContractChangeLog[]
+  ContractDisplayCache  ContractDisplayCache[]
+  DailyAssignment       DailyAssignment[]
+  MonthlySchedule       MonthlySchedule[]
+  Schedule              Schedule[]
+  TemporaryAssignment   TemporaryAssignment[]
+  GlobalDisplaySettings GlobalDisplaySettings[]
+  GlobalPresetSettings  GlobalPresetSettings[]  @relation("GlobalPresetUpdates")
+  ManagerAuditLogs      ManagerAuditLog[]       @relation("ManagerActions")
+  ApprovalActions       PendingApprovalLog[]    @relation("ApprovalActions")
+  user_auth             user_auth?
+  UserPresetSettings    UserPresetSettings?
 }
 
 model TemporaryAssignment {
@@ -125,7 +173,7 @@ model TemporaryAssignment {
   reason    String   @default("支援")
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
-  updatedAt DateTime
+  updatedAt DateTime @updatedAt
   Staff     Staff    @relation(fields: [staffId], references: [id])
 
   @@unique([staffId, startDate, endDate])
@@ -214,13 +262,221 @@ model user_auth {
   externalId            String?
   metadata              Json?
   createdAt             DateTime                @default(now())
-  updatedAt             DateTime
+  updatedAt             DateTime                @updatedAt
   deletedAt             DateTime?
   audit_logs            audit_logs[]
   auth_audit_logs       auth_audit_logs[]
   auth_sessions         auth_sessions[]
   password_reset_tokens password_reset_tokens[]
   Staff                 Staff?                  @relation(fields: [staffId], references: [id])
+}
+
+model DepartmentSettings {
+  id              Int      @id @default(autoincrement())
+  type            String   @db.VarChar(20)
+  name            String   @db.VarChar(255)
+  shortName       String?  @db.VarChar(50)
+  backgroundColor String?  @db.VarChar(7)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  displayOrder    Int      @default(0)
+
+  @@unique([type, name])
+  @@map("DepartmentSettings")
+}
+
+model HistoricalSchedule {
+  id              Int       @id @default(autoincrement())
+  date            DateTime  @db.Date
+  originalId      Int?
+  batchId         String
+  staffId         Int
+  staffEmpNo      String?
+  staffName       String
+  staffDepartment String
+  staffGroup      String
+  staffIsActive   Boolean   @default(true)
+  status          String
+  start           DateTime
+  end             DateTime
+  memo            String?
+  reason          String?
+  snapshotAt      DateTime  @default(now())
+  version         String    @default("1.0")
+  date_utc        DateTime?
+  start_utc       DateTime?
+  end_utc         DateTime?
+  snapshotAt_utc  DateTime?
+
+  @@index([date])
+  @@index([date, staffDepartment])
+  @@index([date, staffId])
+  @@index([staffEmpNo])
+  @@index([batchId])
+  @@map("historical_schedules")
+}
+
+model SnapshotLog {
+  id              Int            @id @default(autoincrement())
+  batchId         String         @unique
+  targetDate      DateTime       @db.Date
+  recordCount     Int
+  status          SnapshotStatus
+  startedAt       DateTime       @default(now())
+  completedAt     DateTime?
+  errorMessage    String?
+  targetDate_utc  DateTime?
+  startedAt_utc   DateTime?
+  completedAt_utc DateTime?
+
+  @@index([targetDate])
+  @@index([status])
+  @@map("snapshot_logs")
+}
+
+model PendingApprovalLog {
+  id           Int        @id @default(autoincrement())
+  adjustmentId Int
+  action       String
+  actorId      Int
+  reason       String?
+  createdAt    DateTime   @default(now())
+  Actor        Staff      @relation("ApprovalActions", fields: [actorId], references: [id])
+  Adjustment   Adjustment @relation(fields: [adjustmentId], references: [id])
+
+  @@index([adjustmentId])
+  @@index([actorId])
+  @@map("pending_approval_logs")
+}
+
+model UserPresetSettings {
+  id                 Int          @id @default(autoincrement())
+  staffId            Int          @unique
+  pagePresetSettings Json         @default("{}")
+  lastModified       DateTime     @default(now())
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  Staff              Staff        @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  UserPresets        UserPreset[]
+
+  @@map("user_preset_settings")
+}
+
+model UserPreset {
+  id                   Int                  @id @default(autoincrement())
+  userPresetSettingsId Int
+  presetId             String
+  name                 String
+  displayName          String
+  description          String?
+  category             String
+  isActive             Boolean              @default(true)
+  customizable         Boolean              @default(true)
+  isDefault            Boolean              @default(false)
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+  UserPresetSchedules  UserPresetSchedule[]
+  UserPresetSettings   UserPresetSettings   @relation(fields: [userPresetSettingsId], references: [id], onDelete: Cascade)
+
+  @@unique([userPresetSettingsId, presetId])
+  @@map("user_presets")
+}
+
+model UserPresetSchedule {
+  id           Int        @id @default(autoincrement())
+  userPresetId Int
+  status       String
+  startTime    Decimal    @db.Decimal(4, 2)
+  endTime      Decimal    @db.Decimal(4, 2)
+  memo         String?
+  sortOrder    Int        @default(0)
+  createdAt    DateTime   @default(now())
+  UserPreset   UserPreset @relation(fields: [userPresetId], references: [id], onDelete: Cascade)
+
+  @@map("user_preset_schedules")
+}
+
+model SystemAdmin {
+  id             String          @id @default(cuid())
+  username       String          @unique
+  email          String          @unique
+  passwordHash   String
+  name           String
+  isActive       Boolean         @default(true)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  lastLoginAt    DateTime?
+  AdminAuditLogs AdminAuditLog[]
+
+  @@map("system_admins")
+}
+
+model ManagerAuditLog {
+  id            Int      @id @default(autoincrement())
+  managerId     Int
+  targetStaffId Int?
+  action        String
+  resource      String
+  resourceId    String?
+  details       String?
+  ipAddress     String?
+  userAgent     String?
+  timestamp     DateTime @default(now())
+  Manager       Staff    @relation("ManagerActions", fields: [managerId], references: [id])
+
+  @@index([managerId])
+  @@index([targetStaffId])
+  @@index([action])
+  @@index([timestamp])
+  @@map("manager_audit_logs")
+}
+
+model AdminAuditLog {
+  id          Int         @id @default(autoincrement())
+  adminId     String
+  action      String
+  targetType  String
+  targetId    String?
+  details     String?
+  ipAddress   String?
+  userAgent   String?
+  timestamp   DateTime    @default(now())
+  SystemAdmin SystemAdmin @relation(fields: [adminId], references: [id])
+
+  @@index([adminId])
+  @@index([action])
+  @@index([timestamp])
+  @@map("admin_audit_logs")
+}
+
+model GlobalDisplaySettings {
+  id                       Int      @id @default(1)
+  maskingEnabled           Boolean  @default(false)
+  timeRange                String   @default("standard")
+  customStatusColors       Json     @default("{}")
+  customStatusDisplayNames Json     @default("{}")
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+  updatedBy                Int?
+  UpdatedByStaff           Staff?   @relation(fields: [updatedBy], references: [id])
+
+  @@map("global_display_settings")
+}
+
+model GlobalPresetSettings {
+  id                 Int      @id @default(1)
+  presets            Json     @default("[]")
+  categories         Json     @default("[]")
+  pagePresetSettings Json     @default("{}")
+  version            String   @default("1.0.0")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  updatedBy          Int?
+  departmentSettings Json     @default("[]")
+  displaySettings    Json     @default("{}")
+  UpdatedByStaff     Staff?   @relation("GlobalPresetUpdates", fields: [updatedBy], references: [id])
+
+  @@map("global_preset_settings")
 }
 
 enum AdminRole {
@@ -251,71 +507,6 @@ enum UserType {
   STAFF
 }
 
-model DepartmentSettings {
-  id              Int      @id @default(autoincrement())
-  type            String   @db.VarChar(20) // 'department' or 'group'
-  name            String   @db.VarChar(255)
-  shortName       String?  @db.VarChar(50)
-  backgroundColor String?  @db.VarChar(7) // hex color
-  displayOrder    Int      @default(0)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  @@unique([type, name])
-  @@map("DepartmentSettings")
-}
-
-model HistoricalSchedule {
-  id              Int      @id @default(autoincrement())
-  
-  // 基本情報
-  date            DateTime @db.Date
-  originalId      Int?     // 元のAdjustment ID
-  batchId         String   // バッチ実行ID（ロールバック用）
-  
-  // スナップショット時点の社員情報（完全保存）
-  staffId         Int
-  staffEmpNo      String?
-  staffName       String
-  staffDepartment String
-  staffGroup      String
-  staffIsActive   Boolean  @default(true)
-  
-  // 予定情報
-  status          String
-  start           DateTime
-  end             DateTime
-  memo            String?
-  reason          String?
-  
-  // メタデータ
-  snapshotAt      DateTime @default(now())
-  version         String   @default("1.0")
-  
-  // パフォーマンス最適化のインデックス
-  @@index([date])
-  @@index([date, staffDepartment])
-  @@index([date, staffId])
-  @@index([staffEmpNo])
-  @@index([batchId])
-  @@map("historical_schedules")
-}
-
-model SnapshotLog {
-  id          Int            @id @default(autoincrement())
-  batchId     String         @unique
-  targetDate  DateTime       @db.Date
-  recordCount Int
-  status      SnapshotStatus
-  startedAt   DateTime       @default(now())
-  completedAt DateTime?
-  errorMessage String?
-  
-  @@index([targetDate])
-  @@index([status])
-  @@map("snapshot_logs")
-}
-
 enum SnapshotStatus {
   RUNNING
   COMPLETED
@@ -323,18 +514,9 @@ enum SnapshotStatus {
   ROLLED_BACK
 }
 
-model PendingApprovalLog {
-  id           Int      @id @default(autoincrement())
-  adjustmentId Int
-  action       String   // 'approved', 'rejected', 'pending'
-  actorId      Int
-  reason       String?
-  createdAt    DateTime @default(now())
-  
-  Adjustment   Adjustment @relation(fields: [adjustmentId], references: [id])
-  Actor        Staff      @relation("ApprovalActions", fields: [actorId], references: [id])
-  
-  @@index([adjustmentId])
-  @@index([actorId])
-  @@map("pending_approval_logs")
+enum ManagerPermission {
+  READ
+  WRITE
+  APPROVE
+  DELETE
 }
