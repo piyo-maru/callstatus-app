@@ -6,22 +6,22 @@
 
 ### 必要なもの
 - [ ] AWSアカウント
-- [ ] EC2インスタンス（t3.medium推奨）
+- [ ] EC2インスタンス（t2.micro・無料枠）
 - [ ] セキュリティグループ設定
 - [ ] SSH接続環境
 
 ### 推定コスト
-- **EC2 t3.medium**: 面接時のみ稼働で月$8-15
-- **EBS 30GB**: $8/月
-- **総額**: $16-23/月
+- **EC2 t2.micro**: 12ヶ月間完全無料（AWS無料枠）
+- **EBS 30GB**: 12ヶ月間完全無料（AWS無料枠）
+- **総額**: **$0/月**（12ヶ月間）
 
 ## 🖥️ EC2セットアップ手順
 
 ### 1. EC2インスタンス作成
 ```bash
-# インスタンスタイプ: t3.medium
-# OS: Ubuntu 22.04 LTS
-# ストレージ: 30GB gp3
+# インスタンスタイプ: t2.micro (無料枠)
+# OS: Ubuntu 22.04 LTS (無料枠対象)
+# ストレージ: 30GB gp2 (無料枠対象)
 ```
 
 ### 2. セキュリティグループ設定
@@ -49,6 +49,13 @@ ssh -i your-key.pem ubuntu@YOUR-EC2-IP
 
 # システム更新
 sudo apt update && sudo apt upgrade -y
+
+# t2.micro用スワップファイル作成（メモリ不足対策）
+sudo fallocate -l 2G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
 
 # Docker & Docker Compose インストール
 sudo apt install -y docker.io docker-compose
@@ -117,40 +124,56 @@ curl http://localhost:3002/api/test
 - リアルタイム更新機能
 - WebSocket通信確認
 
-## 💰 コスト最適化
+## 💰 無料枠活用・監視設定
 
-### 起動・停止スクリプト
+### 無料枠使用量監視
 ```bash
-# 起動
-aws ec2 start-instances --instance-ids i-1234567890abcdef0
-
-# 停止  
-aws ec2 stop-instances --instance-ids i-1234567890abcdef0
+# AWS Billing Dashboard確認
+1. AWSコンソール → Billing Dashboard
+2. 「無料枠使用量の確認」
+3. EC2-Instance Hours: 750時間/月まで無料
+4. EBS Storage: 30GB/月まで無料
+5. Data Transfer Out: 15GB/月まで無料
 ```
 
-### 面接用運用パターン
-1. **平常時**: インスタンス停止（$8/月のEBS代のみ）
-2. **面接1週間前**: インスタンス起動・デモ準備
-3. **面接終了後**: 即座に停止
+### 課金アラート設定（重要）
+```bash
+# CloudWatch課金アラート
+1. CloudWatch → アラーム → 課金アラームを作成
+2. しきい値: $1 (予防的アラート)
+3. 通知先: あなたのメールアドレス
+4. アラーム名: "AWS-Free-Tier-Alert"
+```
+
+### 24時間運用パターン（推奨）
+1. **常時稼働**: t2.micro 24時間稼働（無料枠内）
+2. **ポートフォリオ**: いつでもアクセス可能
+3. **面接対応**: 事前準備不要でデモ実施可能
 
 ## 🎯 面接でのアピールポイント
 
 ### 技術スタック説明
 ```
 「NestJS + Next.js + PostgreSQL のフルスタックアプリを
-Docker Compose で AWS EC2 にデプロイし、実際に運用しています」
+AWS EC2 の無料枠で12ヶ月間無料運用しています」
 ```
 
 ### インフラ経験アピール
 ```
-「EC2でのコンテナ運用、セキュリティグループ設定、
-WebSocket通信の本番環境での動作確認を行いました」
+「t2.microでのメモリ最適化、セキュリティグループ設定、
+WebSocket本番環境構築を実践しました」
 ```
 
 ### コスト意識アピール
 ```
-「必要時のみインスタンスを起動することで
-月額コストを80%削減する運用を実践しています」
+「AWS無料枠の制限を理解し、スワップファイル追加や
+メモリ最適化で効率的なリソース活用を実現しています」
+```
+
+### 継続学習アピール
+```
+「課金アラート設定による予算管理、CloudWatch監視など
+本格的なAWS運用スキルを個人学習で習得しました」
 ```
 
 ## 🔧 トラブルシューティング
@@ -199,10 +222,17 @@ docker exec callstatus-app-backend-1 npx prisma generate
 
 このデモサイトを通じて、以下の実績を積むことができます：
 
-- **AWS EC2運用経験**
-- **Docker本番環境構築**
+- **AWS EC2無料枠活用経験**（12ヶ月間$0運用）
+- **Docker本番環境構築**（t2.microメモリ最適化）
 - **WebSocket本番環境動作確認**
-- **コスト最適化運用**
-- **フルスタックアプリ公開経験**
+- **AWS監視・アラート設定**（CloudWatch、Billing）
+- **フルスタックアプリ公開経験**（常時アクセス可能）
 
-面接で自信を持ってアピールし、転職を成功させましょう！
+## 💡 無料枠活用の最大メリット
+
+- **完全無料**: 12ヶ月間$0でAWS実践経験
+- **常時稼働**: ポートフォリオとしていつでもデモ可能
+- **制約対応**: 限られたリソースでの最適化技術習得
+- **転職価値**: 「効率的なエンジニア」として差別化
+
+**12ヶ月間無料でAWS実績を作り、転職を成功させましょう！**
