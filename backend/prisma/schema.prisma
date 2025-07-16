@@ -144,7 +144,7 @@ model Staff {
   managerDepartments    String[]                @default([])
   managerPermissions    ManagerPermission[]     @default([])
   position              String?
-  workArrangement       String
+  workArrangement       String?
   ApprovedAdjustments   Adjustment[]            @relation("ApprovedAdjustments")
   RejectedAdjustments   Adjustment[]            @relation("RejectedAdjustments")
   Adjustment            Adjustment[]
