@@ -3,7 +3,7 @@
 
 window.APP_CONFIG = {
   // 本番環境（EC2）用API接続設定
-  API_HOST: 'http://YOUR-EC2-IP:3002',
+  API_HOST: 'http://18.176.178.91:3002',
   
   // デバッグ用：現在の設定を確認
   get DEBUG_INFO() {
