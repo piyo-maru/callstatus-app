@@ -163,10 +163,10 @@ export class SnapshotsService {
           { isPending: false },                    // 通常のAdjustment
           { isPending: true, approvedAt: { not: null } }  // 承認済みPending
         ],
-        Staff: { isActive: true }  // アクティブ社員のみ対象
+        Staff_Adjustment_staffIdToStaff: { isActive: true }  // アクティブ社員のみ対象
       },
       include: {
-        Staff: true
+        Staff_Adjustment_staffIdToStaff: true
       }
     });
   }
@@ -199,11 +199,11 @@ export class SnapshotsService {
         originalId: item.id,
         batchId,
         staffId: item.staffId,
-        staffEmpNo: item.Staff.empNo,
-        staffName: item.Staff.name,
-        staffDepartment: item.Staff.department,
-        staffGroup: item.Staff.group,
-        staffIsActive: item.Staff.isActive,
+        staffEmpNo: item.Staff_Adjustment_staffIdToStaff.empNo,
+        staffName: item.Staff_Adjustment_staffIdToStaff.name,
+        staffDepartment: item.Staff_Adjustment_staffIdToStaff.department,
+        staffGroup: item.Staff_Adjustment_staffIdToStaff.group,
+        staffIsActive: item.Staff_Adjustment_staffIdToStaff.isActive,
         status: item.status,
         memo: item.memo,
         reason: item.reason

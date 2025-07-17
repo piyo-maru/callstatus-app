@@ -64,7 +64,8 @@ export const RealSystemMonitoringModal = ({ isOpen, onClose }: RealSystemMonitor
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch('/api/system-monitoring/metrics');
+      const apiHost = (window as any).APP_CONFIG?.API_HOST || 'http://localhost:3002';
+      const response = await fetch(`${apiHost}/api/system-monitoring/metrics`);
       if (!response.ok) {
         throw new Error('メトリクス取得に失敗しました');
       }
@@ -410,7 +411,8 @@ export const RealSystemMonitoringModal = ({ isOpen, onClose }: RealSystemMonitor
                       <button
                         onClick={async () => {
                           try {
-                            const response = await fetch('/api/backup/execute', { method: 'POST' });
+                            const apiHost = (window as any).APP_CONFIG?.API_HOST || 'http://localhost:3002';
+                            const response = await fetch(`${apiHost}/api/backup/execute`, { method: 'POST' });
                             const result = await response.json();
                             if (response.ok) {
                               alert(`バックアップ成功: ${result.message}`);
@@ -449,7 +451,8 @@ export const RealSystemMonitoringModal = ({ isOpen, onClose }: RealSystemMonitor
                             
                             try {
                               // バックアップ一覧取得
-                              const listResponse = await fetch('/api/backup/list');
+                              const apiHost = (window as any).APP_CONFIG?.API_HOST || 'http://localhost:3002';
+                              const listResponse = await fetch(`${apiHost}/api/backup/list`);
                               const listResult = await listResponse.json();
                               
                               if (listResult.backups.length === 0) {
@@ -461,11 +464,11 @@ export const RealSystemMonitoringModal = ({ isOpen, onClose }: RealSystemMonitor
                               const latestBackup = listResult.backups[0];
                               
                               // トークン生成
-                              const tokenResponse = await fetch('/api/backup/generate-token');
+                              const tokenResponse = await fetch(`${apiHost}/api/backup/generate-token`);
                               const tokenResult = await tokenResponse.json();
                               
                               // 復元実行
-                              const restoreResponse = await fetch('/api/backup/restore', {
+                              const restoreResponse = await fetch(`${apiHost}/api/backup/restore`, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({
