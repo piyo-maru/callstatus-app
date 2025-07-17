@@ -14,7 +14,7 @@ async function main() {
   console.log('⚠️  この操作は取り消せません！');
   console.log('📝  新しく50人のポートフォリオ用データを作成します');
   // 外部キー制約を考慮した削除順序
-  await prisma.pendingApprovalLog.deleteMany(); // 承認ログを先に削除
+  await prisma.pending_approval_logs.deleteMany(); // 承認ログを先に削除
   await prisma.adjustment.deleteMany();
   await prisma.contract.deleteMany();
   await prisma.contractDisplayCache.deleteMany(); // 外部キー制約対応
@@ -175,7 +175,10 @@ async function main() {
 
   for (const setting of departmentSettings) {
     await prisma.departmentSettings.create({
-      data: setting
+      data: {
+        ...setting,
+        updatedAt: new Date()
+      }
     });
   }
 
@@ -227,7 +230,10 @@ async function main() {
 
   for (const contract of contractData) {
     await prisma.contract.create({
-      data: contract
+      data: {
+        ...contract,
+        updatedAt: new Date()
+      }
     });
   }
 
@@ -426,10 +432,14 @@ async function main() {
     }
   }
   
-  // バルクインサート
+  // バルクインサート（updatedAt追加）
   if (cacheEntries.length > 0) {
+    const cacheEntriesWithTimestamp = cacheEntries.map(entry => ({
+      ...entry,
+      updatedAt: new Date()
+    }));
     await prisma.contractDisplayCache.createMany({
-      data: cacheEntries,
+      data: cacheEntriesWithTimestamp,
       skipDuplicates: true
     });
   }

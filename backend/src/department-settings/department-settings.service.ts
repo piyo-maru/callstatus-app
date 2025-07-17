@@ -162,7 +162,8 @@ export class DepartmentSettingsService {
           name: setting.name,
           shortName: setting.shortName || null,
           backgroundColor: setting.backgroundColor || null,
-          displayOrder: setting.displayOrder || 0
+          displayOrder: setting.displayOrder || 0,
+          updatedAt: new Date()
         }
       });
       results.push(result);

@@ -994,7 +994,7 @@ export class StaffService {
             },
             include: {
               Contract: true,
-              Adjustment: true
+              Adjustment_Adjustment_staffIdToStaff: true
             }
           });
 
@@ -1002,7 +1002,7 @@ export class StaffService {
           const isUpdate = staff.Contract.length > 0;
           console.log(`スタッフ${isUpdate ? '更新' : '新規作成'}完了: ${staff.name} (ID: ${staff.id})`);
           if (isUpdate) {
-            console.log(`既存調整データ件数: ${staff.Adjustment.length}件`);
+            console.log(`既存調整データ件数: ${staff.Adjustment_Adjustment_staffIdToStaff.length}件`);
           }
 
           // 【契約変更検知システム】既存契約の取得
@@ -1038,12 +1038,38 @@ export class StaffService {
           }
 
           // 契約をupsert（変更検知後の更新）
+          const { staffId, ...updateContractData } = newContractData;
           const contract = await this.prisma.contract.upsert({
             where: { empNo: emp.empNo },
-            update: newContractData,
+            update: {
+              name: updateContractData.name,
+              dept: updateContractData.dept,
+              team: updateContractData.team,
+              email: updateContractData.email,
+              mondayHours: updateContractData.mondayHours,
+              tuesdayHours: updateContractData.tuesdayHours,
+              wednesdayHours: updateContractData.wednesdayHours,
+              thursdayHours: updateContractData.thursdayHours,
+              fridayHours: updateContractData.fridayHours,
+              saturdayHours: updateContractData.saturdayHours,
+              sundayHours: updateContractData.sundayHours,
+              updatedAt: new Date()
+            },
             create: {
               empNo: emp.empNo,
-              ...newContractData
+              name: updateContractData.name,
+              dept: updateContractData.dept,
+              team: updateContractData.team,
+              email: updateContractData.email,
+              mondayHours: updateContractData.mondayHours,
+              tuesdayHours: updateContractData.tuesdayHours,
+              wednesdayHours: updateContractData.wednesdayHours,
+              thursdayHours: updateContractData.thursdayHours,
+              fridayHours: updateContractData.fridayHours,
+              saturdayHours: updateContractData.saturdayHours,
+              sundayHours: updateContractData.sundayHours,
+              staffId: staffId,
+              updatedAt: new Date()
             }
           });
           console.log(`契約${isUpdate ? '更新' : '新規作成'}完了: ${contract.name}`);
@@ -1298,10 +1324,10 @@ export class StaffService {
     try {
       const whereCondition = staffId ? { targetStaffId: staffId } : {};
       
-      const logs = await this.prisma.managerAuditLog.findMany({
+      const logs = await this.prisma.manager_audit_logs.findMany({
         where: whereCondition,
         include: {
-          Manager: {
+          Staff: {
             select: { id: true, name: true, department: true }
           }
         },
@@ -1329,7 +1355,7 @@ export class StaffService {
     userAgent?: string;
   }) {
     try {
-      const log = await this.prisma.managerAuditLog.create({
+      const log = await this.prisma.manager_audit_logs.create({
         data: {
           managerId: logData.managerId,
           targetStaffId: logData.targetStaffId,
@@ -1513,12 +1539,38 @@ export class StaffService {
       );
 
       // 契約をupsert
+      const { staffId, ...updateContractData } = newContractData;
       const contract = await this.prisma.contract.upsert({
         where: { empNo: emp.empNo },
-        update: newContractData,
+        update: {
+          name: updateContractData.name,
+          dept: updateContractData.dept,
+          team: updateContractData.team,
+          email: updateContractData.email,
+          mondayHours: updateContractData.mondayHours,
+          tuesdayHours: updateContractData.tuesdayHours,
+          wednesdayHours: updateContractData.wednesdayHours,
+          thursdayHours: updateContractData.thursdayHours,
+          fridayHours: updateContractData.fridayHours,
+          saturdayHours: updateContractData.saturdayHours,
+          sundayHours: updateContractData.sundayHours,
+          updatedAt: new Date()
+        },
         create: {
           empNo: emp.empNo,
-          ...newContractData
+          name: updateContractData.name,
+          dept: updateContractData.dept,
+          team: updateContractData.team,
+          email: updateContractData.email,
+          mondayHours: updateContractData.mondayHours,
+          tuesdayHours: updateContractData.tuesdayHours,
+          wednesdayHours: updateContractData.wednesdayHours,
+          thursdayHours: updateContractData.thursdayHours,
+          fridayHours: updateContractData.fridayHours,
+          saturdayHours: updateContractData.saturdayHours,
+          sundayHours: updateContractData.sundayHours,
+          staffId: staffId,
+          updatedAt: new Date()
         }
       });
 

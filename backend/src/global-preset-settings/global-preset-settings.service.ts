@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
-import { GlobalPresetSettings } from '@prisma/client';
+import { global_preset_settings } from '@prisma/client';
 
 // グローバルプリセット設定のDTO（フロントエンドのUserPresetSettingsと互換）
 export interface GlobalPresetSettingsDto {
@@ -481,7 +481,7 @@ export class GlobalPresetSettingsService {
    * レコードが存在しない場合はデフォルト設定で初期化
    */
   async getSettings(): Promise<GlobalPresetSettingsDto> {
-    let settings = await this.prisma.globalPresetSettings.findFirst({
+    let settings = await this.prisma.global_preset_settings.findFirst({
       where: { id: 1 }
     });
 
@@ -511,13 +511,13 @@ export class GlobalPresetSettingsService {
   ): Promise<{ success: boolean; settings?: GlobalPresetSettingsDto; error?: string; conflictData?: GlobalPresetSettingsDto }> {
     return this.prisma.$transaction(async (prisma) => {
       // 1. 現在の設定を取得
-      let currentSettings = await prisma.globalPresetSettings.findFirst({
+      let currentSettings = await prisma.global_preset_settings.findFirst({
         where: { id: 1 }
       });
 
       // 設定が存在しない場合は初期化
       if (!currentSettings) {
-        currentSettings = await prisma.globalPresetSettings.create({
+        currentSettings = await prisma.global_preset_settings.create({
           data: {
             id: 1,
             presets: DEFAULT_GLOBAL_PRESET_SETTINGS.presets,
@@ -526,6 +526,7 @@ export class GlobalPresetSettingsService {
             displaySettings: DEFAULT_GLOBAL_PRESET_SETTINGS.displaySettings,
             departmentSettings: DEFAULT_GLOBAL_PRESET_SETTINGS.departmentSettings,
             version: '1.0.0',
+            updatedAt: new Date(),
           },
         });
       }
@@ -552,7 +553,7 @@ export class GlobalPresetSettingsService {
       // 3. バージョンをインクリメントして更新
       const newVersion = this.incrementVersion(currentSettings.version);
       
-      const updatedSettings = await prisma.globalPresetSettings.update({
+      const updatedSettings = await prisma.global_preset_settings.update({
         where: { id: 1 },
         data: {
           ...(updateData.presets !== undefined && { presets: updateData.presets }),
@@ -586,7 +587,7 @@ export class GlobalPresetSettingsService {
    * バージョン情報のみを取得（キャッシュ同期用）
    */
   async getVersion(): Promise<{ version: string; lastModified: string }> {
-    const settings = await this.prisma.globalPresetSettings.findFirst({
+    const settings = await this.prisma.global_preset_settings.findFirst({
       where: { id: 1 },
       select: { version: true, updatedAt: true }
     });
@@ -609,8 +610,8 @@ export class GlobalPresetSettingsService {
   /**
    * デフォルト設定で初期化
    */
-  private async initializeDefaultSettings(): Promise<GlobalPresetSettings> {
-    return this.prisma.globalPresetSettings.create({
+  private async initializeDefaultSettings(): Promise<global_preset_settings> {
+    return this.prisma.global_preset_settings.create({
       data: {
         id: 1,
         presets: DEFAULT_GLOBAL_PRESET_SETTINGS.presets,
@@ -619,6 +620,7 @@ export class GlobalPresetSettingsService {
         displaySettings: DEFAULT_GLOBAL_PRESET_SETTINGS.displaySettings,
         departmentSettings: DEFAULT_GLOBAL_PRESET_SETTINGS.departmentSettings,
         version: '1.0.0',
+        updatedAt: new Date(),
       },
     });
   }
@@ -627,7 +629,7 @@ export class GlobalPresetSettingsService {
    * 現在のバージョンを取得
    */
   private async getCurrentVersion(): Promise<string> {
-    const settings = await this.prisma.globalPresetSettings.findFirst({
+    const settings = await this.prisma.global_preset_settings.findFirst({
       where: { id: 1 },
       select: { version: true }
     });
@@ -651,10 +653,10 @@ export class GlobalPresetSettingsService {
     lastUpdatedAt: Date | null;
     lastUpdatedBy: { id: number; name: string } | null;
   }> {
-    const settings = await this.prisma.globalPresetSettings.findFirst({
+    const settings = await this.prisma.global_preset_settings.findFirst({
       where: { id: 1 },
       include: {
-        UpdatedByStaff: {
+        Staff: {
           select: { id: true, name: true }
         }
       }
@@ -688,7 +690,7 @@ export class GlobalPresetSettingsService {
         lastModified: settings.updatedAt.toISOString(),
       },
       lastUpdatedAt: settings.updatedAt,
-      lastUpdatedBy: settings.UpdatedByStaff,
+      lastUpdatedBy: settings.Staff,
     };
   }
 }

@@ -215,7 +215,7 @@ export class SnapshotsService {
    * 履歴データをデータベースに保存
    */
   private async saveHistoricalData(tx: any, historicalData: any[]) {
-    return await tx.historicalSchedule.createMany({
+    return await tx.historical_schedules.createMany({
       data: historicalData
     });
   }
@@ -224,7 +224,7 @@ export class SnapshotsService {
    * スナップショット開始ログを作成
    */
   private async createSnapshotLog(tx: any, date: Date, batchId: string) {
-    return await tx.snapshotLog.create({
+    return await tx.snapshot_logs.create({
       data: {
         batchId,
         targetDate: date,
@@ -238,7 +238,7 @@ export class SnapshotsService {
    * スナップショット完了ログを更新
    */
   private async completeSnapshotLog(tx: any, batchId: string, recordCount: number) {
-    return await tx.snapshotLog.update({
+    return await tx.snapshot_logs.update({
       where: { batchId },
       data: {
         recordCount,
@@ -253,7 +253,7 @@ export class SnapshotsService {
    */
   private async handleSnapshotError(batchId: string, error: Error) {
     try {
-      await this.prisma.snapshotLog.update({
+      await this.prisma.snapshot_logs.update({
         where: { batchId },
         data: {
           status: 'FAILED',
@@ -333,7 +333,7 @@ export class SnapshotsService {
 
     // CLAUDE.md厳格ルール準拠：UTC範囲でのクエリ、将来的にdate_utcに移行
     // 論理削除対応: アクティブ社員のみを対象
-    const historicalData = await this.prisma.historicalSchedule.findMany({
+    const historicalData = await this.prisma.historical_schedules.findMany({
       where: {
         date: {  // 現在は既存カラム使用、将来的にdate_utcに移行
           gte: startOfDayUTC,
@@ -358,7 +358,7 @@ export class SnapshotsService {
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - days);
     
-    return await this.prisma.snapshotLog.findMany({
+    return await this.prisma.snapshot_logs.findMany({
       where: {
         targetDate: {
           gte: cutoffDate
@@ -378,12 +378,12 @@ export class SnapshotsService {
     
     return await this.prisma.$transaction(async (tx) => {
       // 1. 該当する履歴データを削除
-      const deleteResult = await tx.historicalSchedule.deleteMany({
+      const deleteResult = await tx.historical_schedules.deleteMany({
         where: { batchId }
       });
       
       // 2. ログを更新
-      await tx.snapshotLog.update({
+      await tx.snapshot_logs.update({
         where: { batchId },
         data: {
           status: 'ROLLED_BACK',
@@ -415,7 +415,7 @@ export class SnapshotsService {
   private async checkExistingSnapshot(date: Date) {
     const { startOfDayUTC, endOfDayUTC } = this.getUTCDayRange(date);
 
-    return await this.prisma.snapshotLog.findFirst({
+    return await this.prisma.snapshot_logs.findFirst({
       where: {
         targetDate: {
           gte: startOfDayUTC,
@@ -436,7 +436,7 @@ export class SnapshotsService {
   private async getFailedRetryCount(date: Date) {
     const { startOfDayUTC, endOfDayUTC } = this.getUTCDayRange(date);
 
-    const failedLogs = await this.prisma.snapshotLog.findMany({
+    const failedLogs = await this.prisma.snapshot_logs.findMany({
       where: {
         targetDate: {
           gte: startOfDayUTC,

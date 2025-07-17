@@ -3,7 +3,7 @@
 /**
  * ポートフォリオ用60日分申請データ生成スクリプト（50人版・動的日付）
  * 実行日から60日間のデータを自動生成
- * 対象スタッフ: ID 234-283（50人）
+ * 対象スタッフ: ID 252-301（50人）
  */
 
 const fs = require('fs');
@@ -25,8 +25,17 @@ const SYSTEM_PRESETS = {
     { status: 'off', start: 13, end: 18 }
   ]},
   'custom-remote-work': { name: '在宅勤務', schedules: [{ status: 'remote', start: 9, end: 18 }] },
-  'night-duty': { name: '夜間担当', schedules: [{ status: 'online', start: 18, end: 22 }] },
-  'weekend-substitute': { name: '振出', schedules: [{ status: 'online', start: 9, end: 18 }] }
+  'night-duty': { name: '夜間担当', schedules: [
+    { status: 'off', start: 9, end: 12 },
+    { status: 'online', start: 12, end: 13 },
+    { status: 'break', start: 17, end: 18 },
+    { status: 'night duty', start: 18, end: 21 }
+  ]},
+  'weekend-substitute': { name: '振出', schedules: [
+    { status: 'online', start: 9, end: 12 },
+    { status: 'break', start: 12, end: 13 },
+    { status: 'online', start: 13, end: 18 }
+  ]}
 };
 
 // 平日用申請種別配分（1日当たり）- 50人版適正密度（225人時の21%比率を維持）

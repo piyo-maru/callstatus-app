@@ -8,7 +8,7 @@ import * as path from 'path';
 
 // 設定ファイルを読み込む関数
 function loadConfig() {
-  const configPath = '/root/callstatus-app/config.ini';
+  const configPath = '/app/config.ini';
   try {
     if (fs.existsSync(configPath)) {
       const configFile = fs.readFileSync(configPath, 'utf-8');
