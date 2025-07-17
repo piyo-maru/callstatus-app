@@ -101,7 +101,7 @@ export class PendingService {
     });
 
     // 承認ログに記録
-    await this.prisma.pendingApprovalLog.create({
+    await this.prisma.pending_approval_logs.create({
       data: {
         adjustmentId: pending.id,
         action: 'pending',
@@ -132,16 +132,16 @@ export class PendingService {
     const pendings = await this.prisma.adjustment.findMany({
       where,
       include: {
-        Staff: true,
-        ApprovedBy: {
+        Staff_Adjustment_staffIdToStaff: true,
+        Staff_Adjustment_approvedByToStaff: {
           select: { id: true, name: true }
         },
-        RejectedBy: {
+        Staff_Adjustment_rejectedByToStaff: {
           select: { id: true, name: true }
         },
-        ApprovalLogs: {
+        pending_approval_logs: {
           include: {
-            Actor: {
+            Staff: {
               select: { id: true, name: true }
             }
           },
@@ -153,7 +153,7 @@ export class PendingService {
 
     // 部署フィルター（Staffリレーション経由）
     const filteredPendings = filters.department
-      ? pendings.filter(p => p.Staff.department === filters.department)
+      ? pendings.filter(p => p.Staff_Adjustment_staffIdToStaff.department === filters.department)
       : pendings;
 
     return filteredPendings.map(p => this.formatPendingResponse(p));
@@ -166,16 +166,16 @@ export class PendingService {
     const pending = await this.prisma.adjustment.findUnique({
       where: { id, isPending: true },
       include: {
-        Staff: true,
-        ApprovedBy: {
+        Staff_Adjustment_staffIdToStaff: true,
+        Staff_Adjustment_approvedByToStaff: {
           select: { id: true, name: true }
         },
-        RejectedBy: {
+        Staff_Adjustment_rejectedByToStaff: {
           select: { id: true, name: true }
         },
-        ApprovalLogs: {
+        pending_approval_logs: {
           include: {
-            Actor: {
+            Staff: {
               select: { id: true, name: true }
             }
           },
@@ -284,7 +284,7 @@ export class PendingService {
     }
 
     // まずApprovalLogsを削除
-    await this.prisma.pendingApprovalLog.deleteMany({
+    await this.prisma.pending_approval_logs.deleteMany({
       where: { adjustmentId: id }
     });
     
@@ -337,7 +337,7 @@ export class PendingService {
     });
 
     // 承認ログに記録
-    await this.prisma.pendingApprovalLog.create({
+    await this.prisma.pending_approval_logs.create({
       data: {
         adjustmentId: id,
         action: 'approved',
@@ -390,7 +390,7 @@ export class PendingService {
     });
 
     // 却下ログに記録
-    await this.prisma.pendingApprovalLog.create({
+    await this.prisma.pending_approval_logs.create({
       data: {
         adjustmentId: id,
         action: 'rejected',
@@ -449,7 +449,7 @@ export class PendingService {
     });
 
     // 承認取り消しログに記録
-    await this.prisma.pendingApprovalLog.create({
+    await this.prisma.pending_approval_logs.create({
       data: {
         adjustmentId: id,
         action: 'unapproved',
@@ -528,7 +528,7 @@ export class PendingService {
             reason: bulkDto.reason || null,
             createdAt: now
           }));
-          await this.prisma.pendingApprovalLog.createMany({
+          await this.prisma.pending_approval_logs.createMany({
             data: approvalLogs
           });
 
@@ -557,7 +557,7 @@ export class PendingService {
             reason: bulkDto.reason || null,
             createdAt: now
           }));
-          await this.prisma.pendingApprovalLog.createMany({
+          await this.prisma.pending_approval_logs.createMany({
             data: rejectionLogs
           });
         }
@@ -620,16 +620,16 @@ export class PendingService {
     const pendings = await this.prisma.adjustment.findMany({
       where,
       include: {
-        Staff: true,
-        ApprovedBy: {
+        Staff_Adjustment_staffIdToStaff: true,
+        Staff_Adjustment_approvedByToStaff: {
           select: { id: true, name: true }
         },
-        RejectedBy: {
+        Staff_Adjustment_rejectedByToStaff: {
           select: { id: true, name: true }
         },
-        ApprovalLogs: {
+        pending_approval_logs: {
           include: {
-            Actor: {
+            Staff: {
               select: { id: true, name: true }
             }
           },
@@ -641,7 +641,7 @@ export class PendingService {
 
     // 部署フィルター
     const filteredPendings = filters.department
-      ? pendings.filter(p => p.Staff.department === filters.department)
+      ? pendings.filter(p => p.Staff_Adjustment_staffIdToStaff.department === filters.department)
       : pendings;
 
     return filteredPendings.map(p => this.formatPendingResponse(p));
@@ -665,13 +665,13 @@ export class PendingService {
         }
       },
       include: {
-        Staff: {
+        Staff_Adjustment_staffIdToStaff: {
           select: { id: true, name: true, department: true, group: true }
         },
-        ApprovedBy: {
+        Staff_Adjustment_approvedByToStaff: {
           select: { id: true, name: true }
         },
-        RejectedBy: {
+        Staff_Adjustment_rejectedByToStaff: {
           select: { id: true, name: true }
         }
       },
@@ -691,7 +691,7 @@ export class PendingService {
     return {
       id: pending.id,
       staffId: pending.staffId,
-      staffName: pending.Staff?.name,
+      staffName: pending.Staff_Adjustment_staffIdToStaff?.name,
       date: pending.date,
       status: pending.status,
       start: this.utcToJstDecimal(pending.start),
@@ -699,12 +699,12 @@ export class PendingService {
       memo: pending.memo,
       isPending: pending.isPending,
       pendingType: pending.pendingType,
-      approvedBy: pending.ApprovedBy,
+      approvedBy: pending.Staff_Adjustment_approvedByToStaff,
       approvedAt: pending.approvedAt,
-      rejectedBy: pending.RejectedBy,
+      rejectedBy: pending.Staff_Adjustment_rejectedByToStaff,
       rejectedAt: pending.rejectedAt,
       rejectionReason: pending.rejectionReason,
-      approvalLogs: pending.ApprovalLogs || [],
+      approvalLogs: pending.pending_approval_logs || [],
       createdAt: pending.createdAt,
       updatedAt: pending.updatedAt,
     };

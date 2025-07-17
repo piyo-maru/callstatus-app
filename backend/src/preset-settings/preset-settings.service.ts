@@ -72,7 +72,7 @@ export class PresetSettingsService {
    */
   async getUserPresetSettings(staffId: number): Promise<UserPresetSettingsDto> {
     // 既存のプリセット設定を取得
-    let userPresetSettings = await this.prisma.userPresetSettings.findUnique({
+    let userPresetSettings = await this.prisma.user_preset_settings.findUnique({
       where: { staffId },
       include: {
         UserPresets: {
@@ -105,7 +105,7 @@ export class PresetSettingsService {
     await this.ensureUserPresetSettingsExists(staffId);
 
     // ページ別プリセット設定を更新
-    const updated = await this.prisma.userPresetSettings.update({
+    const updated = await this.prisma.user_preset_settings.update({
       where: { staffId },
       data: {
         pagePresetSettings: pagePresetSettings as any,
@@ -134,7 +134,7 @@ export class PresetSettingsService {
     const userSettings = await this.ensureUserPresetSettingsExists(staffId);
 
     // 同じpresetIdが既に存在するかチェック
-    const existingPreset = await this.prisma.userPreset.findUnique({
+    const existingPreset = await this.prisma.user_presets.findUnique({
       where: {
         userPresetSettingsId_presetId: {
           userPresetSettingsId: userSettings.id,
@@ -148,7 +148,7 @@ export class PresetSettingsService {
     }
 
     // プリセットを作成
-    const newPreset = await this.prisma.userPreset.create({
+    const newPreset = await this.prisma.user_presets.create({
       data: {
         userPresetSettingsId: userSettings.id,
         presetId: presetData.presetId,
@@ -190,7 +190,7 @@ export class PresetSettingsService {
     updateData: UpdatePresetDto
   ): Promise<UnifiedPresetDto> {
     // ユーザー設定を取得
-    const userSettings = await this.prisma.userPresetSettings.findUnique({
+    const userSettings = await this.prisma.user_preset_settings.findUnique({
       where: { staffId }
     });
 
@@ -199,7 +199,7 @@ export class PresetSettingsService {
     }
 
     // プリセットを取得
-    const existingPreset = await this.prisma.userPreset.findUnique({
+    const existingPreset = await this.prisma.user_presets.findUnique({
       where: {
         userPresetSettingsId_presetId: {
           userPresetSettingsId: userSettings.id,
@@ -224,12 +224,12 @@ export class PresetSettingsService {
 
     // スケジュールが更新される場合は既存のスケジュールを削除して再作成
     if (updateData.schedules) {
-      await this.prisma.userPresetSchedule.deleteMany({
+      await this.prisma.user_presetsSchedule.deleteMany({
         where: { userPresetId: existingPreset.id }
       });
     }
 
-    const updatedPreset = await this.prisma.userPreset.update({
+    const updatedPreset = await this.prisma.user_presets.update({
       where: { id: existingPreset.id },
       data: {
         ...updatePresetData,
@@ -263,7 +263,7 @@ export class PresetSettingsService {
    */
   async deletePreset(staffId: number, presetId: string): Promise<void> {
     // ユーザー設定を取得
-    const userSettings = await this.prisma.userPresetSettings.findUnique({
+    const userSettings = await this.prisma.user_preset_settings.findUnique({
       where: { staffId }
     });
 
@@ -272,7 +272,7 @@ export class PresetSettingsService {
     }
 
     // プリセットを削除（CASCADE設定により関連するスケジュールも自動削除される）
-    const deleteResult = await this.prisma.userPreset.deleteMany({
+    const deleteResult = await this.prisma.user_presets.deleteMany({
       where: {
         userPresetSettingsId: userSettings.id,
         presetId: presetId
@@ -288,9 +288,9 @@ export class PresetSettingsService {
    * 管理者用：全ユーザーのプリセット統計を取得
    */
   async getPresetStatistics() {
-    const totalUsers = await this.prisma.userPresetSettings.count();
-    const totalPresets = await this.prisma.userPreset.count();
-    const categoryStats = await this.prisma.userPreset.groupBy({
+    const totalUsers = await this.prisma.user_preset_settings.count();
+    const totalPresets = await this.prisma.user_presets.count();
+    const categoryStats = await this.prisma.user_presets.groupBy({
       by: ['category'],
       _count: {
         category: true
@@ -313,7 +313,7 @@ export class PresetSettingsService {
    * ユーザープリセット設定が存在することを確認（存在しない場合は作成）
    */
   private async ensureUserPresetSettingsExists(staffId: number) {
-    let userSettings = await this.prisma.userPresetSettings.findUnique({
+    let userSettings = await this.prisma.user_preset_settings.findUnique({
       where: { staffId }
     });
 
@@ -352,7 +352,7 @@ export class PresetSettingsService {
     };
 
     // UserPresetSettingsを作成
-    const userPresetSettings = await this.prisma.userPresetSettings.create({
+    const userPresetSettings = await this.prisma.user_preset_settings.create({
       data: {
         staffId,
         pagePresetSettings: defaultPageSettings
@@ -363,7 +363,7 @@ export class PresetSettingsService {
     const defaultPresets = this.getDefaultPresetsWithSchedules();
     
     for (const presetData of defaultPresets) {
-      await this.prisma.userPreset.create({
+      await this.prisma.user_presets.create({
         data: {
           userPresetSettingsId: userPresetSettings.id,
           presetId: presetData.presetId,
@@ -390,7 +390,7 @@ export class PresetSettingsService {
     }
 
     // 作成された設定を取得して返す
-    return await this.prisma.userPresetSettings.findUnique({
+    return await this.prisma.user_preset_settings.findUnique({
       where: { id: userPresetSettings.id },
       include: {
         UserPresets: {

@@ -46,7 +46,17 @@ export class StaffSimpleService {
             dept: emp.dept || emp.department,
             team: emp.team,
             email: emp.email || '',
-            staffId: staff.id
+            mondayHours: null,
+            tuesdayHours: null, 
+            wednesdayHours: null,
+            thursdayHours: null,
+            fridayHours: null,
+            saturdayHours: null,
+            sundayHours: null,
+            updatedAt: new Date(),
+            Staff: {
+              connect: { id: staff.id }
+            }
           }
         });
 

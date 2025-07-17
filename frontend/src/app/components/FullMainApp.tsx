@@ -1028,6 +1028,7 @@ export default function FullMainApp() {
   
   // スクロール位置保存用（縦スクロール対応）
   const [savedScrollPosition, setSavedScrollPosition] = useState({ x: 0, y: 0 });
+  
   const [isImporting, setIsImporting] = useState(false);
   const [departmentSettings, setDepartmentSettings] = useState<{
     departments: Array<{id: number, name: string, shortName?: string, backgroundColor?: string, displayOrder?: number}>,
@@ -1205,15 +1206,637 @@ export default function FullMainApp() {
     errorCount: number;
     fallbackCount: number;
     averageUpdateTime: number;
+    partialUpdateCount?: number;
+    lastPartialUpdateTime?: string;
   }>({ successCount: 0, errorCount: 0, fallbackCount: 0, averageUpdateTime: 0 });
   
   // 並行実装用の一時的なスケジュール状態（テスト用）
-  const optimizedScheduleUpdateRef = useRef<{
+  const optimizedScheduleUpdateLegacyRef = useRef<{
     pending: boolean;
     lastUpdate: Date | null;
     errorLog: string[];
     fallbackCount: number;
   }>({ pending: false, lastUpdate: null, errorLog: [], fallbackCount: 0 });
+
+  // 📝 Phase 1: 楽観的更新管理システム（パフォーマンス最適化版）
+  const OptimisticUpdateManager = {
+    // 楽観的更新を追跡（一時ID → 元データ）
+    pendingUpdates: new Map<string, {
+      originalData: Schedule | null;
+      operation: 'create' | 'update' | 'delete';
+      timestamp: number;
+      changeType: 'low' | 'medium' | 'high';
+      retryCount: number;
+      batchGroup?: string;
+    }>(),
+    
+    // バッチ処理キュー
+    batchQueue: new Map<string, {
+      operations: Array<{
+        tempId: string;
+        operation: 'create' | 'update' | 'delete';
+        scheduleData: Schedule;
+      }>;
+      timestamp: number;
+      processed: boolean;
+    }>(),
+    
+    // 一時ID生成
+    generateTempId: () => `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+    
+    // 楽観的更新の追跡開始（競合解決対応）
+    trackOptimisticUpdate: (tempId: string, originalData: Schedule | null, operation: 'create' | 'update' | 'delete', changeType: 'low' | 'medium' | 'high', batchGroup?: string) => {
+      // 競合チェック：同じスケジュールの更新が進行中かチェック
+      const existingConflict = Array.from(OptimisticUpdateManager.pendingUpdates.values()).find(
+        pending => pending.originalData?.id === originalData?.id && pending.operation === 'update'
+      );
+      
+      if (existingConflict && operation === 'update') {
+        if (isDebugEnabled()) {
+          console.warn('⚠️ 競合検出: 同じスケジュールの更新が進行中:', {
+            existingId: existingConflict.originalData?.id,
+            newTempId: tempId,
+            conflictResolution: 'latest_wins'
+          });
+        }
+        // 最新の更新を優先（Last Writer Wins）
+        const existingTempIds = Array.from(OptimisticUpdateManager.pendingUpdates.keys()).filter(
+          id => OptimisticUpdateManager.pendingUpdates.get(id)?.originalData?.id === originalData?.id
+        );
+        existingTempIds.forEach(id => OptimisticUpdateManager.pendingUpdates.delete(id));
+      }
+      
+      OptimisticUpdateManager.pendingUpdates.set(tempId, {
+        originalData,
+        operation,
+        timestamp: Date.now(),
+        changeType,
+        retryCount: 0,
+        batchGroup
+      });
+      
+      if (isDebugEnabled()) {
+        console.log('🔄 楽観的更新追跡開始:', {
+          tempId,
+          operation,
+          changeType,
+          originalData: originalData?.id,
+          batchGroup,
+          conflictResolved: !!existingConflict
+        });
+      }
+    },
+    
+    // 成功時：楽観的更新を確認
+    confirmUpdate: (tempId: string, serverData: Schedule) => {
+      const pending = OptimisticUpdateManager.pendingUpdates.get(tempId);
+      if (pending) {
+        OptimisticUpdateManager.pendingUpdates.delete(tempId);
+        
+        if (isDebugEnabled()) {
+          console.log('✅ 楽観的更新成功:', {
+            tempId,
+            serverData: serverData.id,
+            operation: pending.operation,
+            duration: Date.now() - pending.timestamp
+          });
+        }
+      }
+    },
+    
+    // 失敗時：楽観的更新をロールバック
+    rollbackUpdate: (tempId: string) => {
+      const pending = OptimisticUpdateManager.pendingUpdates.get(tempId);
+      if (pending) {
+        if (isDebugEnabled()) {
+          console.log('🔙 楽観的更新ロールバック:', {
+            tempId,
+            operation: pending.operation,
+            duration: Date.now() - pending.timestamp
+          });
+        }
+        
+        // 実際のロールバック処理
+        const optimizedScheduleUpdate = optimizedScheduleUpdateRef.current;
+        if (optimizedScheduleUpdate) {
+          if (pending.operation === 'create') {
+            // 新規作成の場合：一時要素を削除
+            optimizedScheduleUpdate.delete(tempId);
+          } else if (pending.operation === 'update' && pending.originalData) {
+            // 更新の場合：元のデータに復元
+            // サーバーデータとして変換（型安全な変換）
+            const rollbackData: ScheduleFromDB = {
+              id: typeof pending.originalData.id === 'string' ? 
+                  parseInt(pending.originalData.id.replace(/[^0-9]/g, '')) || Date.now() : 
+                  Number(pending.originalData.id),
+              staffId: pending.originalData.staffId,
+              status: pending.originalData.status,
+              start: String(pending.originalData.start),
+              end: String(pending.originalData.end),
+              memo: pending.originalData.memo,
+              layer: pending.originalData.layer === 'historical' ? 'adjustment' : 
+                     (pending.originalData.layer || 'adjustment')
+            };
+            optimizedScheduleUpdate.update(rollbackData);
+          }
+        }
+        
+        OptimisticUpdateManager.pendingUpdates.delete(tempId);
+      }
+    },
+    
+    // 全ての楽観的更新をクリア
+    clearAllPending: () => {
+      OptimisticUpdateManager.pendingUpdates.clear();
+      OptimisticUpdateManager.batchQueue.clear();
+      if (isDebugEnabled()) {
+        console.log('🧹 全ての楽観的更新をクリア');
+      }
+    },
+    
+    // リトライ機能
+    retryFailedUpdate: async (tempId: string, originalPayload: any, isUpdate: boolean) => {
+      const pending = OptimisticUpdateManager.pendingUpdates.get(tempId);
+      if (!pending) return false;
+      
+      const maxRetries = 3;
+      if (pending.retryCount >= maxRetries) {
+        if (isDebugEnabled()) {
+          console.error('🔄 リトライ上限に達しました:', {
+            tempId,
+            retryCount: pending.retryCount,
+            maxRetries
+          });
+        }
+        // 最終的にロールバック
+        OptimisticUpdateManager.rollbackUpdate(tempId);
+        return false;
+      }
+      
+      // リトライ回数を増やす
+      pending.retryCount++;
+      OptimisticUpdateManager.pendingUpdates.set(tempId, pending);
+      
+      if (isDebugEnabled()) {
+        console.log('🔄 楽観的更新リトライ実行:', {
+          tempId,
+          retryCount: pending.retryCount,
+          maxRetries
+        });
+      }
+      
+      // 指数バックオフでリトライ
+      const delay = Math.pow(2, pending.retryCount) * 1000; // 2秒、4秒、8秒
+      await new Promise(resolve => setTimeout(resolve, delay));
+      
+      try {
+        const currentApiUrl = getApiUrl();
+        let response;
+        
+        if (isUpdate) {
+          response = await authenticatedFetch(`${currentApiUrl}/api/schedules/${originalPayload.id}`, {
+            method: 'PATCH',
+            body: JSON.stringify(originalPayload)
+          });
+        } else {
+          response = await authenticatedFetch(`${currentApiUrl}/api/schedules`, {
+            method: 'POST',
+            body: JSON.stringify(originalPayload)
+          });
+        }
+        
+        if (response.ok) {
+          const serverResult = await response.json();
+          OptimisticUpdateManager.confirmUpdate(tempId, serverResult);
+          
+          if (isDebugEnabled()) {
+            console.log('✅ リトライ成功:', {
+              tempId,
+              retryCount: pending.retryCount,
+              serverResult: serverResult.id
+            });
+          }
+          
+          return true;
+        } else {
+          throw new Error(`Retry failed: ${response.status}`);
+        }
+      } catch (error) {
+        if (isDebugEnabled()) {
+          console.error('❌ リトライ失敗:', {
+            tempId,
+            retryCount: pending.retryCount,
+            error: error instanceof Error ? error.message : String(error)
+          });
+        }
+        
+        // 次のリトライをスケジュール
+        if (pending.retryCount < maxRetries) {
+          setTimeout(() => {
+            OptimisticUpdateManager.retryFailedUpdate(tempId, originalPayload, isUpdate);
+          }, delay);
+        } else {
+          // 最終的にロールバック
+          OptimisticUpdateManager.rollbackUpdate(tempId);
+        }
+        
+        return false;
+      }
+    },
+    
+    // 自動復旧機能（定期的な整合性チェック）
+    startHealthCheck: () => {
+      const healthCheckInterval = setInterval(() => {
+        const now = Date.now();
+        const staleThreshold = 30000; // 30秒
+        
+        Array.from(OptimisticUpdateManager.pendingUpdates.entries()).forEach(([tempId, pending]) => {
+          if (now - pending.timestamp > staleThreshold) {
+            if (isDebugEnabled()) {
+              console.warn('⚠️ 古い楽観的更新を検出:', {
+                tempId,
+                age: now - pending.timestamp,
+                threshold: staleThreshold
+              });
+            }
+            
+            // 古い楽観的更新をロールバック
+            OptimisticUpdateManager.rollbackUpdate(tempId);
+          }
+        });
+        
+        // バッチキューのクリーンアップ
+        Array.from(OptimisticUpdateManager.batchQueue.entries()).forEach(([batchId, batch]) => {
+          if (now - batch.timestamp > staleThreshold && batch.processed) {
+            OptimisticUpdateManager.batchQueue.delete(batchId);
+          }
+        });
+        
+      }, 10000); // 10秒ごとにチェック
+      
+      // クリーンアップ関数を返す
+      return () => clearInterval(healthCheckInterval);
+    }
+  };
+
+  // 📝 Phase 1: 変更リスク分類システム
+  const UPDATE_RISK_LEVELS = {
+    LOW: ['memo', 'description'],                    // Phase 1: 楽観的更新
+    MEDIUM: ['title', 'priority', 'tags', 'type'],  // Phase 2: 確認付き更新
+    HIGH: ['start', 'end', 'status', 'staffId']     // Phase 3: 安全な全体更新
+  };
+
+  // 変更タイプを検出
+  const detectChangeType = (newData: Schedule, originalData: Schedule | null): 'low' | 'medium' | 'high' => {
+    if (!originalData) return 'low'; // 新規作成は低リスクとして扱う
+    
+    const changes: string[] = [];
+    Object.keys(newData).forEach(key => {
+      if (newData[key as keyof Schedule] !== originalData[key as keyof Schedule]) {
+        changes.push(key);
+      }
+    });
+    
+    // 最もリスクの高い変更を返す
+    if (changes.some(c => UPDATE_RISK_LEVELS.HIGH.includes(c))) return 'high';
+    if (changes.some(c => UPDATE_RISK_LEVELS.MEDIUM.includes(c))) return 'medium';
+    return 'low';
+  };
+
+  // 楽観的更新を使用するかの判定（シンプル化版）
+  const shouldUseOptimisticUpdate = (changeType: 'low' | 'medium' | 'high', scheduleData: Schedule, isNewCreation: boolean = false): boolean => {
+    // 🎯 新規作成は楽観的更新なしでシンプルに
+    if (isNewCreation) {
+      console.log('📝 新規作成: 楽観的更新なしでシンプル処理');
+      return false;
+    }
+    
+    // 更新・移動のみ楽観的更新を使用
+    console.log('🔄 更新・移動: 楽観的更新システム使用');
+    
+    // 重要な業務予定は楽観的更新を避ける
+    if (scheduleData.memo?.includes('重要') || 
+        scheduleData.memo?.includes('会議') ||
+        scheduleData.memo?.includes('顧客')) {
+      console.log('❌ 楽観的更新スキップ: 重要業務予定');
+      return false;
+    }
+    
+    // 受付チームの予定は慎重に（業務継続性重視）
+    const staff = staffList.find(s => s.id === scheduleData.staffId);
+    const isReception = staff && isReceptionStaff(staff);
+    
+    if (isReception) {
+      console.log('❌ 楽観的更新スキップ: 受付チーム（業務継続性重視）');
+      return false;
+    }
+    
+    // Phase 2: 中リスク変更の追加チェック
+    if (changeType === 'medium') {
+      // 中リスク変更の場合、追加の安全性チェック
+      
+      // 1. 営業時間外の変更は慎重に
+      const currentHour = new Date().getHours();
+      if (currentHour < 9 || currentHour > 18) {
+        if (isDebugEnabled()) {
+          console.log('📅 営業時間外の中リスク変更、楽観的更新をスキップ:', {
+            currentHour,
+            changeType
+          });
+        }
+        return false;
+      }
+      
+      // 2. 過去の予定は慎重に
+      const scheduleDate = new Date();
+      const today = new Date();
+      if (scheduleDate < today) {
+        if (isDebugEnabled()) {
+          console.log('📅 過去の予定の中リスク変更、楽観的更新をスキップ:', {
+            scheduleDate,
+            today,
+            changeType
+          });
+        }
+        return false;
+      }
+      
+      // 3. 複数人に影響する可能性のある変更は慎重に
+      if (scheduleData.memo?.includes('チーム') || 
+          scheduleData.memo?.includes('全員') ||
+          scheduleData.memo?.includes('共有')) {
+        return false;
+      }
+    }
+    
+    return true;
+  };
+
+  // Phase 2: 中リスク変更のバリデーション
+  const validateMediumRiskChange = (scheduleData: Schedule, changeType: 'low' | 'medium' | 'high'): { isValid: boolean; reason?: string } => {
+    if (changeType !== 'medium') return { isValid: true };
+    
+    // 1. タイトルの長さチェック
+    if (scheduleData.memo && scheduleData.memo.length > 100) {
+      return { isValid: false, reason: 'タイトルが長すぎます（100文字以内）' };
+    }
+    
+    // 2. 禁止文字のチェック
+    const forbiddenChars = ['<', '>', '&', '"', "'"];
+    if (scheduleData.memo && forbiddenChars.some(char => scheduleData.memo!.includes(char))) {
+      return { isValid: false, reason: '禁止文字が含まれています' };
+    }
+    
+    // 3. ステータスの妥当性チェック
+    const validStatuses = ['working', 'break', 'meeting', 'off', 'unplanned'];
+    if (!validStatuses.includes(scheduleData.status)) {
+      return { isValid: false, reason: '無効なステータスです' };
+    }
+    
+    // 4. 時間の妥当性チェック
+    if (scheduleData.start >= scheduleData.end) {
+      return { isValid: false, reason: '開始時刻は終了時刻より前である必要があります' };
+    }
+    
+    // 5. 勤務時間の妥当性チェック
+    const workingHours = scheduleData.end - scheduleData.start;
+    if (workingHours > 12) { // 12時間以上の連続勤務
+      return { isValid: false, reason: '連続勤務時間が長すぎます（12時間以内）' };
+    }
+    
+    return { isValid: true };
+  };
+
+  // 楽観的更新用スケジュールデータ作成（Phase 2対応）
+  const createOptimisticSchedule = (formData: Schedule, existingSchedule: Schedule | null = null): Schedule => {
+    // 新規作成の場合は一時IDを生成、更新の場合は既存IDを使用
+    const isNewSchedule = !existingSchedule || !existingSchedule.id;
+    const tempId = isNewSchedule ? OptimisticUpdateManager.generateTempId() : existingSchedule.id;
+    
+    // 深くコピーしてからオプショナルプロパティを設定
+    const optimisticSchedule: Schedule = {
+      ...JSON.parse(JSON.stringify(formData)),
+      id: tempId,
+      _isOptimistic: true,
+      _originalId: isNewSchedule ? null : existingSchedule?.id, // 新規作成時はnull
+      _timestamp: Date.now()
+    };
+    
+    // 必須フィールドの検証
+    if (!optimisticSchedule.staffId || !optimisticSchedule.status) {
+      throw new Error('楽観的更新: 必須フィールドが不足しています');
+    }
+    
+    if (isDebugEnabled()) {
+      console.log('📋 楽観的スケジュール作成:', {
+        isNewSchedule,
+        tempId,
+        originalId: existingSchedule?.id,
+        optimisticSchedule
+      });
+    }
+    
+    return optimisticSchedule;
+  };
+
+  // 📝 Phase 1: 統合された部分更新システム
+  const optimizedScheduleUpdateRef = useRef<{
+    add: (newSchedule: ScheduleFromDB) => void;
+    update: (updatedSchedule: ScheduleFromDB) => void;
+    delete: (id: string | number) => void;
+  } | null>(null);
+
+  // 部分更新システムの初期化
+  const initializeOptimizedScheduleUpdate = useCallback(() => {
+    return {
+      add: (newSchedule: ScheduleFromDB) => {
+        const startTime = performance.now();
+        try {
+          if (isDebugEnabled()) console.log('🔄 部分更新: スケジュール追加:', newSchedule);
+          
+          // 既存の変換ロジック
+          const convertedSchedule: Schedule = {
+            id: newSchedule.id,
+            staffId: newSchedule.staffId,
+            status: newSchedule.status,
+            start: typeof newSchedule.start === 'number' ? newSchedule.start : timeStringToHours(newSchedule.start),
+            end: typeof newSchedule.end === 'number' ? newSchedule.end : timeStringToHours(newSchedule.end),
+            memo: newSchedule.memo,
+            layer: newSchedule.layer || 'adjustment',
+            isHistorical: false
+          };
+          
+          setSchedules(prevSchedules => {
+            // 厳密な重複チェック
+            const duplicateCheck = prevSchedules.filter(s => {
+              const sId = String(s.id);
+              const targetId = String(convertedSchedule.id);
+              
+              // 完全一致
+              if (sId === targetId) return true;
+              
+              // 複合ID内の数値IDチェック
+              if (sId.includes(`_${targetId}_`)) return true;
+              
+              // 楽観的更新の一時IDチェック（強化版）
+              if (s._isOptimistic && s._originalId && String(s._originalId) === targetId) return true;
+              if (s._isOptimistic && String(s.id) === targetId) return true; // 一時ID自体との照合
+              if ((newSchedule as any)._isOptimistic && (newSchedule as any)._originalId && String((newSchedule as any)._originalId) === String(s.id)) return true; // 逆方向照合
+              
+              // 同じstaffIdと時間帯での重複チェック
+              if (s.staffId === convertedSchedule.staffId && 
+                  s.start === convertedSchedule.start && 
+                  s.end === convertedSchedule.end && 
+                  s.status === convertedSchedule.status) {
+                return true;
+              }
+              
+              return false;
+            });
+            
+            if (duplicateCheck.length > 0) {
+              console.warn('⚠️ 重複スケジュール検出:', {
+                newSchedule: convertedSchedule.id,
+                duplicates: duplicateCheck.map(s => ({ id: s.id, _isOptimistic: s._isOptimistic, _originalId: s._originalId }))
+              });
+              return prevSchedules;
+            }
+            
+            const updatedSchedules = [...prevSchedules, convertedSchedule];
+            if (isDebugEnabled()) console.log('✅ スケジュール追加成功:', convertedSchedule.id);
+            
+            // 視覚的フィードバック（楽観的更新対応）
+            const isOptimistic = (newSchedule as any)._isOptimistic;
+            setScheduleFeedback(convertedSchedule.id, 'added', isOptimistic ? 1000 : 2500);
+            
+            return updatedSchedules;
+          });
+          
+          const duration = performance.now() - startTime;
+          setOptimizationMetrics(prev => ({
+            ...prev,
+            successCount: prev.successCount + 1,
+            averageUpdateTime: (prev.averageUpdateTime + duration) / 2
+          }));
+          
+        } catch (error) {
+          console.error('部分更新(追加)エラー:', error);
+          setOptimizationMetrics(prev => ({
+            ...prev,
+            errorCount: prev.errorCount + 1,
+            fallbackCount: prev.fallbackCount + 1
+          }));
+        }
+      },
+      
+      update: (updatedSchedule: ScheduleFromDB) => {
+        const startTime = performance.now();
+        try {
+          if (isDebugEnabled()) console.log('🔄 部分更新: スケジュール更新:', updatedSchedule);
+          
+          const convertedSchedule: Schedule = {
+            id: updatedSchedule.id,
+            staffId: updatedSchedule.staffId,
+            status: updatedSchedule.status,
+            start: typeof updatedSchedule.start === 'number' ? updatedSchedule.start : timeStringToHours(updatedSchedule.start),
+            end: typeof updatedSchedule.end === 'number' ? updatedSchedule.end : timeStringToHours(updatedSchedule.end),
+            memo: updatedSchedule.memo,
+            layer: updatedSchedule.layer || 'adjustment',
+            isHistorical: false
+          };
+          
+          setSchedules(prevSchedules => {
+            // 削除→作成方式（厳密なID照合）
+            const withoutOld = prevSchedules.filter(s => {
+              const sId = String(s.id);
+              const targetId = String(updatedSchedule.id);
+              
+              // 完全一致チェック
+              if (sId === targetId) return false;
+              
+              // 複合ID内の数値IDチェック（例: 'adjustment_adj_18_55' と 18）
+              if (sId.includes(`_${targetId}_`)) return false;
+              
+              // 楽観的更新の一時IDチェック（強化版）
+              if (s._isOptimistic && s._originalId && String(s._originalId) === targetId) return false;
+              if (s._isOptimistic && String(s.id) === targetId) return false; // 一時ID自体との照合
+              if ((updatedSchedule as any)._isOptimistic && (updatedSchedule as any)._originalId && String((updatedSchedule as any)._originalId) === String(s.id)) return false; // 逆方向照合
+              
+              // 同じstaffIdと時間帯での重複チェック
+              if (s.staffId === convertedSchedule.staffId && 
+                  s.start === convertedSchedule.start && 
+                  s.end === convertedSchedule.end && 
+                  s.status === convertedSchedule.status) {
+                return false;
+              }
+              
+              return true;
+            });
+            
+            const updatedSchedules = [...withoutOld, convertedSchedule];
+            if (isDebugEnabled()) console.log('✅ スケジュール更新成功:', convertedSchedule.id);
+            
+            // 視覚的フィードバック（楽観的更新対応）
+            const isOptimistic = (updatedSchedule as any)._isOptimistic;
+            setScheduleFeedback(convertedSchedule.id, 'updated', isOptimistic ? 1000 : 2500);
+            
+            return updatedSchedules;
+          });
+          
+          const duration = performance.now() - startTime;
+          setOptimizationMetrics(prev => ({
+            ...prev,
+            successCount: prev.successCount + 1,
+            averageUpdateTime: (prev.averageUpdateTime + duration) / 2
+          }));
+          
+        } catch (error) {
+          console.error('部分更新(更新)エラー:', error);
+          setOptimizationMetrics(prev => ({
+            ...prev,
+            errorCount: prev.errorCount + 1,
+            fallbackCount: prev.fallbackCount + 1
+          }));
+        }
+      },
+      
+      delete: (id: string | number) => {
+        const startTime = performance.now();
+        try {
+          if (isDebugEnabled()) console.log('🔄 部分更新: スケジュール削除:', id);
+          
+          setSchedules(prevSchedules => {
+            const withoutDeleted = prevSchedules.filter(s => {
+              const sId = String(s.id);
+              const targetId = String(id);
+              if (sId === targetId) return false;
+              if (sId.includes(`_${targetId}_`)) return false;
+              return true;
+            });
+            
+            if (isDebugEnabled()) console.log('✅ スケジュール削除成功:', id);
+            
+            return withoutDeleted;
+          });
+          
+          const duration = performance.now() - startTime;
+          setOptimizationMetrics(prev => ({
+            ...prev,
+            successCount: prev.successCount + 1,
+            averageUpdateTime: (prev.averageUpdateTime + duration) / 2
+          }));
+          
+        } catch (error) {
+          console.error('部分更新(削除)エラー:', error);
+          setOptimizationMetrics(prev => ({
+            ...prev,
+            errorCount: prev.errorCount + 1,
+            fallbackCount: prev.fallbackCount + 1
+          }));
+        }
+      }
+    };
+  }, [isDebugEnabled]);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 60000);
@@ -1223,13 +1846,18 @@ export default function FullMainApp() {
   // 🛡️ 開発者向けデバッグ・監視機能（グローバル公開）
   useEffect(() => {
     if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
-      // Phase 0 監視・制御機能
+      // Phase 1 監視・制御機能
       (window as any).optimizationControl = {
         // 状態確認
         getStatus: () => ({
           enabled: enableOptimizedUpdates,
           metrics: optimizationMetrics,
-          safetyLog: optimizedScheduleUpdateRef.current
+          safetyLog: optimizedScheduleUpdateLegacyRef.current,
+          // Phase 1: 楽観的更新の状態
+          optimisticUpdates: {
+            pending: Array.from(OptimisticUpdateManager.pendingUpdates.entries()),
+            pendingCount: OptimisticUpdateManager.pendingUpdates.size
+          }
         }),
         
         // 手動制御
@@ -1241,6 +1869,126 @@ export default function FullMainApp() {
         resetMetrics: () => setOptimizationMetrics({
           successCount: 0, errorCount: 0, fallbackCount: 0, averageUpdateTime: 0
         }),
+        
+        // Phase 1: 楽観的更新制御
+        optimistic: {
+          // 楽観的更新のクリア
+          clearPending: () => OptimisticUpdateManager.clearAllPending(),
+          
+          // 特定の楽観的更新をロールバック
+          rollback: (tempId: string) => OptimisticUpdateManager.rollbackUpdate(tempId),
+          
+          // 楽観的更新の詳細確認
+          inspect: (tempId: string) => OptimisticUpdateManager.pendingUpdates.get(tempId),
+          
+          // 更新リスクレベルの確認
+          getRiskLevels: () => UPDATE_RISK_LEVELS,
+          
+          // 変更タイプテスト
+          testChangeType: (newData: any, originalData: any) => detectChangeType(newData, originalData),
+          
+          // 楽観的更新判定テスト
+          testOptimisticUpdate: (changeType: string, scheduleData: any, isNewCreation: boolean = false) => 
+            shouldUseOptimisticUpdate(changeType as any, scheduleData, isNewCreation),
+          
+          // Phase 1 & 2: 実際の動作テスト機能
+          testOptimisticFlow: (scheduleData: any) => {
+            console.log('🧪 楽観的更新フローテスト開始');
+            
+            // 1. リスク判定テスト
+            const changeType = detectChangeType(scheduleData, null);
+            const shouldUse = shouldUseOptimisticUpdate(changeType, scheduleData, false);
+            console.log('📊 リスク判定結果:', { changeType, shouldUse });
+            
+            // 2. 楽観的スケジュール作成テスト
+            const optimisticSchedule = createOptimisticSchedule(scheduleData, null);
+            console.log('📋 楽観的スケジュール作成:', optimisticSchedule);
+            
+            // 3. 一時ID生成テスト
+            const tempId = OptimisticUpdateManager.generateTempId();
+            console.log('🔢 一時ID生成:', tempId);
+            
+            // 4. 追跡開始テスト
+            OptimisticUpdateManager.trackOptimisticUpdate(tempId, null, 'create', changeType);
+            console.log('📍 追跡開始完了');
+            
+            // 5. 部分更新テスト
+            const optimizedScheduleUpdate = optimizedScheduleUpdateRef.current;
+            if (optimizedScheduleUpdate) {
+              console.log('🔄 部分更新実行テスト');
+              // 実際の部分更新をテスト
+              const scheduleForUpdate: ScheduleFromDB = {
+                id: typeof optimisticSchedule.id === 'string' ? 
+                    parseInt(optimisticSchedule.id.replace(/[^0-9]/g, '')) || Date.now() : 
+                    Number(optimisticSchedule.id),
+                staffId: optimisticSchedule.staffId,
+                status: optimisticSchedule.status,
+                start: String(optimisticSchedule.start),
+                end: String(optimisticSchedule.end),
+                memo: optimisticSchedule.memo,
+                layer: optimisticSchedule.layer === 'historical' ? 'adjustment' : 
+                       (optimisticSchedule.layer || 'adjustment')
+              };
+              optimizedScheduleUpdate.add(scheduleForUpdate);
+            }
+            
+            // 6. 状態確認
+            console.log('📈 現在の状態:', (window as any).optimizationControl?.getStatus());
+            
+            // 7. 自動クリーンアップ（5秒後）
+            setTimeout(() => {
+              OptimisticUpdateManager.rollbackUpdate(tempId);
+              console.log('🧹 テストデータクリーンアップ完了');
+            }, 5000);
+            
+            return {
+              changeType,
+              shouldUse,
+              optimisticSchedule,
+              tempId,
+              success: true
+            };
+          },
+          
+          // Phase 2: 中リスク変更のテスト機能
+          testMediumRiskValidation: (scheduleData: any) => {
+            console.log('🧪 中リスク変更バリデーションテスト開始');
+            
+            const changeType = detectChangeType(scheduleData, null);
+            const validation = validateMediumRiskChange(scheduleData, changeType);
+            
+            console.log('📊 バリデーション結果:', {
+              changeType,
+              validation,
+              scheduleData
+            });
+            
+            return {
+              changeType,
+              validation,
+              scheduleData,
+              success: validation.isValid
+            };
+          },
+          
+          // Phase 2: 営業時間チェックテスト
+          testBusinessHoursCheck: () => {
+            const currentHour = new Date().getHours();
+            const isBusinessHours = currentHour >= 9 && currentHour <= 18;
+            
+            console.log('🕐 営業時間チェック:', {
+              currentHour,
+              isBusinessHours,
+              recommendation: isBusinessHours ? '中リスク楽観的更新OK' : '中リスク楽観的更新NG'
+            });
+            
+            return {
+              currentHour,
+              isBusinessHours,
+              success: true
+            };
+          }
+        },
         
         // 強制フォールバック（緊急時）
         forceFullRefresh: () => {
@@ -1257,7 +2005,9 @@ export default function FullMainApp() {
           console.log('エラー:', optimizationMetrics.errorCount);
           console.log('フォールバック:', optimizationMetrics.fallbackCount);
           console.log('平均処理時間:', optimizationMetrics.averageUpdateTime.toFixed(2), 'ms');
-          console.log('最終更新:', optimizedScheduleUpdateRef.current.lastUpdate);
+          console.log('📊 Phase 2 完全部分更新:', optimizationMetrics.partialUpdateCount || 0);
+          console.log('🕐 最終部分更新時刻:', optimizationMetrics.lastPartialUpdateTime || 'None');
+          console.log('最終更新:', optimizedScheduleUpdateRef.current ? 'System Active' : 'System Inactive');
           console.groupEnd();
         },
         
@@ -1288,6 +2038,47 @@ export default function FullMainApp() {
           console.groupEnd();
           
           return testSchedule;
+        },
+        
+        // Phase 2 テスト機能
+        testPhase2PartialUpdate: () => {
+          if (!enableOptimizedUpdates) {
+            console.warn('⚠️ 部分更新が無効です。まず enable() を実行してください');
+            return;
+          }
+          
+          console.group('🚀 Phase 2 完全部分更新テスト開始');
+          console.log('現在のスケジュール数:', schedules.length);
+          console.log('低リスク変更（メモのみ）の完全部分更新をテスト中...');
+          
+          // 既存のスケジュールを取得
+          const existingSchedule = schedules.find(s => s.memo);
+          if (!existingSchedule) {
+            console.warn('⚠️ メモ付きスケジュールが見つかりません');
+            console.groupEnd();
+            return;
+          }
+          
+          console.log('テスト対象スケジュール:', existingSchedule);
+          
+          // 低リスク変更の判定テスト
+          const testData = {
+            ...existingSchedule,
+            memo: existingSchedule.memo + ' [Phase 2テスト]'
+          };
+          
+          const changeType = detectChangeType(testData, existingSchedule);
+          const shouldUse = shouldUseOptimisticUpdate(changeType, testData, false);
+          
+          console.log('📊 Phase 2 テスト結果:', {
+            changeType,
+            shouldUse,
+            isLowRisk: changeType === 'low',
+            willSkipFetchData: changeType === 'low' && shouldUse
+          });
+          
+          console.groupEnd();
+          return { testData, changeType, shouldUse };
         }
       };
       
@@ -1299,6 +2090,7 @@ export default function FullMainApp() {
         console.log('  window.optimizationControl.disable() - 部分更新無効化');
         console.log('  window.optimizationControl.showLog() - 監視ログ表示');
         console.log('  window.optimizationControl.forceFullRefresh() - 緊急時全体更新');
+        console.log('  window.optimizationControl.testPhase2PartialUpdate() - Phase 2テスト');
       }
     }
   }, [enableOptimizedUpdates, optimizationMetrics, displayDate]);
@@ -1554,6 +2346,12 @@ export default function FullMainApp() {
   }, []);
 
   useEffect(() => {
+    // Phase 1: 部分更新システムの初期化
+    optimizedScheduleUpdateRef.current = initializeOptimizedScheduleUpdate();
+    
+    // Phase 1: ヘルスチェック開始
+    const cleanupHealthCheck = OptimisticUpdateManager.startHealthCheck();
+    
     // WebSocket接続条件チェック
     const isWebSocketEnabled = (process.env.NEXT_PUBLIC_ENABLE_WEBSOCKET === 'true' || 
                                process.env.NEXT_PUBLIC_FORCE_WEBSOCKET === 'true' ||
@@ -1570,10 +2368,79 @@ export default function FullMainApp() {
     const currentApiUrl = getApiUrl();
     const socket: Socket = io(currentApiUrl);
     
+    // WebSocket重複処理防止用
+    const processedScheduleIds = new Set<string>();
+    
     // WebSocket接続イベントのログ
     socket.on('connect', () => {
       // console.log('✅ WebSocket接続成功:', currentApiUrl);
     });
+    
+    // 🔧 統一的な重複チェック関数（デバッグ強化版）
+    const isScheduleDuplicate = (existingSchedules: Schedule[], newSchedule: ScheduleFromDB): boolean => {
+      const duplicateResult = existingSchedules.some(existing => {
+        const existingId = String(existing.id);
+        const newId = String(newSchedule.id);
+        
+        // ID完全一致チェック（新規作成対応版）
+        if (existingId === newId) {
+          // 🎯 新規作成時の特別処理：楽観的更新なしスケジュールは重複扱いしない
+          if (!existing._isOptimistic) {
+            console.log('🆕 新規作成スケジュール検出: 重複チェックをスキップ（他ブラウザからの正当な追加）', {
+              existingId,
+              newId,
+              existingIsOptimistic: existing._isOptimistic
+            });
+            return false; // 重複として扱わない
+          }
+          
+          console.log('🚨 ID完全一致による重複検出:', {
+            existingId,
+            newId,
+            existingSchedule: {
+              id: existing.id,
+              staffId: existing.staffId,
+              start: existing.start,
+              end: existing.end,
+              status: existing.status,
+              isOptimistic: existing._isOptimistic
+            },
+            newSchedule: {
+              id: newSchedule.id,
+              staffId: newSchedule.staffId,
+              start: newSchedule.start,
+              end: newSchedule.end,
+              status: newSchedule.status
+            }
+          });
+          return true;
+        }
+        
+        // 楽観的更新の元IDチェック
+        if (existing._originalId && String(existing._originalId) === newId) return true;
+        
+        // 🎯 同一内容チェック（楽観的更新があるときのみ）
+        // 新規作成時（楽観的更新なし）は同一内容でも別々の予定として扱う
+        if (existing._isOptimistic && 
+            existing.staffId === newSchedule.staffId &&
+            Math.abs(existing.start - (typeof newSchedule.start === 'number' ? newSchedule.start : timeStringToHours(newSchedule.start))) < 0.1 &&
+            Math.abs(existing.end - (typeof newSchedule.end === 'number' ? newSchedule.end : timeStringToHours(newSchedule.end))) < 0.1 &&
+            existing.status === newSchedule.status) {
+          console.log('🔍 楽観的更新による同一内容重複検出:', { existing: existingId, new: newId });
+          return true;
+        }
+        
+        return false;
+      });
+      
+      if (duplicateResult) {
+        console.log('⚠️ 重複判定結果: TRUE - スケジュール追加をスキップ');
+      } else {
+        console.log('✅ 重複判定結果: FALSE - スケジュール追加を継続');
+      }
+      
+      return duplicateResult;
+    };
     
     socket.on('disconnect', (reason) => {
       // console.log('❌ WebSocket接続切断:', reason);
@@ -1583,12 +2450,12 @@ export default function FullMainApp() {
       console.error('🚨 WebSocket接続エラー:', error);
     });
     
-    // 🛡️ 安全な並行実装ロジック（Phase 0）
+    // 🛡️ 安全な並行実装ロジック（Phase 1）
     
     // 現行システムの安全なフォールバック（既存実装の完全保護）
     const safeFullRefresh = (reason: string) => {
       console.log(`🔄 Safe fallback triggered: ${reason}`);
-      optimizedScheduleUpdateRef.current.fallbackCount++;
+      optimizedScheduleUpdateLegacyRef.current.fallbackCount++;
       
       // スクロール位置保存（既存ロジックと同じ）
       scrollPositionBeforeUpdate.current = {
@@ -1635,8 +2502,8 @@ export default function FullMainApp() {
         const startTime = performance.now();
         try {
           if (!isSafeForOptimizedUpdate(newSchedule)) {
-            safeFullRefresh('Safety check failed for add operation');
-            return;
+            console.warn('⚠️ 安全性チェック失敗 - 手動部分更新で継続（追加）');
+            // Phase 3: 安全性チェック失敗時も部分更新で処理
           }
           
           // 部分更新: 新規スケジュール追加
@@ -1659,9 +2526,11 @@ export default function FullMainApp() {
             // 重複チェック（安全性確保）
             const existingIndex = prevSchedules.findIndex(s => s.id === convertedSchedule.id);
             if (existingIndex >= 0) {
-              console.warn('⚠️ 重複スケジュール検出、フォールバック:', convertedSchedule.id);
-              safeFullRefresh('Duplicate schedule detected');
-              return prevSchedules; // 状態変更なし
+              console.warn('⚠️ 重複スケジュール検出 - 部分更新で処理:', convertedSchedule.id);
+              // Phase 3: 重複時も部分更新で処理（既存を更新）
+              return prevSchedules.map(s => 
+                s.id === convertedSchedule.id ? convertedSchedule : s
+              );
             }
             
             // 新しいスケジュールを安全に追加
@@ -1672,7 +2541,7 @@ export default function FullMainApp() {
             setScheduleFeedback(convertedSchedule.id, 'added', 2500);
             
             // 更新時刻を記録
-            optimizedScheduleUpdateRef.current.lastUpdate = new Date();
+            (optimizedScheduleUpdateRef.current as any).lastUpdate = new Date();
             
             return updatedSchedules;
           });
@@ -1689,7 +2558,7 @@ export default function FullMainApp() {
             ...prev,
             errorCount: prev.errorCount + 1
           }));
-          safeFullRefresh('Optimized add threw exception');
+          console.error('Phase 3: 部分更新でエラー処理（追加）', error);
         }
       },
       
@@ -1697,12 +2566,12 @@ export default function FullMainApp() {
         const startTime = performance.now();
         try {
           if (!isSafeForOptimizedUpdate(updatedSchedule)) {
-            safeFullRefresh('Safety check failed for update operation');
-            return;
+            console.warn('⚠️ 安全性チェック失敗 - 手動部分更新で継続（更新）');
+            // Phase 3: 安全性チェック失敗時も部分更新で処理
           }
           
-          // 部分更新: スケジュール更新
-          if (isDebugEnabled()) console.log('部分更新: スケジュール更新開始:', updatedSchedule);
+          // 部分更新: スケジュール更新（削除→新規作成方式）
+          if (isDebugEnabled()) console.log('部分更新: スケジュール更新開始 (削除→新規作成):', updatedSchedule);
           
           // 既存の変換ロジックを安全に再利用
           const convertedSchedule: Schedule = {
@@ -1716,79 +2585,71 @@ export default function FullMainApp() {
             isHistorical: false
           };
           
-          // 既存のschedules状態を安全に更新
+          // 削除→新規作成方式でスケジュールを更新
           setSchedules(prevSchedules => {
-            // 既存スケジュールの検索（後勝ちシステム対応版）
-            // 後勝ちシステムでは同一時間・スタッフに複数スケジュール存在
-            // → 時間・スタッフ・日付の組み合わせでマッチング
-            const existingIndex = prevSchedules.findIndex(s => {
-              // 1. ID完全一致チェック（従来）
-              if (String(s.id) === String(convertedSchedule.id)) return true;
+            // 1. 既存要素を削除（超厳密なID照合）
+            const withoutOld = prevSchedules.filter(s => {
+              const sId = String(s.id);
+              const targetId = String(updatedSchedule.id);
               
-              // 2. 後勝ちシステム対応：時間・スタッフ・レイヤーの組み合わせマッチング
-              const timeMatch = Math.abs(s.start - convertedSchedule.start) < 0.01 && 
-                               Math.abs(s.end - convertedSchedule.end) < 0.01;
-              const staffMatch = s.staffId === convertedSchedule.staffId;
-              const layerMatch = (s.layer || 'adjustment') === (convertedSchedule.layer || 'adjustment');
+              // 完全一致チェック
+              if (sId === targetId) return false;
               
-              if (timeMatch && staffMatch && layerMatch) {
-                if (isDebugEnabled()) console.log('🎯 後勝ちマッチング成功:', {
-                  existingId: s.id,
-                  newId: convertedSchedule.id,
-                  time: `${s.start}-${s.end}`,
-                  staffId: s.staffId,
-                  layer: s.layer
-                });
-                return true;
+              // 文字列ID内の数値IDチェック（例: 'adjustment_adj_18_55' と 18）
+              if (sId.includes(`_${targetId}_`)) return false;
+              
+              // 楽観的更新の元IDチェック
+              if (s._originalId && String(s._originalId) === targetId) return false;
+              
+              // 同一内容チェック（最後の砦）
+              if (s.staffId === convertedSchedule.staffId && 
+                  Math.abs(s.start - convertedSchedule.start) < 0.1 && 
+                  Math.abs(s.end - convertedSchedule.end) < 0.1 && 
+                  s.status === convertedSchedule.status) {
+                console.log('🔍 同一内容による削除:', { existing: s.id, target: targetId });
+                return false;
               }
               
-              // 3. 数値ID抽出によるフォールバック
-              const extractNumericId = (id: string): string[] => {
-                const numbers = id.match(/\d+/g) || [];
-                return numbers;
-              };
-              
-              const sNumbers = extractNumericId(String(s.id));
-              const cNumbers = extractNumericId(String(convertedSchedule.id));
-              
-              for (const sNum of sNumbers) {
-                for (const cNum of cNumbers) {
-                  if (sNum === cNum) return true;
-                }
-              }
-              
-              return false;
+              return true;
             });
             
-            if (existingIndex < 0) {
-              console.error('⚠️ 更新対象スケジュール未発見、フォールバック実行:', convertedSchedule.id);
-              if (isDebugEnabled()) {
-                console.error('🐛 詳細デバッグ情報:');
-                console.error('  - 探しているID:', convertedSchedule.id, typeof convertedSchedule.id);
-                console.error('  - 既存スケジュール数:', prevSchedules.length);
-                console.error('  - 既存ID一覧:', prevSchedules.map(s => `${s.id}(${typeof s.id})`));
-                console.error('  - 数値ID抽出テスト:');
-                console.error('    - WebSocketのID:', convertedSchedule.id, '→', String(convertedSchedule.id).match(/\d+/g));
-                console.error('    - 既存ID例:', prevSchedules.slice(0, 3).map(s => `${s.id} → ${String(s.id).match(/\d+/g)}`));
-                console.error('  - 受信データ:', convertedSchedule);
-              }
-              safeFullRefresh('Update target schedule not found');
-              return prevSchedules; // 状態変更なし
+            if (isDebugEnabled()) {
+              console.log('🔍 削除→新規作成 デバッグ情報:', {
+                updatedScheduleId: updatedSchedule.id,
+                updatedScheduleIdType: typeof updatedSchedule.id,
+                convertedScheduleId: convertedSchedule.id,
+                convertedScheduleIdType: typeof convertedSchedule.id,
+                beforeCount: prevSchedules.length,
+                afterDeleteCount: withoutOld.length,
+                removedCount: prevSchedules.length - withoutOld.length,
+                existingIds: prevSchedules.map(s => s.id),
+                targetIdFound: prevSchedules.some(s => {
+                  const sId = String(s.id);
+                  const targetId = String(updatedSchedule.id);
+                  return sId === targetId || sId.includes(`_${targetId}_`);
+                })
+              });
+              console.log('📋 existingIds:', prevSchedules.map(s => s.id));
+              console.log('🎯 targetIdFound:', prevSchedules.some(s => {
+                const sId = String(s.id);
+                const targetId = String(updatedSchedule.id);
+                return sId === targetId || sId.includes(`_${targetId}_`);
+              }));
             }
             
-            // 既存スケジュールを安全に置換
-            const updatedSchedules = [...prevSchedules];
-            updatedSchedules[existingIndex] = convertedSchedule;
-            if (isDebugEnabled()) console.log('✅ スケジュール更新成功:', convertedSchedule.id);
+            // 2. 新しい要素を追加
+            const updatedSchedules = [...withoutOld, convertedSchedule];
             
-            // === Phase 2a: 視覚的フィードバック適用 ===
-            setScheduleFeedback(convertedSchedule.id, 'updated', 2500);
+            if (isDebugEnabled()) console.log('✅ スケジュール更新成功 (削除→新規作成):', convertedSchedule.id);
             
             // 更新時刻を記録
-            optimizedScheduleUpdateRef.current.lastUpdate = new Date();
+            (optimizedScheduleUpdateRef.current as any).lastUpdate = new Date();
             
             return updatedSchedules;
           });
+          
+          // === Phase 2a: 視覚的フィードバック適用 ===
+          setScheduleFeedback(convertedSchedule.id, 'updated', 2500);
           
           const duration = performance.now() - startTime;
           setOptimizationMetrics(prev => ({
@@ -1802,7 +2663,7 @@ export default function FullMainApp() {
             ...prev,
             errorCount: prev.errorCount + 1
           }));
-          safeFullRefresh('Optimized update threw exception');
+          console.error('Phase 3: 部分更新でエラー処理（更新）', error);
         }
       },
       
@@ -1857,7 +2718,7 @@ export default function FullMainApp() {
                 console.error('    - WebSocketのID:', deletedId, '→', String(deletedId).match(/\d+/g));
                 console.error('    - 既存ID例:', prevSchedules.slice(0, 3).map(s => `${s.id} → ${String(s.id).match(/\d+/g)}`));
               }
-              safeFullRefresh('Delete target schedule not found');
+              console.warn('Phase 3: 削除対象が見つからない - 部分更新で処理');
               return prevSchedules; // 状態変更なし
             }
             
@@ -1891,7 +2752,7 @@ export default function FullMainApp() {
             if (isDebugEnabled()) console.log('✅ スケジュール削除成功:', deletedId);
             
             // 更新時刻を記録
-            optimizedScheduleUpdateRef.current.lastUpdate = new Date();
+            (optimizedScheduleUpdateRef.current as any).lastUpdate = new Date();
             
             return updatedSchedules;
           });
@@ -1908,37 +2769,80 @@ export default function FullMainApp() {
             ...prev,
             errorCount: prev.errorCount + 1
           }));
-          safeFullRefresh('Optimized delete threw exception');
+          console.error('Phase 3: 部分更新でエラー処理（削除）', error);
         }
       }
     };
     
-    // 🔄 既存WebSocketハンドラー（安全な並行実装対応）
+    // 🔄 既存WebSocketハンドラー（重複処理防止版・詳細デバッグ）
     const handleNewSchedule = (newSchedule: ScheduleFromDB) => {
+        const scheduleId = String(newSchedule.id);
+        
+        console.log('📥 WebSocket新規スケジュール受信:', {
+            scheduleId,
+            alreadyProcessed: processedScheduleIds.has(scheduleId),
+            processedIdsCount: processedScheduleIds.size,
+            recentProcessedIds: Array.from(processedScheduleIds).slice(-5)
+        });
+        
+        // 🚫 重複処理防止チェック
+        if (processedScheduleIds.has(scheduleId)) {
+            console.log('🚫 WebSocket重複処理防止: 既に処理済みのスケジュール', scheduleId);
+            return;
+        }
+        
+        // 処理開始をマーク
+        processedScheduleIds.add(scheduleId);
+        console.log('✅ 新規スケジュール処理開始:', scheduleId);
+        
         const scheduleDate = new Date(newSchedule.start);
         const scheduleDateStr = `${scheduleDate.getFullYear()}-${String(scheduleDate.getMonth() + 1).padStart(2, '0')}-${String(scheduleDate.getDate()).padStart(2, '0')}`;
         const displayDateStr = `${displayDate.getFullYear()}-${String(displayDate.getMonth() + 1).padStart(2, '0')}-${String(displayDate.getDate()).padStart(2, '0')}`;
         if(scheduleDateStr === displayDateStr) {
-            // 🛡️ 安全な分岐制御（デフォルト：既存実装）
-            if (isDebugEnabled()) console.log('🔄 WebSocket受信: schedule:new', { 
-                enabled: enableOptimizedUpdates, 
-                safe: isSafeForOptimizedUpdate(newSchedule),
-                schedule: newSchedule,
-                date_match: scheduleDateStr === displayDateStr,
-                scheduleDateStr,
-                displayDateStr 
+            // 🎯 新規作成シンプル処理：setSchedules内で重複チェック+部分更新実行
+            const scheduleId = String(newSchedule.id);
+            
+            setSchedules(currentSchedules => {
+                // 重複チェック
+                if (isScheduleDuplicate(currentSchedules, newSchedule)) {
+                    console.log('⚠️ 重複スケジュール検出、スキップ:', scheduleId);
+                    return currentSchedules;
+                }
+                
+                console.log('✅ 重複チェック通過、新規スケジュール追加開始:', scheduleId);
+                console.log('🚀 新規作成シンプルモード: setSchedules内で部分更新実行');
+                
+                // 重複チェック通過後、即座に部分更新実行（非同期問題回避）
+                if (enableOptimizedUpdates && isSafeForOptimizedUpdate(newSchedule)) {
+                    const optimizedScheduleUpdate = optimizedScheduleUpdateRef.current;
+                    if (optimizedScheduleUpdate) {
+                        console.log('⚡ 部分更新実行:', scheduleId);
+                        optimizedScheduleUpdate.add(newSchedule);
+                    } else {
+                        console.warn('⚠️ OptimizedScheduleUpdate未初期化 - 後で手動追加実行');
+                        // フォールバック用フラグ設定（次のsetSchedulesで実行）
+                        setTimeout(() => {
+                            setSchedules(prev => [...prev, {
+                                ...newSchedule,
+                                start: Number(newSchedule.start),
+                                end: Number(newSchedule.end)
+                            }]);
+                        }, 0);
+                    }
+                } else {
+                    console.log('📝 安全性チェック失敗 - 後で手動追加実行');
+                    // フォールバック: 非同期で手動追加
+                    setTimeout(() => {
+                        setSchedules(prev => [...prev, {
+                            ...newSchedule,
+                            start: Number(newSchedule.start),
+                            end: Number(newSchedule.end)
+                        }]);
+                    }, 0);
+                }
+                
+                return currentSchedules; // setSchedules自体は変更なし
             });
-            if (enableOptimizedUpdates && isSafeForOptimizedUpdate(newSchedule)) {
-                if (isDebugEnabled()) console.log('✅ 部分更新実行: schedule:new');
-                optimizedScheduleUpdate.add(newSchedule);
-            } else {
-                // 🔒 既存の安全な実装（完全保護）
-                scrollPositionBeforeUpdate.current = {
-                  x: bottomScrollRef.current?.scrollLeft || 0,
-                  y: window.pageYOffset || window.scrollY || 0
-                };
-                fetchData(displayDate);
-            }
         }
     };
     const handleUpdatedSchedule = (updatedSchedule: ScheduleFromDB) => {
@@ -1946,41 +2850,129 @@ export default function FullMainApp() {
         const scheduleDateStr = `${scheduleDate.getFullYear()}-${String(scheduleDate.getMonth() + 1).padStart(2, '0')}-${String(scheduleDate.getDate()).padStart(2, '0')}`;
         const displayDateStr = `${displayDate.getFullYear()}-${String(displayDate.getMonth() + 1).padStart(2, '0')}-${String(displayDate.getDate()).padStart(2, '0')}`;
         if(scheduleDateStr === displayDateStr){
-            // 🛡️ 安全な分岐制御（デフォルト：既存実装）
-            if (isDebugEnabled()) console.log('🔄 WebSocket受信: schedule:updated', { 
-                enabled: enableOptimizedUpdates, 
-                safe: isSafeForOptimizedUpdate(updatedSchedule),
-                schedule: updatedSchedule 
+            // Phase 3: 楽観的更新との重複チェック（更新時・全リスクレベル対応）
+            setSchedules(currentSchedules => {
+                const optimisticDuplicate = currentSchedules.find(s => {
+                    if (!s._isOptimistic) return false;
+                    
+                    // デバッグログ（更新時）
+                    if (isDebugEnabled()) {
+                        console.log('🔍 楽観的更新検出チェック（更新）:', {
+                            optimisticId: s.id,
+                            optimisticOriginalId: s._originalId,
+                            updatedScheduleId: updatedSchedule.id,
+                            optimistic_staffId: s.staffId,
+                            updated_staffId: updatedSchedule.staffId,
+                            optimistic_start: s.start,
+                            updated_start: Number(updatedSchedule.start),
+                            optimistic_end: s.end,
+                            updated_end: Number(updatedSchedule.end),
+                            optimistic_status: s.status,
+                            updated_status: updatedSchedule.status
+                        });
+                    }
+                    
+                    // 1. 一時IDとサーバーIDのマッチング（新規作成→更新の場合）
+                    if (s._originalId && String(s._originalId) === String(updatedSchedule.id)) {
+                        if (isDebugEnabled()) console.log('✅ ID照合一致（新規→更新）:', s._originalId, '→', updatedSchedule.id);
+                        return true;
+                    }
+                    
+                    // 2. 一時IDと実IDの直接マッチング（編集更新の場合）
+                    if (String(s.id) === String(updatedSchedule.id)) {
+                        if (isDebugEnabled()) console.log('✅ ID直接一致（編集更新）:', s.id, '→', updatedSchedule.id);
+                        return true;
+                    }
+                    
+                    // 3. 予定内容マッチング（ID変更を伴わない場合）
+                    if (s.staffId === updatedSchedule.staffId && 
+                        s.start === Number(updatedSchedule.start) && 
+                        s.end === Number(updatedSchedule.end)) {
+                        if (isDebugEnabled()) console.log('✅ 内容照合一致（更新）:', s.id, '→', updatedSchedule.id);
+                        return true;
+                    }
+                    
+                    return false;
+                });
+                
+                if (optimisticDuplicate) {
+                    console.log('✅ 楽観的更新確認（更新）: 一時スケジュールを実スケジュールに置換', {
+                        tempId: optimisticDuplicate.id,
+                        serverId: updatedSchedule.id
+                    });
+                    // 楽観的更新の成功確認
+                    if (optimisticDuplicate._isOptimistic && String(optimisticDuplicate.id).startsWith('temp_')) {
+                        const serverSchedule: Schedule = {
+                            ...updatedSchedule,
+                            start: Number(updatedSchedule.start),
+                            end: Number(updatedSchedule.end)
+                        };
+                        OptimisticUpdateManager.confirmUpdate(String(optimisticDuplicate.id), serverSchedule);
+                    }
+                    // 一時スケジュールを実スケジュールに置換（型変換対応）
+                    const convertedSchedule: Schedule = {
+                        ...updatedSchedule,
+                        start: Number(updatedSchedule.start),
+                        end: Number(updatedSchedule.end),
+                        layer: optimisticDuplicate.layer
+                    };
+                    return currentSchedules.map(s => 
+                        s.id === optimisticDuplicate.id ? convertedSchedule : s
+                    );
+                }
+                
+                // Phase 3: 楽観的更新がない場合も完全部分更新
+                if (enableOptimizedUpdates && isSafeForOptimizedUpdate(updatedSchedule)) {
+                    const optimizedScheduleUpdate = optimizedScheduleUpdateRef.current;
+                    if (optimizedScheduleUpdate) {
+                        optimizedScheduleUpdate.update(updatedSchedule);
+                        return currentSchedules; // setSchedulesは呼ばれない
+                    } else {
+                        console.warn('⚠️ OptimizedScheduleUpdate未初期化 - 手動部分更新実行（更新）');
+                        // フォールバックとして手動部分更新
+                        return currentSchedules.map(s => 
+                            s.id === Number(updatedSchedule.id) ? {
+                                ...updatedSchedule,
+                                start: Number(updatedSchedule.start),
+                                end: Number(updatedSchedule.end),
+                                layer: s.layer
+                            } : s
+                        );
+                    }
+                } else {
+                    // Phase 3: 安全性チェック失敗時も部分更新で処理（更新）
+                    console.log('🔄 Phase 3: 安全性チェック失敗 - 部分更新で処理（更新）');
+                    return currentSchedules.map(s => 
+                        s.id === Number(updatedSchedule.id) ? {
+                            ...updatedSchedule,
+                            start: Number(updatedSchedule.start),
+                            end: Number(updatedSchedule.end),
+                            layer: s.layer
+                        } : s
+                    );
+                }
             });
-            if (enableOptimizedUpdates && isSafeForOptimizedUpdate(updatedSchedule)) {
-                if (isDebugEnabled()) console.log('✅ 部分更新実行: schedule:updated');
-                optimizedScheduleUpdate.update(updatedSchedule);
-            } else {
-                // 🔒 既存の安全な実装（完全保護）
-                scrollPositionBeforeUpdate.current = {
-                  x: bottomScrollRef.current?.scrollLeft || 0,
-                  y: window.pageYOffset || window.scrollY || 0
-                };
-                fetchData(displayDate);
-            }
         }
     }
     const handleDeletedSchedule = (id: number) => {
-        // 🛡️ 安全な分岐制御（デフォルト：既存実装）
-        if (isDebugEnabled()) console.log('🔄 WebSocket受信: schedule:deleted', { 
-            enabled: enableOptimizedUpdates, 
-            id: id 
-        });
+        // Phase 3: 削除操作の完全部分更新
         if (enableOptimizedUpdates) {
-            if (isDebugEnabled()) console.log('✅ 部分更新実行: schedule:deleted');
-            optimizedScheduleUpdate.delete(id);
+            const optimizedScheduleUpdate = optimizedScheduleUpdateRef.current;
+            if (optimizedScheduleUpdate) {
+                optimizedScheduleUpdate.delete(id);
+            } else {
+                console.warn('⚠️ OptimizedScheduleUpdate未初期化 - 手動部分更新実行（削除）');
+                // フォールバックとして手動部分更新
+                setSchedules(prevSchedules => 
+                    prevSchedules.filter(s => Number(s.id) !== id)
+                );
+            }
         } else {
-            // 🔒 既存の安全な実装（完全保護）
-            scrollPositionBeforeUpdate.current = {
-              x: bottomScrollRef.current?.scrollLeft || 0,
-              y: window.pageYOffset || window.scrollY || 0
-            };
-            fetchData(displayDate);
+            // Phase 3: 部分更新無効時も手動部分更新で処理
+            console.log('🔄 Phase 3: 部分更新無効 - 手動部分更新で処理（削除）');
+            setSchedules(prevSchedules => 
+                prevSchedules.filter(s => Number(s.id) !== id)
+            );
         }
     };
     socket.on('schedule:new', handleNewSchedule);
@@ -1990,7 +2982,8 @@ export default function FullMainApp() {
         socket.off('schedule:new', handleNewSchedule);
         socket.off('schedule:updated', handleUpdatedSchedule);
         socket.off('schedule:deleted', handleDeletedSchedule);
-        socket.disconnect(); 
+        socket.disconnect();
+        cleanupHealthCheck(); // ヘルスチェックの停止
     };
   }, [displayDate, realTimeUpdateEnabled, enableOptimizedUpdates]);
   
@@ -2030,15 +3023,12 @@ export default function FullMainApp() {
   const handleOpenModal = (schedule: Schedule | null = null, initialData: Partial<Schedule> | null = null, isDragCreated: boolean = false) => {
     // console.log('=== handleOpenModal ===', { schedule, initialData, isDragCreated });
     
-    // モーダル開く前にスクロール位置をキャプチャ（縦・横両対応）
-    const horizontalScroll = bottomScrollRef.current?.scrollLeft || 0;
-    const verticalScroll = window.scrollY || document.documentElement.scrollTop || 0;
+    // シンプルなスクロール位置保存
+    setSavedScrollPosition({ 
+      x: bottomScrollRef.current?.scrollLeft || 0, 
+      y: window.scrollY || 0 
+    });
     
-    // console.log('モーダルオープン時のスクロール位置キャプチャ:');
-    // console.log('- 横スクロール:', horizontalScroll);
-    // console.log('- 縦スクロール:', verticalScroll);
-    
-    setSavedScrollPosition({ x: horizontalScroll, y: verticalScroll });
     
     // 新規作成時（scheduleもinitialDataもない場合）は現在時刻を自動設定
     let finalInitialData = initialData;
@@ -2076,7 +3066,7 @@ export default function FullMainApp() {
   // メイン画面では全て /api/schedules を使用（バックエンドで複合ID処理済み）
   // IDの変換は不要 - 複合IDをそのまま送信
 
-  // === Phase 2b: 楽観的更新対応版handleSaveSchedule ===
+  // === Phase 1: 楽観的更新対応版handleSaveSchedule ===
   const handleSaveSchedule = async (scheduleData: Schedule & { id?: number | string }) => {
     // JST基準で正しい日付文字列を生成
     const year = displayDate.getFullYear();
@@ -2091,13 +3081,30 @@ export default function FullMainApp() {
     const todayDay = String(todayDate.getDate()).padStart(2, '0');
     const today = `${todayYear}-${todayMonth}-${todayDay}`;
     
-    // デバッグ用ログ追加
-    // console.log('=== handleSaveSchedule 詳細デバッグ ===');
-    // console.log('displayDate オブジェクト:', displayDate);
-    // console.log('displayDate ISO文字列:', displayDate.toISOString());
-    // console.log('生成された date 文字列:', date);
-    // console.log('現在の実際の日付:', today);
-    // console.log('==============================');
+    // Phase 1 & 2: 楽観的更新の判定
+    const isUpdate = Boolean(scheduleData.id);
+    const existingSchedule = isUpdate ? editingSchedule : null;
+    const changeType = detectChangeType(scheduleData, existingSchedule);
+    
+    // Phase 2: 中リスク変更のバリデーション
+    const validation = validateMediumRiskChange(scheduleData, changeType);
+    if (!validation.isValid) {
+      alert(`入力エラー: ${validation.reason}`);
+      return;
+    }
+    
+    const useOptimistic = shouldUseOptimisticUpdate(changeType, scheduleData, !isUpdate);
+    
+    if (isDebugEnabled()) {
+      console.log('🚀 handleSaveSchedule Phase 2:', {
+        isUpdate,
+        changeType,
+        useOptimistic,
+        scheduleData: scheduleData.id,
+        existingSchedule: existingSchedule?.id,
+        validation: validation.isValid
+      });
+    }
     
     // 案1 + 案4のハイブリッド: 当日作成のOffを自動でUnplannedに変換
     let processedScheduleData = { ...scheduleData };
@@ -2105,36 +3112,127 @@ export default function FullMainApp() {
     // 新規作成 かつ 当日 かつ Offステータスの場合、自動でUnplannedに変換
     if (!scheduleData.id && date === today && scheduleData.status === 'off') {
       processedScheduleData.status = 'unplanned';
-      // console.log('当日作成のOffをUnplannedに自動変換しました');
+      if (isDebugEnabled()) console.log('当日作成のOffをUnplannedに自動変換しました');
     }
     
     const payload = { ...processedScheduleData, date };
     const currentApiUrl = getApiUrl();
     
+    // Phase 1: 楽観的更新の実行
+    let optimisticSchedule: Schedule | null = null;
+    let tempId: string | null = null;
+    
+    if (useOptimistic) {
+      optimisticSchedule = createOptimisticSchedule(processedScheduleData, existingSchedule);
+      tempId = String(optimisticSchedule.id);
+      
+      // 楽観的更新の追跡開始
+      OptimisticUpdateManager.trackOptimisticUpdate(
+        tempId,
+        existingSchedule,
+        isUpdate ? 'update' : 'create',
+        changeType
+      );
+      
+      // Phase 3: 重複チェック強化（全リスクレベル対応）
+      const isDuplicateOptimistic = optimisticSchedule ? Array.from(OptimisticUpdateManager.pendingUpdates.values()).some(pending => {
+        if (isDebugEnabled()) {
+          console.log('🔍 楽観的更新重複チェック:', {
+            pendingStaffId: pending.originalData?.staffId,
+            optimisticStaffId: optimisticSchedule!.staffId,
+            pendingStart: pending.originalData?.start,
+            optimisticStart: optimisticSchedule!.start,
+            pendingEnd: pending.originalData?.end,
+            optimisticEnd: optimisticSchedule!.end,
+            pendingStatus: pending.originalData?.status,
+            optimisticStatus: optimisticSchedule!.status,
+            pendingOperation: pending.operation,
+            currentOperation: isUpdate ? 'update' : 'create'
+          });
+        }
+        
+        // 完全一致チェック（全リスクレベル対応）
+        return pending.originalData?.staffId === optimisticSchedule!.staffId &&
+               pending.originalData?.start === optimisticSchedule!.start &&
+               pending.originalData?.end === optimisticSchedule!.end &&
+               pending.originalData?.status === optimisticSchedule!.status &&
+               pending.operation === (isUpdate ? 'update' : 'create');
+      }) : false;
+      
+      if (isDuplicateOptimistic && optimisticSchedule) {
+        console.warn('⚠️ 重複する楽観的更新を検出、スキップ:', {
+          staffId: optimisticSchedule.staffId,
+          start: optimisticSchedule.start,
+          end: optimisticSchedule.end,
+          status: optimisticSchedule.status
+        });
+        // 通常のAPI呼び出しに進む（楽観的更新なしで）
+      } else if (optimisticSchedule) {
+        // 即座にUIを更新
+        const optimizedScheduleUpdate = optimizedScheduleUpdateRef.current;
+        if (optimizedScheduleUpdate) {
+        // サーバーデータ形式に変換（型安全な変換）
+        const scheduleForUpdate: ScheduleFromDB = {
+          id: typeof optimisticSchedule.id === 'string' ? 
+              parseInt(optimisticSchedule.id.replace(/[^0-9]/g, '')) || Date.now() : 
+              Number(optimisticSchedule.id),
+          staffId: optimisticSchedule.staffId,
+          status: optimisticSchedule.status,
+          start: String(optimisticSchedule.start),
+          end: String(optimisticSchedule.end),
+          memo: optimisticSchedule.memo,
+          layer: optimisticSchedule.layer === 'historical' ? 'adjustment' : 
+                 (optimisticSchedule.layer || 'adjustment')
+        };
+        
+        // 楽観的更新プロパティを追加（部分更新システム用）
+        (scheduleForUpdate as any)._isOptimistic = true;
+        (scheduleForUpdate as any)._originalId = optimisticSchedule._originalId;
+        (scheduleForUpdate as any)._timestamp = optimisticSchedule._timestamp;
+        
+        if (isUpdate) {
+          optimizedScheduleUpdate.update(scheduleForUpdate);
+        } else {
+          optimizedScheduleUpdate.add(scheduleForUpdate);
+        }
+      }
+      }
+      
+      // モーダルを即座に閉じる（楽観的更新の体験）
+      setIsModalOpen(false);
+      setEditingSchedule(null);
+      setDraggedSchedule(null);
+      
+      if (isDebugEnabled()) {
+        console.log('✨ 楽観的更新実行:', {
+          tempId,
+          operation: isUpdate ? 'update' : 'create',
+          optimisticSchedule: optimisticSchedule.id
+        });
+      }
+    }
+    
     try {
-      // console.log('=== handleSaveSchedule START ===');
-      // console.log('Original scheduleData:', scheduleData);
-      // console.log('Display date:', date);
-      // console.log('Final payload:', payload);
-      // console.log('API URL:', currentApiUrl);
+      if (isDebugEnabled()) {
+        console.log('🌐 サーバー通信開始:', {
+          method: isUpdate ? 'PATCH' : 'POST',
+          url: isUpdate ? `${currentApiUrl}/api/schedules/${scheduleData.id}` : `${currentApiUrl}/api/schedules`,
+          payload
+        });
+      }
       
       let response;
       if (scheduleData.id) {
-        // console.log('PATCH request to:', `${currentApiUrl}/api/schedules/${scheduleData.id}`);
         response = await authenticatedFetch(`${currentApiUrl}/api/schedules/${scheduleData.id}`, { 
           method: 'PATCH',
           body: JSON.stringify(payload) 
         });
       } else {
-        // console.log('POST request to:', `${currentApiUrl}/api/schedules`);
         response = await authenticatedFetch(`${currentApiUrl}/api/schedules`, { 
           method: 'POST',
           body: JSON.stringify(payload) 
         });
       }
-      
-      // console.log('Response status:', response.status);
-      // console.log('Response headers:', Object.fromEntries(response.headers.entries()));
       
       if (!response.ok) {
         const errorText = await response.text();
@@ -2142,22 +3240,110 @@ export default function FullMainApp() {
         throw new Error(`スケジュールの保存に失敗しました: ${response.status} ${response.statusText}`);
       }
       
-      await response.json();
-      // console.log('Schedule saved successfully:', result);
-      // console.log('=== handleSaveSchedule SUCCESS ===');
+      const serverResult = await response.json();
+      if (isDebugEnabled()) {
+        console.log('✅ サーバー通信成功:', {
+          serverResult: serverResult.id,
+          tempId,
+          useOptimistic
+        });
+      }
       
-      // 成功通知（シンプル版）
-      // updateNotification(notificationId, 'success', `スケジュール${operationType}が完了しました`);
+      if (useOptimistic && tempId) {
+        // Phase 1: 楽観的更新の成功処理
+        OptimisticUpdateManager.confirmUpdate(tempId, serverResult);
+        
+        // 楽観的更新したデータを実際のサーバーデータで置換
+        const optimizedScheduleUpdate = optimizedScheduleUpdateRef.current;
+        if (optimizedScheduleUpdate) {
+          // サーバーデータ形式に変換
+          const serverScheduleData: ScheduleFromDB = {
+            id: serverResult.id,
+            staffId: serverResult.staffId,
+            status: serverResult.status,
+            start: serverResult.start,
+            end: serverResult.end,
+            memo: serverResult.memo,
+            layer: serverResult.layer || 'adjustment'
+          };
+          
+          if (isUpdate) {
+            optimizedScheduleUpdate.update(serverScheduleData);
+          } else {
+            // 新規作成の場合：一時IDを削除し、実際のIDで追加
+            if (isDebugEnabled()) {
+              console.log('🔄 新規作成楽観的更新確認: 一時ID削除→実ID追加', {
+                tempId,
+                serverId: serverScheduleData.id
+              });
+            }
+            
+            // 一時IDのスケジュールを直接置換（削除→追加よりも確実）
+            setSchedules(prev => prev.map(s => 
+              s.id === tempId ? {
+                ...serverScheduleData,
+                start: Number(serverScheduleData.start),
+                end: Number(serverScheduleData.end),
+                layer: s.layer || 'adjustment'
+              } : s
+            ));
+          }
+        }
+        
+        if (isDebugEnabled()) {
+          console.log('🎯 楽観的更新確認完了:', {
+            tempId,
+            serverResult: serverResult.id
+          });
+        }
+        
+        // Phase 3: 全リスクレベル変更の完全部分更新
+        if (isDebugEnabled()) {
+          console.log('🚀 Phase 3: 完全部分更新実行 - fetchDataスキップ', {
+            changeType,
+            riskLevel: changeType === 'low' ? '低リスク' : changeType === 'medium' ? '中リスク' : '高リスク'
+          });
+        }
+        
+        // Phase 3: 完全部分更新の成功ログ
+        setOptimizationMetrics(prev => ({
+          ...prev,
+          partialUpdateCount: (prev.partialUpdateCount || 0) + 1,
+          lastPartialUpdateTime: new Date().toISOString(),
+          [`${changeType}RiskUpdateCount`]: ((prev as any)[`${changeType}RiskUpdateCount`] || 0) + 1
+        }));
+        
+        // 楽観的更新のみで処理完了 - 全変更タイプでfetchDataを実行しない
+        return;
+      } else {
+        // Phase 3: 楽観的更新なしでも部分更新を実行
+        if (isDebugEnabled()) console.log('🔄 Phase 3: 楽観的更新なし - 部分更新で処理', {
+          changeType,
+          reason: '楽観的更新条件に該当しないが部分更新で処理'
+        });
+        
+        // WebSocketで更新が通知されるため、fetchDataは不要
+        // モーダルを閉じる
+        setIsModalOpen(false);
+        setEditingSchedule(null);
+        setDraggedSchedule(null);
+        
+        // 部分更新メトリクス更新
+        setOptimizationMetrics(prev => ({
+          ...prev,
+          partialUpdateCount: (prev.partialUpdateCount || 0) + 1,
+          lastPartialUpdateTime: new Date().toISOString(),
+          nonOptimisticPartialUpdateCount: ((prev as any).nonOptimisticPartialUpdateCount || 0) + 1
+        }));
+        
+        return;
+      }
       
-      // データを再取得してUIを更新
-      // console.log('Fetching updated data...');
-      // console.log('復元予定のスクロール位置:', savedScrollPosition);
-      await fetchData(displayDate);
       
       // fetchData完了後、保存した位置に復元 - 縦・横両対応
       const restoreScroll = () => {
         if (topScrollRef.current && bottomScrollRef.current) {
-          // console.log('スクロール復元実行:', savedScrollPosition, 'current横:', topScrollRef.current.scrollLeft, 'current縦:', window.scrollY);
+          console.log('📍 スクロール復元実行:', savedScrollPosition, 'current横:', topScrollRef.current.scrollLeft, 'current縦:', window.scrollY);
           
           // 横スクロール復元
           if (savedScrollPosition.x > 0) {
@@ -2170,7 +3356,7 @@ export default function FullMainApp() {
             window.scrollTo(savedScrollPosition.x || 0, savedScrollPosition.y);
           }
         } else {
-          // console.log('スクロール要素が見つかりません');
+          console.log('スクロール要素が見つかりません');
         }
       };
       // 複数回復元を試行（DOM更新タイミングの違いに対応）
@@ -2186,11 +3372,50 @@ export default function FullMainApp() {
       console.error('=== handleSaveSchedule ERROR ===');
       console.error('Error details:', error);
       
-      // エラー通知（シンプル版）
-      // updateNotification(notificationId, 'error', `スケジュール${operationType}に失敗しました。再度お試しください。`);
-      
-      // エラー時は従来のアラート表示も維持（重要な情報なので）
-      alert('スケジュールの保存に失敗しました。再度お試しください。\n詳細: ' + (error instanceof Error ? error.message : String(error)));
+      if (useOptimistic && tempId) {
+        // Phase 1: 楽観的更新のロールバック
+        if (isDebugEnabled()) {
+          console.log('🔙 楽観的更新ロールバック実行:', {
+            tempId,
+            error: error instanceof Error ? error.message : String(error)
+          });
+        }
+        
+        // Phase 1: 自動リトライ機能
+        const shouldRetry = error instanceof Error && 
+                          (error.message.includes('Network') || 
+                           error.message.includes('timeout') || 
+                           error.message.includes('500') || 
+                           error.message.includes('503'));
+        
+        if (shouldRetry) {
+          if (isDebugEnabled()) {
+            console.log('🔄 自動リトライを開始:', {
+              tempId,
+              error: error.message,
+              shouldRetry
+            });
+          }
+          
+          // 自動リトライを開始
+          OptimisticUpdateManager.retryFailedUpdate(tempId, payload, isUpdate);
+        } else {
+          // 楽観的更新をロールバック
+          OptimisticUpdateManager.rollbackUpdate(tempId);
+          
+          // フォールバック：安全な全体更新
+          await fetchData(displayDate);
+          
+          // エラー時にモーダルを再表示（楽観的更新の場合）
+          setIsModalOpen(true);
+          setEditingSchedule(existingSchedule);
+          
+          alert('更新に失敗しました。データを最新状態に復旧しました。\n詳細: ' + (error instanceof Error ? error.message : String(error)));
+        }
+      } else {
+        // 従来のエラー処理
+        alert('スケジュールの保存に失敗しました。再度お試しください。\n詳細: ' + (error instanceof Error ? error.message : String(error)));
+      }
     }
   };
   
@@ -2213,41 +3438,46 @@ export default function FullMainApp() {
         // console.log('Schedule deleted successfully, fetching updated data...');
       }
       
-      // データを再取得してUIを更新
-      // console.log('復元予定のスクロール位置:', savedScrollPosition);
-      await fetchData(displayDate);
-      // データ更新完了後、保存した位置に復元 - 段階的試行
-      const restoreScroll = (attempt = 1) => {
+      // Phase 3: 削除操作も部分更新 - fetchDataを実行しない
+      // WebSocketで削除通知が送信されるため、fetchDataは不要
+      if (isDebugEnabled()) {
+        console.log('🚀 Phase 3: 削除操作完了 - 部分更新のみ（fetchDataスキップ）', {
+          deletedId: id,
+          apiResponse: responseData?.message || 'OK'
+        });
+      }
+      
+      // 削除操作メトリクス更新
+      setOptimizationMetrics(prev => ({
+        ...prev,
+        partialUpdateCount: (prev.partialUpdateCount || 0) + 1,
+        deletePartialUpdateCount: ((prev as any).deletePartialUpdateCount || 0) + 1,
+        lastPartialUpdateTime: new Date().toISOString()
+      }));
+      
+      // fetchData完了後、保存した位置に復元 - 縦・横両対応（追加処理と同じパターン）
+      const restoreScroll = () => {
         if (topScrollRef.current && bottomScrollRef.current) {
-          const currentPosX = topScrollRef.current.scrollLeft;
-          const currentPosY = window.scrollY;
-          // console.log(`スクロール復元試行${attempt}:`, savedScrollPosition, 'current横:', currentPosX, 'current縦:', currentPosY);
+          console.log('📍 削除後スクロール復元実行:', savedScrollPosition, 'current横:', topScrollRef.current.scrollLeft, 'current縦:', window.scrollY);
+          
+          // 横スクロール復元
           if (savedScrollPosition.x > 0) {
             topScrollRef.current.scrollLeft = savedScrollPosition.x;
             bottomScrollRef.current.scrollLeft = savedScrollPosition.x;
-            // 復元が成功したかチェック
-            setTimeout(() => {
-              const newPosX = topScrollRef.current?.scrollLeft || 0;
-              const newPosY = window.scrollY;
-              const xDiff = Math.abs(newPosX - (savedScrollPosition.x || 0));
-              const yDiff = Math.abs(newPosY - (savedScrollPosition.y || 0));
-              
-              if ((xDiff > 10 || yDiff > 10) && attempt < 5) {
-                // console.log(`復元失敗、再試行${attempt + 1}:`, { newPosX, newPosY }, 'target:', savedScrollPosition);
-                restoreScroll(attempt + 1);
-              } else {
-                // console.log('スクロール復元完了:', { x: newPosX, y: newPosY });
-              }
-            }, 50);
+          }
+          
+          // 縦スクロール復元
+          if (savedScrollPosition.y >= 0) {
+            window.scrollTo(savedScrollPosition.x || 0, savedScrollPosition.y);
           }
         } else {
-          // console.log('スクロール要素未準備、再試行:', attempt);
-          if (attempt < 5) {
-            setTimeout(() => restoreScroll(attempt + 1), 100);
-          }
+          console.log('削除後スクロール要素が見つかりません');
         }
       };
-      setTimeout(() => restoreScroll(1), 100);
+      // 複数回復元を試行（DOM更新タイミングの違いに対応）
+      setTimeout(restoreScroll, 50);
+      setTimeout(restoreScroll, 200);
+      setTimeout(restoreScroll, 500);
     } catch (error) { 
       console.error('予定の削除に失敗しました', error);
       alert(`予定の削除に失敗しました: ${error instanceof Error ? error.message : String(error)}`);
@@ -2759,6 +3989,32 @@ export default function FullMainApp() {
       alert('このスタッフのスケジュールを編集する権限がありません。');
       return;
     }
+    
+    // Phase 3: ドラッグ移動での楽観的更新（即座にUI反映）
+    const existingSchedule = schedules.find(s => s.id === scheduleId);
+    if (existingSchedule && isDebugEnabled()) {
+      console.log('🚀 Phase 3: ドラッグ移動楽観的更新開始', {
+        scheduleId,
+        oldStaffId: existingSchedule.staffId,
+        newStaffId,
+        oldStart: existingSchedule.start,
+        newStart,
+        oldEnd: existingSchedule.end,
+        newEnd
+      });
+      
+      // 即座にUI更新（楽観的更新）
+      setSchedules(prev => prev.map(s => 
+        s.id === scheduleId ? {
+          ...s,
+          staffId: newStaffId,
+          start: newStart,
+          end: newEnd,
+          _isOptimistic: true,
+          _timestamp: Date.now()
+        } : s
+      ));
+    }
 
     const currentApiUrl = getApiUrl();
     // JST基準で正しい日付文字列を生成
@@ -2784,9 +4040,25 @@ export default function FullMainApp() {
         throw new Error('スケジュールの移動に失敗しました');
       }
       
-      // データを再取得してUIを更新
-      // console.log('ドラッグ移動後の復元予定スクロール位置:', savedScrollPosition);
-      await fetchData(displayDate);
+      // Phase 3: ドラッグ移動も部分更新 - fetchDataを実行しない
+      // WebSocketで更新通知が送信されるため、fetchDataは不要
+      if (isDebugEnabled()) {
+        console.log('🚀 Phase 3: ドラッグ移動完了 - 部分更新のみ（fetchDataスキップ）', {
+          scheduleId,
+          newStaffId,
+          newStart,
+          newEnd,
+          date
+        });
+      }
+      
+      // ドラッグ移動メトリクス更新
+      setOptimizationMetrics(prev => ({
+        ...prev,
+        partialUpdateCount: (prev.partialUpdateCount || 0) + 1,
+        dragPartialUpdateCount: ((prev as any).dragPartialUpdateCount || 0) + 1,
+        lastPartialUpdateTime: new Date().toISOString()
+      }));
       // ドラッグ移動完了後、保存した位置に復元
       const restoreScroll = (attempt = 1) => {
         if (topScrollRef.current && bottomScrollRef.current) {
@@ -3581,8 +4853,9 @@ export default function FullMainApp() {
               部署 / グループ / スタッフ名
             </div>
             <div className="flex-1">
-              <div className="min-w-[1120px]">
-                <div className="flex font-bold text-sm">
+              <div className="overflow-x-auto" ref={topScrollRef} onScroll={handleTopScroll} data-scroll-ref="top">
+                <div className="min-w-[1120px]">
+                  <div className="flex font-bold text-sm">
                   {Array.from({ length: 13 }).map((_, i) => {
                     const hour = 8 + i;
                     const isEarlyOrNight = hour === 8 || hour >= 18;
@@ -3597,6 +4870,7 @@ export default function FullMainApp() {
                       </div>
                     );
                   })}
+                  </div>
                 </div>
               </div>
             </div>
@@ -3651,7 +4925,7 @@ export default function FullMainApp() {
             </div>
             <div className="flex-1">
               {/* メインコンテンツ */}
-              <div className="overflow-x-auto" ref={bottomScrollRef} onScroll={handleBottomScroll}>
+              <div className="overflow-x-auto" ref={bottomScrollRef} onScroll={handleBottomScroll} data-scroll-ref="bottom">
                 <div className="min-w-[1120px] relative">
                   {/* グリッド線はスタッフ行に個別配置（下記のスタッフループ内） */}
                   {currentTimePosition !== null && (
@@ -3888,7 +5162,15 @@ export default function FullMainApp() {
                                         )}
                                       </span>
                                       {!isContract && !isHistoricalData && canEdit(schedule.staffId) && (
-                                        <button onClick={(e) => { e.stopPropagation(); setDeletingScheduleId(schedule.id); }} 
+                                        <button onClick={(e) => { 
+                                          e.stopPropagation(); 
+                                          // 削除確認前にスクロール位置を保存
+                                          setSavedScrollPosition({ 
+                                            x: bottomScrollRef.current?.scrollLeft || 0, 
+                                            y: window.scrollY || 0 
+                                          });
+                                          setDeletingScheduleId(schedule.id); 
+                                        }} 
                                                 className="text-white hover:text-red-200 ml-2">×</button>
                                       )}
                                     </div>

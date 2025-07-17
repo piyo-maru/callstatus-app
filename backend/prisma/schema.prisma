@@ -8,35 +8,37 @@ datasource db {
 }
 
 model Adjustment {
-  id              Int                  @id @default(autoincrement())
-  date            DateTime
-  status          String
-  start           DateTime
-  end             DateTime
-  memo            String?
-  reason          String?
-  createdAt       DateTime             @default(now())
-  updatedAt       DateTime             @updatedAt
-  staffId         Int
-  batchId         String?
-  approvedAt      DateTime?
-  approvedBy      Int?
-  isPending       Boolean              @default(false)
-  pendingType     String?
-  rejectedAt      DateTime?
-  rejectedBy      Int?
-  rejectionReason String?
-  approvedAt_utc  DateTime?
-  createdAt_utc   DateTime?
-  date_utc        DateTime?
-  end_utc         DateTime?
-  rejectedAt_utc  DateTime?
-  start_utc       DateTime?
-  updatedAt_utc   DateTime?
-  ApprovedBy      Staff?               @relation("ApprovedAdjustments", fields: [approvedBy], references: [id])
-  RejectedBy      Staff?               @relation("RejectedAdjustments", fields: [rejectedBy], references: [id])
-  Staff           Staff                @relation(fields: [staffId], references: [id])
-  ApprovalLogs    PendingApprovalLog[]
+  id                                 Int                     @id @default(autoincrement())
+  date                               DateTime
+  status                             String
+  start                              DateTime
+  end                                DateTime
+  memo                               String?
+  reason                             String?
+  createdAt                          DateTime                @default(now())
+  updatedAt                          DateTime
+  staffId                            Int
+  batchId                            String?
+  approvedAt                         DateTime?
+  approvedBy                         Int?
+  isPending                          Boolean                 @default(false)
+  pendingType                        String?
+  rejectedAt                         DateTime?
+  rejectedBy                         Int?
+  rejectionReason                    String?
+  date_utc                           DateTime?               @db.Timestamptz(6)
+  start_utc                          DateTime?               @db.Timestamptz(6)
+  end_utc                            DateTime?               @db.Timestamptz(6)
+  createdAt_utc                      DateTime?               @default(now()) @db.Timestamptz(6)
+  updatedAt_utc                      DateTime?               @default(now()) @db.Timestamptz(6)
+  approvedAt_utc                     DateTime?               @db.Timestamptz(6)
+  rejectedAt_utc                     DateTime?               @db.Timestamptz(6)
+  Staff_Adjustment_approvedByToStaff Staff?                  @relation("Adjustment_approvedByToStaff", fields: [approvedBy], references: [id])
+  Staff_Adjustment_rejectedByToStaff Staff?                  @relation("Adjustment_rejectedByToStaff", fields: [rejectedBy], references: [id])
+  Staff_Adjustment_staffIdToStaff    Staff                   @relation("Adjustment_staffIdToStaff", fields: [staffId], references: [id])
+  pending_approval_logs              pending_approval_logs[]
+
+  @@index([date_utc], map: "idx_adjustment_date_utc")
 }
 
 model Contract {
@@ -46,7 +48,7 @@ model Contract {
   team           String
   email          String?
   createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  updatedAt      DateTime
   staffId        Int
   dept           String
   fridayHours    String?
@@ -77,6 +79,20 @@ model ContractChangeLog {
   @@index([staffId, changeDate])
 }
 
+model ContractDisplayCache {
+  staffId     Int
+  year        Int
+  month       Int
+  day         Int
+  hasContract Boolean
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime
+  Staff       Staff    @relation(fields: [staffId], references: [id])
+
+  @@id([staffId, year, month, day])
+  @@index([year, month])
+}
+
 model DailyAssignment {
   id             Int      @id @default(autoincrement())
   staffId        Int
@@ -84,8 +100,21 @@ model DailyAssignment {
   assignmentType String   @db.VarChar(20)
   customLabel    String?  @db.VarChar(50)
   createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  updatedAt      DateTime
   Staff          Staff    @relation(fields: [staffId], references: [id])
+}
+
+model DepartmentSettings {
+  id              Int      @id @default(autoincrement())
+  type            String   @db.VarChar(20)
+  name            String   @db.VarChar(255)
+  shortName       String?  @db.VarChar(50)
+  backgroundColor String?  @db.VarChar(7)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime
+  displayOrder    Int      @default(0)
+
+  @@unique([type, name])
 }
 
 model MonthlySchedule {
@@ -97,25 +126,11 @@ model MonthlySchedule {
   memo      String?
   source    String   @default("csv")
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  updatedAt DateTime
   staffId   Int
   Staff     Staff    @relation(fields: [staffId], references: [id])
 
   @@unique([staffId, date, start, end])
-}
-
-model ContractDisplayCache {
-  staffId     Int
-  year        Int
-  month       Int
-  day         Int
-  hasContract Boolean
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  Staff       Staff    @relation(fields: [staffId], references: [id])
-
-  @@id([staffId, year, month, day])
-  @@index([year, month])
 }
 
 model Schedule {
@@ -129,36 +144,36 @@ model Schedule {
 }
 
 model Staff {
-  id                    Int                     @id @default(autoincrement())
-  name                  String
-  department            String
-  group                 String
-  authGracePeriod       DateTime?
-  empNo                 String?                 @unique
-  isActive              Boolean                 @default(true)
-  deletedAt             DateTime?
-  isManager             Boolean                 @default(false)
-  managerActivatedAt    DateTime?
-  managerDepartments    String[]                @default([])
-  managerPermissions    ManagerPermission[]     @default([])
-  position              String?
-  workArrangement       String
-  ApprovedAdjustments   Adjustment[]            @relation("ApprovedAdjustments")
-  RejectedAdjustments   Adjustment[]            @relation("RejectedAdjustments")
-  Adjustment            Adjustment[]
-  Contract              Contract[]
-  ContractChangeLogs    ContractChangeLog[]
-  ContractDisplayCache  ContractDisplayCache[]
-  DailyAssignment       DailyAssignment[]
-  MonthlySchedule       MonthlySchedule[]
-  Schedule              Schedule[]
-  TemporaryAssignment   TemporaryAssignment[]
-  GlobalDisplaySettings GlobalDisplaySettings[]
-  GlobalPresetSettings  GlobalPresetSettings[]  @relation("GlobalPresetUpdates")
-  ManagerAuditLogs      ManagerAuditLog[]       @relation("ManagerActions")
-  ApprovalActions       PendingApprovalLog[]    @relation("ApprovalActions")
-  user_auth             user_auth?
-  UserPresetSettings    UserPresetSettings?
+  id                                      Int                       @id @default(autoincrement())
+  name                                    String
+  department                              String
+  group                                   String
+  authGracePeriod                         DateTime?
+  empNo                                   String?                   @unique
+  isActive                                Boolean                   @default(true)
+  deletedAt                               DateTime?
+  isManager                               Boolean                   @default(false)
+  managerActivatedAt                      DateTime?
+  managerDepartments                      String[]                  @default([])
+  managerPermissions                      ManagerPermission[]       @default([])
+  position                                String?
+  workArrangement                         String?
+  Adjustment_Adjustment_approvedByToStaff Adjustment[]              @relation("Adjustment_approvedByToStaff")
+  Adjustment_Adjustment_rejectedByToStaff Adjustment[]              @relation("Adjustment_rejectedByToStaff")
+  Adjustment_Adjustment_staffIdToStaff    Adjustment[]              @relation("Adjustment_staffIdToStaff")
+  Contract                                Contract[]
+  ContractChangeLog                       ContractChangeLog[]
+  ContractDisplayCache                    ContractDisplayCache[]
+  DailyAssignment                         DailyAssignment[]
+  MonthlySchedule                         MonthlySchedule[]
+  Schedule                                Schedule[]
+  TemporaryAssignment                     TemporaryAssignment[]
+  global_display_settings                 global_display_settings[]
+  global_preset_settings                  global_preset_settings[]
+  manager_audit_logs                      manager_audit_logs[]
+  pending_approval_logs                   pending_approval_logs[]
+  user_auth                               user_auth?
+  user_preset_settings                    user_preset_settings?
 }
 
 model TemporaryAssignment {
@@ -171,10 +186,27 @@ model TemporaryAssignment {
   reason    String   @default("支援")
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  updatedAt DateTime
   Staff     Staff    @relation(fields: [staffId], references: [id])
 
   @@unique([staffId, startDate, endDate])
+}
+
+model admin_audit_logs {
+  id            Int           @id @default(autoincrement())
+  adminId       String
+  action        String
+  targetType    String
+  targetId      String?
+  details       String?
+  ipAddress     String?
+  userAgent     String?
+  timestamp     DateTime      @default(now())
+  system_admins system_admins @relation(fields: [adminId], references: [id])
+
+  @@index([action])
+  @@index([adminId])
+  @@index([timestamp])
 }
 
 model audit_logs {
@@ -230,6 +262,84 @@ model auth_sessions {
   @@index([userAuthId])
 }
 
+model global_display_settings {
+  id                       Int      @id @default(1)
+  viewMode                 String   @default("normal")
+  maskingEnabled           Boolean  @default(false)
+  timeRange                String   @default("standard")
+  customStatusColors       Json     @default("{}")
+  customStatusDisplayNames Json     @default("{}")
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime
+  updatedBy                Int?
+  Staff                    Staff?   @relation(fields: [updatedBy], references: [id])
+}
+
+model global_preset_settings {
+  id                 Int      @id @default(1)
+  presets            Json     @default("[]")
+  categories         Json     @default("[]")
+  pagePresetSettings Json     @default("{}")
+  version            String   @default("1.0.0")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime
+  updatedBy          Int?
+  departmentSettings Json     @default("[]")
+  displaySettings    Json     @default("{}")
+  Staff              Staff?   @relation(fields: [updatedBy], references: [id])
+}
+
+model historical_schedules {
+  id              Int       @id @default(autoincrement())
+  date            DateTime  @db.Date
+  originalId      Int?
+  batchId         String
+  staffId         Int
+  staffEmpNo      String?
+  staffName       String
+  staffDepartment String
+  staffGroup      String
+  staffIsActive   Boolean   @default(true)
+  status          String
+  start           DateTime
+  end             DateTime
+  memo            String?
+  reason          String?
+  snapshotAt      DateTime  @default(now())
+  version         String    @default("1.0")
+  date_utc        DateTime? @db.Timestamptz(6)
+  start_utc       DateTime? @db.Timestamptz(6)
+  end_utc         DateTime? @db.Timestamptz(6)
+  snapshotAt_utc  DateTime? @default(now()) @db.Timestamptz(6)
+
+  @@index([batchId])
+  @@index([date])
+  @@index([date, staffDepartment])
+  @@index([date, staffId])
+  @@index([staffEmpNo])
+  @@index([date_utc], map: "idx_historical_schedules_date_utc")
+  @@index([date_utc, staffId], map: "idx_historical_schedules_date_utc_staff")
+}
+
+model manager_audit_logs {
+  id            Int      @id @default(autoincrement())
+  managerId     Int
+  targetStaffId Int?
+  action        String
+  resource      String
+  resourceId    String?
+  details       String?
+  ipAddress     String?
+  userAgent     String?
+  timestamp     DateTime @default(now())
+  Staff         Staff    @relation(fields: [managerId], references: [id])
+
+  @@index([action])
+  @@index([managerId])
+  @@index([targetStaffId])
+  @@index([timestamp])
+}
+
 model password_reset_tokens {
   id         String    @id
   userAuthId String
@@ -242,6 +352,51 @@ model password_reset_tokens {
   usedAt     DateTime?
   tokenType  TokenType @default(PASSWORD_RESET)
   user_auth  user_auth @relation(fields: [userAuthId], references: [id], onDelete: Cascade)
+}
+
+model pending_approval_logs {
+  id           Int        @id @default(autoincrement())
+  adjustmentId Int
+  action       String
+  actorId      Int
+  reason       String?
+  createdAt    DateTime   @default(now())
+  Staff        Staff      @relation(fields: [actorId], references: [id])
+  Adjustment   Adjustment @relation(fields: [adjustmentId], references: [id])
+
+  @@index([actorId])
+  @@index([adjustmentId])
+}
+
+model snapshot_logs {
+  id              Int            @id @default(autoincrement())
+  batchId         String         @unique
+  targetDate      DateTime       @db.Date
+  recordCount     Int
+  status          SnapshotStatus
+  startedAt       DateTime       @default(now())
+  completedAt     DateTime?
+  errorMessage    String?
+  targetDate_utc  DateTime?      @db.Timestamptz(6)
+  startedAt_utc   DateTime?      @default(now()) @db.Timestamptz(6)
+  completedAt_utc DateTime?      @db.Timestamptz(6)
+
+  @@index([targetDate_utc], map: "idx_snapshot_logs_target_date_utc")
+  @@index([status])
+  @@index([targetDate])
+}
+
+model system_admins {
+  id               String             @id
+  username         String             @unique
+  email            String             @unique
+  passwordHash     String
+  name             String
+  isActive         Boolean            @default(true)
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime
+  lastLoginAt      DateTime?
+  admin_audit_logs admin_audit_logs[]
 }
 
 model user_auth {
@@ -260,7 +415,7 @@ model user_auth {
   externalId            String?
   metadata              Json?
   createdAt             DateTime                @default(now())
-  updatedAt             DateTime                @updatedAt
+  updatedAt             DateTime
   deletedAt             DateTime?
   audit_logs            audit_logs[]
   auth_audit_logs       auth_audit_logs[]
@@ -269,212 +424,46 @@ model user_auth {
   Staff                 Staff?                  @relation(fields: [staffId], references: [id])
 }
 
-model DepartmentSettings {
-  id              Int      @id @default(autoincrement())
-  type            String   @db.VarChar(20)
-  name            String   @db.VarChar(255)
-  shortName       String?  @db.VarChar(50)
-  backgroundColor String?  @db.VarChar(7)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  displayOrder    Int      @default(0)
-
-  @@unique([type, name])
-  @@map("DepartmentSettings")
-}
-
-model HistoricalSchedule {
-  id              Int       @id @default(autoincrement())
-  date            DateTime  @db.Date
-  originalId      Int?
-  batchId         String
-  staffId         Int
-  staffEmpNo      String?
-  staffName       String
-  staffDepartment String
-  staffGroup      String
-  staffIsActive   Boolean   @default(true)
-  status          String
-  start           DateTime
-  end             DateTime
-  memo            String?
-  reason          String?
-  snapshotAt      DateTime  @default(now())
-  version         String    @default("1.0")
-  date_utc        DateTime?
-  end_utc         DateTime?
-  snapshotAt_utc  DateTime?
-  start_utc       DateTime?
-
-  @@index([date])
-  @@index([date, staffDepartment])
-  @@index([date, staffId])
-  @@index([staffEmpNo])
-  @@index([batchId])
-  @@map("historical_schedules")
-}
-
-model SnapshotLog {
-  id              Int            @id @default(autoincrement())
-  batchId         String         @unique
-  targetDate      DateTime       @db.Date
-  recordCount     Int
-  status          SnapshotStatus
-  startedAt       DateTime       @default(now())
-  completedAt     DateTime?
-  errorMessage    String?
-  completedAt_utc DateTime?
-  startedAt_utc   DateTime?
-  targetDate_utc  DateTime?
-
-  @@index([targetDate])
-  @@index([status])
-  @@map("snapshot_logs")
-}
-
-model PendingApprovalLog {
-  id           Int        @id @default(autoincrement())
-  adjustmentId Int
-  action       String
-  actorId      Int
-  reason       String?
-  createdAt    DateTime   @default(now())
-  Actor        Staff      @relation("ApprovalActions", fields: [actorId], references: [id])
-  Adjustment   Adjustment @relation(fields: [adjustmentId], references: [id])
-
-  @@index([adjustmentId])
-  @@index([actorId])
-  @@map("pending_approval_logs")
-}
-
-model UserPresetSettings {
-  id                 Int          @id @default(autoincrement())
-  staffId            Int          @unique
-  pagePresetSettings Json         @default("{}")
-  lastModified       DateTime     @default(now())
-  createdAt          DateTime     @default(now())
-  updatedAt          DateTime     @updatedAt
-  Staff              Staff        @relation(fields: [staffId], references: [id], onDelete: Cascade)
-  UserPresets        UserPreset[]
-
-  @@map("user_preset_settings")
-}
-
-model UserPreset {
-  id                   Int                  @id @default(autoincrement())
-  userPresetSettingsId Int
-  presetId             String
-  name                 String
-  displayName          String
-  description          String?
-  category             String
-  isActive             Boolean              @default(true)
-  customizable         Boolean              @default(true)
-  isDefault            Boolean              @default(false)
-  createdAt            DateTime             @default(now())
-  updatedAt            DateTime             @updatedAt
-  UserPresetSchedules  UserPresetSchedule[]
-  UserPresetSettings   UserPresetSettings   @relation(fields: [userPresetSettingsId], references: [id], onDelete: Cascade)
-
-  @@unique([userPresetSettingsId, presetId])
-  @@map("user_presets")
-}
-
-model UserPresetSchedule {
-  id           Int        @id @default(autoincrement())
+model user_preset_schedules {
+  id           Int          @id @default(autoincrement())
   userPresetId Int
   status       String
-  startTime    Decimal    @db.Decimal(4, 2)
-  endTime      Decimal    @db.Decimal(4, 2)
+  startTime    Decimal      @db.Decimal(4, 2)
+  endTime      Decimal      @db.Decimal(4, 2)
   memo         String?
-  sortOrder    Int        @default(0)
-  createdAt    DateTime   @default(now())
-  UserPreset   UserPreset @relation(fields: [userPresetId], references: [id], onDelete: Cascade)
-
-  @@map("user_preset_schedules")
+  sortOrder    Int          @default(0)
+  createdAt    DateTime     @default(now())
+  user_presets user_presets @relation(fields: [userPresetId], references: [id], onDelete: Cascade)
 }
 
-model SystemAdmin {
-  id             String          @id @default(cuid())
-  username       String          @unique
-  email          String          @unique
-  passwordHash   String
-  name           String
-  isActive       Boolean         @default(true)
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
-  lastLoginAt    DateTime?
-  AdminAuditLogs AdminAuditLog[]
-
-  @@map("system_admins")
+model user_preset_settings {
+  id                 Int            @id @default(autoincrement())
+  staffId            Int            @unique
+  pagePresetSettings Json           @default("{}")
+  lastModified       DateTime       @default(now())
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime
+  Staff              Staff          @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  user_presets       user_presets[]
 }
 
-model ManagerAuditLog {
-  id            Int      @id @default(autoincrement())
-  managerId     Int
-  targetStaffId Int?
-  action        String
-  resource      String
-  resourceId    String?
-  details       String?
-  ipAddress     String?
-  userAgent     String?
-  timestamp     DateTime @default(now())
-  Manager       Staff    @relation("ManagerActions", fields: [managerId], references: [id])
+model user_presets {
+  id                    Int                     @id @default(autoincrement())
+  userPresetSettingsId  Int
+  presetId              String
+  name                  String
+  displayName           String
+  description           String?
+  category              String
+  isActive              Boolean                 @default(true)
+  customizable          Boolean                 @default(true)
+  isDefault             Boolean                 @default(false)
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime
+  user_preset_schedules user_preset_schedules[]
+  user_preset_settings  user_preset_settings    @relation(fields: [userPresetSettingsId], references: [id], onDelete: Cascade)
 
-  @@index([managerId])
-  @@index([targetStaffId])
-  @@index([action])
-  @@index([timestamp])
-  @@map("manager_audit_logs")
-}
-
-model AdminAuditLog {
-  id          Int         @id @default(autoincrement())
-  adminId     String
-  action      String
-  targetType  String
-  targetId    String?
-  details     String?
-  ipAddress   String?
-  userAgent   String?
-  timestamp   DateTime    @default(now())
-  SystemAdmin SystemAdmin @relation(fields: [adminId], references: [id])
-
-  @@index([adminId])
-  @@index([action])
-  @@index([timestamp])
-  @@map("admin_audit_logs")
-}
-
-model GlobalDisplaySettings {
-  id                       Int      @id @default(1)
-  maskingEnabled           Boolean  @default(false)
-  timeRange                String   @default("standard")
-  customStatusColors       Json     @default("{}")
-  customStatusDisplayNames Json     @default("{}")
-  createdAt                DateTime @default(now())
-  updatedAt                DateTime @updatedAt
-  updatedBy                Int?
-  UpdatedByStaff           Staff?   @relation(fields: [updatedBy], references: [id])
-
-  @@map("global_display_settings")
-}
-
-model GlobalPresetSettings {
-  id                 Int      @id @default(1)
-  presets            Json     @default("[]")
-  categories         Json     @default("[]")
-  pagePresetSettings Json     @default("{}")
-  version            String   @default("1.0.0")
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
-  updatedBy          Int?
-  departmentSettings Json     @default("[]")
-  displaySettings    Json     @default("{}")
-  UpdatedByStaff     Staff?   @relation("GlobalPresetUpdates", fields: [updatedBy], references: [id])
-
-  @@map("global_preset_settings")
+  @@unique([userPresetSettingsId, presetId])
 }
 
 enum AdminRole {
@@ -495,14 +484,11 @@ enum AuthAction {
   ACCOUNT_UNLOCKED
 }
 
-enum TokenType {
-  PASSWORD_RESET
-  INITIAL_PASSWORD_SETUP
-}
-
-enum UserType {
-  ADMIN
-  STAFF
+enum ManagerPermission {
+  READ
+  WRITE
+  APPROVE
+  DELETE
 }
 
 enum SnapshotStatus {
@@ -512,9 +498,12 @@ enum SnapshotStatus {
   ROLLED_BACK
 }
 
-enum ManagerPermission {
-  READ
-  WRITE
-  APPROVE
-  DELETE
+enum TokenType {
+  PASSWORD_RESET
+  INITIAL_PASSWORD_SETUP
+}
+
+enum UserType {
+  ADMIN
+  STAFF
 }

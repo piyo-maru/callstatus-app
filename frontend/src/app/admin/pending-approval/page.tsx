@@ -286,7 +286,7 @@ export default function PendingApprovalPage() {
           const failedCount = result.failedCount || 0;
           const errors = result.errors || [];
           
-          const errorMessages = errors.map(err => `ID${err.pendingId}: ${err.error}`);
+          const errorMessages = errors.map((err: any) => `ID${err.pendingId}: ${err.error}`);
           setProcessingResults({ 
             success: successCount, 
             failed: failedCount, 

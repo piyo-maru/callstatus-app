@@ -76,6 +76,10 @@ export type Schedule = {
   layer?: 'contract' | 'adjustment' | 'historical';
   isHistorical?: boolean;
   isDragCreated?: boolean;
+  // Phase 1: 楽観的更新用プロパティ
+  _isOptimistic?: boolean;
+  _originalId?: string | number;
+  _timestamp?: number;
 };
 
 // ドラッグ操作型

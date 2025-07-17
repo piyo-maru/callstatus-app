@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
-import { GlobalDisplaySettings } from '@prisma/client';
+import { global_display_settings } from '@prisma/client';
 
 export interface DisplaySettingsDto {
   maskingEnabled: boolean;
@@ -18,7 +18,7 @@ export class DisplaySettingsService {
    * レコードが存在しない場合はデフォルト設定で初期化
    */
   async getSettings(): Promise<DisplaySettingsDto> {
-    let settings = await this.prisma.globalDisplaySettings.findFirst({
+    let settings = await this.prisma.global_display_settings.findFirst({
       where: { id: 1 }
     });
 
@@ -45,14 +45,14 @@ export class DisplaySettingsService {
     // まず現在の設定を取得（存在しない場合は初期化）
     await this.getSettings();
 
-    const settings = await this.prisma.globalDisplaySettings.upsert({
+    const settings = await this.prisma.global_display_settings.upsert({
       where: { id: 1 },
       update: {
         ...(updateData.maskingEnabled !== undefined && { maskingEnabled: updateData.maskingEnabled }),
         ...(updateData.timeRange !== undefined && { timeRange: updateData.timeRange }),
         ...(updateData.customStatusColors !== undefined && { customStatusColors: updateData.customStatusColors }),
         ...(updateData.customStatusDisplayNames !== undefined && { customStatusDisplayNames: updateData.customStatusDisplayNames }),
-        updatedBy: updatedByStaffId || null,
+        updatedAt: new Date(),
       },
       create: {
         id: 1,
@@ -60,7 +60,7 @@ export class DisplaySettingsService {
         timeRange: updateData.timeRange || 'standard',
         customStatusColors: updateData.customStatusColors || {},
         customStatusDisplayNames: updateData.customStatusDisplayNames || {},
-        updatedBy: updatedByStaffId || null,
+        updatedAt: new Date(),
       },
     });
 
@@ -75,14 +75,15 @@ export class DisplaySettingsService {
   /**
    * デフォルト設定で初期化
    */
-  private async initializeDefaultSettings(): Promise<GlobalDisplaySettings> {
-    return this.prisma.globalDisplaySettings.create({
+  private async initializeDefaultSettings(): Promise<global_display_settings> {
+    return this.prisma.global_display_settings.create({
       data: {
         id: 1,
         maskingEnabled: false,
         timeRange: 'standard',
         customStatusColors: {},
         customStatusDisplayNames: {},
+        updatedAt: new Date(),
       },
     });
   }
@@ -95,10 +96,10 @@ export class DisplaySettingsService {
     lastUpdatedAt: Date | null;
     lastUpdatedBy: { id: number; name: string } | null;
   }> {
-    const settings = await this.prisma.globalDisplaySettings.findFirst({
+    const settings = await this.prisma.global_display_settings.findFirst({
       where: { id: 1 },
       include: {
-        UpdatedByStaff: {
+        Staff: {
           select: { id: true, name: true }
         }
       }
@@ -126,7 +127,7 @@ export class DisplaySettingsService {
         customStatusDisplayNames: settings.customStatusDisplayNames as Record<string, string>,
       },
       lastUpdatedAt: settings.updatedAt,
-      lastUpdatedBy: settings.UpdatedByStaff,
+      lastUpdatedBy: settings.Staff,
     };
   }
 }

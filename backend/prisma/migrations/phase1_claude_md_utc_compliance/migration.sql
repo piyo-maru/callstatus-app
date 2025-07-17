@@ -1,28 +1,62 @@
 -- CLAUDE.md厳格ルール準拠：Phase 1 - スナップショット機能コア対応
 -- Migration: Add _utc suffix columns for time handling compliance
 
--- 1. HistoricalSchedule テーブル：新UTCカラム追加
-ALTER TABLE "historical_schedules" 
-ADD COLUMN "date_utc" TIMESTAMP WITH TIME ZONE,
-ADD COLUMN "start_utc" TIMESTAMP WITH TIME ZONE,
-ADD COLUMN "end_utc" TIMESTAMP WITH TIME ZONE,
-ADD COLUMN "snapshotAt_utc" TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+-- 1. HistoricalSchedule テーブル：新UTCカラム追加（安全）
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'historical_schedules' AND column_name = 'date_utc') THEN
+        ALTER TABLE "historical_schedules" ADD COLUMN "date_utc" TIMESTAMP WITH TIME ZONE;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'historical_schedules' AND column_name = 'start_utc') THEN
+        ALTER TABLE "historical_schedules" ADD COLUMN "start_utc" TIMESTAMP WITH TIME ZONE;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'historical_schedules' AND column_name = 'end_utc') THEN
+        ALTER TABLE "historical_schedules" ADD COLUMN "end_utc" TIMESTAMP WITH TIME ZONE;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'historical_schedules' AND column_name = 'snapshotAt_utc') THEN
+        ALTER TABLE "historical_schedules" ADD COLUMN "snapshotAt_utc" TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+    END IF;
+END $$;
 
--- 2. SnapshotLog テーブル：新UTCカラム追加
-ALTER TABLE "snapshot_logs"
-ADD COLUMN "targetDate_utc" TIMESTAMP WITH TIME ZONE,
-ADD COLUMN "startedAt_utc" TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-ADD COLUMN "completedAt_utc" TIMESTAMP WITH TIME ZONE;
+-- 2. SnapshotLog テーブル：新UTCカラム追加（安全）
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'snapshot_logs' AND column_name = 'targetDate_utc') THEN
+        ALTER TABLE "snapshot_logs" ADD COLUMN "targetDate_utc" TIMESTAMP WITH TIME ZONE;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'snapshot_logs' AND column_name = 'startedAt_utc') THEN
+        ALTER TABLE "snapshot_logs" ADD COLUMN "startedAt_utc" TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'snapshot_logs' AND column_name = 'completedAt_utc') THEN
+        ALTER TABLE "snapshot_logs" ADD COLUMN "completedAt_utc" TIMESTAMP WITH TIME ZONE;
+    END IF;
+END $$;
 
--- 3. Adjustment テーブル：新UTCカラム追加
-ALTER TABLE "Adjustment"
-ADD COLUMN "date_utc" TIMESTAMP WITH TIME ZONE,
-ADD COLUMN "start_utc" TIMESTAMP WITH TIME ZONE,
-ADD COLUMN "end_utc" TIMESTAMP WITH TIME ZONE,
-ADD COLUMN "createdAt_utc" TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-ADD COLUMN "updatedAt_utc" TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-ADD COLUMN "approvedAt_utc" TIMESTAMP WITH TIME ZONE,
-ADD COLUMN "rejectedAt_utc" TIMESTAMP WITH TIME ZONE;
+-- 3. Adjustment テーブル：新UTCカラム追加（安全）
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'Adjustment' AND column_name = 'date_utc') THEN
+        ALTER TABLE "Adjustment" ADD COLUMN "date_utc" TIMESTAMP WITH TIME ZONE;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'Adjustment' AND column_name = 'start_utc') THEN
+        ALTER TABLE "Adjustment" ADD COLUMN "start_utc" TIMESTAMP WITH TIME ZONE;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'Adjustment' AND column_name = 'end_utc') THEN
+        ALTER TABLE "Adjustment" ADD COLUMN "end_utc" TIMESTAMP WITH TIME ZONE;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'Adjustment' AND column_name = 'createdAt_utc') THEN
+        ALTER TABLE "Adjustment" ADD COLUMN "createdAt_utc" TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'Adjustment' AND column_name = 'updatedAt_utc') THEN
+        ALTER TABLE "Adjustment" ADD COLUMN "updatedAt_utc" TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'Adjustment' AND column_name = 'approvedAt_utc') THEN
+        ALTER TABLE "Adjustment" ADD COLUMN "approvedAt_utc" TIMESTAMP WITH TIME ZONE;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'Adjustment' AND column_name = 'rejectedAt_utc') THEN
+        ALTER TABLE "Adjustment" ADD COLUMN "rejectedAt_utc" TIMESTAMP WITH TIME ZONE;
+    END IF;
+END $$;
 
 -- データ変換：既存データを新UTCカラムにコピー
 UPDATE "historical_schedules" SET
