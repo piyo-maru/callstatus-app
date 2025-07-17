@@ -419,7 +419,7 @@ export const RealSystemMonitoringModal = ({ isOpen, onClose }: RealSystemMonitor
                               alert(`バックアップ失敗: ${result.message}`);
                             }
                           } catch (error) {
-                            alert(`バックアップエラー: ${error.message}`);
+                            alert(`バックアップエラー: ${error instanceof Error ? error.message : String(error)}`);
                           }
                         }}
                         className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
@@ -483,7 +483,7 @@ export const RealSystemMonitoringModal = ({ isOpen, onClose }: RealSystemMonitor
                                 alert(`復元失敗: ${restoreResult.message}`);
                               }
                             } catch (error) {
-                              alert(`復元エラー: ${error.message}`);
+                              alert(`復元エラー: ${error instanceof Error ? error.message : String(error)}`);
                             }
                           }}
                           className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors font-medium"

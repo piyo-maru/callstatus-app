@@ -2275,7 +2275,7 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
                     <div className="flex items-center">
                       <div className="w-2 h-2 bg-indigo-500 rounded-full mr-3"></div>
                       <div className="text-sm font-medium text-gray-700 uppercase tracking-wide">
-                        {currentStaff?.workArrangement ? `${currentStaff.workArrangement} / 契約勤務時間` : '契約勤務時間'}
+                        {(currentStaff as any)?.workArrangement ? `${(currentStaff as any).workArrangement} / 契約勤務時間` : '契約勤務時間'}
                       </div>
                     </div>
                     <div className="flex flex-wrap gap-2">
@@ -2886,15 +2886,10 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
         staffList={
           // ADMIN・SYSTEM_ADMINは全スタッフ操作可能、STAFFは自分のみ
           (user?.role === 'ADMIN' || user?.role === 'SYSTEM_ADMIN') 
-            ? allStaffList 
+            ? (allStaffList as any)
             : currentStaff ? [{
-                id: currentStaff.id,
-                empNo: currentStaff.empNo,
-                name: currentStaff.name,
-                department: currentStaff.department,
-                group: currentStaff.group,
-                currentStatus: '',
-                isActive: currentStaff.isActive ?? true
+                ...currentStaff,
+                currentStatus: (currentStaff as any).currentStatus || 'unknown'
               }] : []
         } 
         onSave={handleSaveSchedule} 
