@@ -320,6 +320,7 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
   const [selectedDate, setSelectedDate] = usePersonalPageDate();
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [currentStaff, setCurrentStaff] = useState<Staff | null>(null);
+  const [allStaffList, setAllStaffList] = useState<Staff[]>([]);
   
   // デバッグ: currentStaff状態をログ出力
   useEffect(() => {
@@ -649,6 +650,7 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
       
       if (response.ok) {
         const staffList: Staff[] = await response.json();
+        setAllStaffList(staffList); // 全スタッフリストを保存
         
         let targetStaff: Staff | undefined;
         
@@ -984,6 +986,7 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
           const schedulesWithDate = schedules.map((schedule: any) => ({
             ...schedule,
             date: dateStr, // 取得日付を明示的に設定
+            layer: schedule.layer || 'adjustment', // レイヤー情報を明示的に設定
             start: typeof schedule.start === 'number' ? schedule.start : new Date(schedule.start),
             end: typeof schedule.end === 'number' ? schedule.end : new Date(schedule.end)
           }));
@@ -1637,7 +1640,7 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
             start: scheduleData.start,
             end: scheduleData.end,
             memo: scheduleData.memo || '',
-            date: scheduleData.date || format(new Date(), 'yyyy-MM-dd'),
+            date: scheduleData.date, // 編集対象の予定の日付を使用
           };
           
           const response = await authenticatedFetch(`${getApiUrl()}/api/schedules`, {
@@ -1690,8 +1693,9 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
           start: scheduleData.start,
           end: scheduleData.end,
           memo: scheduleData.memo || '',
-          date: scheduleData.date || format(new Date(), 'yyyy-MM-dd'),
+          date: scheduleData.date, // ドラッグ作成時は必ずscheduleData.dateが設定される
         };
+        
         
         const response = await authenticatedFetch(`${getApiUrl()}/api/schedules`, {
           method: 'POST',
@@ -1699,6 +1703,7 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
         });
         
         if (response.ok) {
+          const createdSchedule = await response.json();
           if (isDev) console.log('スケジュール作成成功');
             await fetchSchedules();
           // スクロール位置を復元
@@ -2878,15 +2883,20 @@ const PersonalSchedulePage: React.FC<PersonalSchedulePageProps> = ({
       <ScheduleModal 
         isOpen={isModalOpen} 
         onClose={() => setIsModalOpen(false)} 
-        staffList={currentStaff ? [{
-          id: currentStaff.id,
-          empNo: currentStaff.empNo,
-          name: currentStaff.name,
-          department: currentStaff.department,
-          group: currentStaff.group,
-          currentStatus: '',
-          isActive: currentStaff.isActive ?? true
-        }] : []} 
+        staffList={
+          // ADMIN・SYSTEM_ADMINは全スタッフ操作可能、STAFFは自分のみ
+          (user?.role === 'ADMIN' || user?.role === 'SYSTEM_ADMIN') 
+            ? allStaffList 
+            : currentStaff ? [{
+                id: currentStaff.id,
+                empNo: currentStaff.empNo,
+                name: currentStaff.name,
+                department: currentStaff.department,
+                group: currentStaff.group,
+                currentStatus: '',
+                isActive: currentStaff.isActive ?? true
+              }] : []
+        } 
         onSave={handleSaveSchedule} 
         scheduleToEdit={editingSchedule ? {
           ...editingSchedule,

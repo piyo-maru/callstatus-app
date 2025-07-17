@@ -100,7 +100,9 @@ export const ScheduleModal = ({ isOpen, onClose, staffList, onSave, scheduleToEd
       status, 
       start: startDecimal, 
       end: endDecimal,
-      memo: (status === 'meeting' || status === 'training') ? memo : undefined
+      memo: (status === 'meeting' || status === 'training') ? memo : undefined,
+      // 初期データに日付がある場合は含める（ドラッグ作成時）
+      ...(initialData?.date && { date: initialData.date })
     };
     console.log('Schedule data prepared:', scheduleData);
     
