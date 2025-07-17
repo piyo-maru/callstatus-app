@@ -3,7 +3,7 @@ import { Server } from 'socket.io';
 
 @WebSocketGateway({
   cors: {
-    origin: 'http://YOUR-EC2-IP:3000', // 本番EC2環境用
+    origin: 'http://18.179.58.147:3000', // 本番環境用
   },
 })
 export class SchedulesGateway {

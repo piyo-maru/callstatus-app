@@ -1702,8 +1702,8 @@ export default function FullMainApp() {
             return;
           }
           
-          // 部分更新: スケジュール更新
-          if (isDebugEnabled()) console.log('部分更新: スケジュール更新開始:', updatedSchedule);
+          // 部分更新: スケジュール更新（削除→新規作成方式）
+          if (isDebugEnabled()) console.log('部分更新: スケジュール更新開始 (削除→新規作成):', updatedSchedule);
           
           // 既存の変換ロジックを安全に再利用
           const convertedSchedule: Schedule = {
@@ -1717,79 +1717,56 @@ export default function FullMainApp() {
             isHistorical: false
           };
           
-          // 既存のschedules状態を安全に更新
+          // 削除→新規作成方式でスケジュールを更新
           setSchedules(prevSchedules => {
-            // 既存スケジュールの検索（後勝ちシステム対応版）
-            // 後勝ちシステムでは同一時間・スタッフに複数スケジュール存在
-            // → 時間・スタッフ・日付の組み合わせでマッチング
-            const existingIndex = prevSchedules.findIndex(s => {
-              // 1. ID完全一致チェック（従来）
-              if (String(s.id) === String(convertedSchedule.id)) return true;
-              
-              // 2. 後勝ちシステム対応：時間・スタッフ・レイヤーの組み合わせマッチング
-              const timeMatch = Math.abs(s.start - convertedSchedule.start) < 0.01 && 
-                               Math.abs(s.end - convertedSchedule.end) < 0.01;
-              const staffMatch = s.staffId === convertedSchedule.staffId;
-              const layerMatch = (s.layer || 'adjustment') === (convertedSchedule.layer || 'adjustment');
-              
-              if (timeMatch && staffMatch && layerMatch) {
-                if (isDebugEnabled()) console.log('🎯 後勝ちマッチング成功:', {
-                  existingId: s.id,
-                  newId: convertedSchedule.id,
-                  time: `${s.start}-${s.end}`,
-                  staffId: s.staffId,
-                  layer: s.layer
-                });
-                return true;
-              }
-              
-              // 3. 数値ID抽出によるフォールバック
-              const extractNumericId = (id: string): string[] => {
-                const numbers = id.match(/\d+/g) || [];
-                return numbers;
-              };
-              
-              const sNumbers = extractNumericId(String(s.id));
-              const cNumbers = extractNumericId(String(convertedSchedule.id));
-              
-              for (const sNum of sNumbers) {
-                for (const cNum of cNumbers) {
-                  if (sNum === cNum) return true;
-                }
-              }
-              
-              return false;
+            // 1. 既存要素を削除（数値IDと文字列IDの両方をチェック）
+            const withoutOld = prevSchedules.filter(s => {
+              const sId = String(s.id);
+              const targetId = String(updatedSchedule.id);
+              // 完全一致チェック
+              if (sId === targetId) return false;
+              // 文字列ID内の数値IDチェック（例: 'adjustment_adj_18_55' と 18）
+              if (sId.includes(`_${targetId}_`)) return false;
+              return true;
             });
             
-            if (existingIndex < 0) {
-              console.error('⚠️ 更新対象スケジュール未発見、フォールバック実行:', convertedSchedule.id);
-              if (isDebugEnabled()) {
-                console.error('🐛 詳細デバッグ情報:');
-                console.error('  - 探しているID:', convertedSchedule.id, typeof convertedSchedule.id);
-                console.error('  - 既存スケジュール数:', prevSchedules.length);
-                console.error('  - 既存ID一覧:', prevSchedules.map(s => `${s.id}(${typeof s.id})`));
-                console.error('  - 数値ID抽出テスト:');
-                console.error('    - WebSocketのID:', convertedSchedule.id, '→', String(convertedSchedule.id).match(/\d+/g));
-                console.error('    - 既存ID例:', prevSchedules.slice(0, 3).map(s => `${s.id} → ${String(s.id).match(/\d+/g)}`));
-                console.error('  - 受信データ:', convertedSchedule);
-              }
-              safeFullRefresh('Update target schedule not found');
-              return prevSchedules; // 状態変更なし
+            if (isDebugEnabled()) {
+              console.log('🔍 削除→新規作成 デバッグ情報:', {
+                updatedScheduleId: updatedSchedule.id,
+                updatedScheduleIdType: typeof updatedSchedule.id,
+                convertedScheduleId: convertedSchedule.id,
+                convertedScheduleIdType: typeof convertedSchedule.id,
+                beforeCount: prevSchedules.length,
+                afterDeleteCount: withoutOld.length,
+                removedCount: prevSchedules.length - withoutOld.length,
+                existingIds: prevSchedules.map(s => s.id),
+                targetIdFound: prevSchedules.some(s => {
+                  const sId = String(s.id);
+                  const targetId = String(updatedSchedule.id);
+                  return sId === targetId || sId.includes(`_${targetId}_`);
+                })
+              });
+              console.log('📋 existingIds:', prevSchedules.map(s => s.id));
+              console.log('🎯 targetIdFound:', prevSchedules.some(s => {
+                const sId = String(s.id);
+                const targetId = String(updatedSchedule.id);
+                return sId === targetId || sId.includes(`_${targetId}_`);
+              }));
             }
             
-            // 既存スケジュールを安全に置換
-            const updatedSchedules = [...prevSchedules];
-            updatedSchedules[existingIndex] = convertedSchedule;
-            if (isDebugEnabled()) console.log('✅ スケジュール更新成功:', convertedSchedule.id);
+            // 2. 新しい要素を追加
+            const updatedSchedules = [...withoutOld, convertedSchedule];
             
-            // === Phase 2a: 視覚的フィードバック適用 ===
-            setScheduleFeedback(convertedSchedule.id, 'updated', 2500);
+            if (isDebugEnabled()) console.log('✅ スケジュール更新成功 (削除→新規作成):', convertedSchedule.id);
             
             // 更新時刻を記録
             optimizedScheduleUpdateRef.current.lastUpdate = new Date();
             
             return updatedSchedules;
           });
+          
+          // === Phase 2a: 視覚的フィードバック適用 ===
+          setScheduleFeedback(convertedSchedule.id, 'updated', 2500);
           
           const duration = performance.now() - startTime;
           setOptimizationMetrics(prev => ({
@@ -1921,16 +1898,7 @@ export default function FullMainApp() {
         const displayDateStr = `${displayDate.getFullYear()}-${String(displayDate.getMonth() + 1).padStart(2, '0')}-${String(displayDate.getDate()).padStart(2, '0')}`;
         if(scheduleDateStr === displayDateStr) {
             // 🛡️ 安全な分岐制御（デフォルト：既存実装）
-            if (isDebugEnabled()) console.log('🔄 WebSocket受信: schedule:new', { 
-                enabled: enableOptimizedUpdates, 
-                safe: isSafeForOptimizedUpdate(newSchedule),
-                schedule: newSchedule,
-                date_match: scheduleDateStr === displayDateStr,
-                scheduleDateStr,
-                displayDateStr 
-            });
             if (enableOptimizedUpdates && isSafeForOptimizedUpdate(newSchedule)) {
-                if (isDebugEnabled()) console.log('✅ 部分更新実行: schedule:new');
                 optimizedScheduleUpdate.add(newSchedule);
             } else {
                 // 🔒 既存の安全な実装（完全保護）
@@ -1948,13 +1916,7 @@ export default function FullMainApp() {
         const displayDateStr = `${displayDate.getFullYear()}-${String(displayDate.getMonth() + 1).padStart(2, '0')}-${String(displayDate.getDate()).padStart(2, '0')}`;
         if(scheduleDateStr === displayDateStr){
             // 🛡️ 安全な分岐制御（デフォルト：既存実装）
-            if (isDebugEnabled()) console.log('🔄 WebSocket受信: schedule:updated', { 
-                enabled: enableOptimizedUpdates, 
-                safe: isSafeForOptimizedUpdate(updatedSchedule),
-                schedule: updatedSchedule 
-            });
             if (enableOptimizedUpdates && isSafeForOptimizedUpdate(updatedSchedule)) {
-                if (isDebugEnabled()) console.log('✅ 部分更新実行: schedule:updated');
                 optimizedScheduleUpdate.update(updatedSchedule);
             } else {
                 // 🔒 既存の安全な実装（完全保護）
@@ -1968,12 +1930,7 @@ export default function FullMainApp() {
     }
     const handleDeletedSchedule = (id: number) => {
         // 🛡️ 安全な分岐制御（デフォルト：既存実装）
-        if (isDebugEnabled()) console.log('🔄 WebSocket受信: schedule:deleted', { 
-            enabled: enableOptimizedUpdates, 
-            id: id 
-        });
         if (enableOptimizedUpdates) {
-            if (isDebugEnabled()) console.log('✅ 部分更新実行: schedule:deleted');
             optimizedScheduleUpdate.delete(id);
         } else {
             // 🔒 既存の安全な実装（完全保護）
