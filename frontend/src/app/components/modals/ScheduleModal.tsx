@@ -93,6 +93,8 @@ export const ScheduleModal = ({ isOpen, onClose, staffList, onSave, scheduleToEd
       return; 
     }
     
+    
+    
     const scheduleData = { 
       staffId: parseInt(staffId), 
       status, 

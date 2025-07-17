@@ -1028,6 +1028,7 @@ export default function FullMainApp() {
   
   // スクロール位置保存用（縦スクロール対応）
   const [savedScrollPosition, setSavedScrollPosition] = useState({ x: 0, y: 0 });
+  
   const [isImporting, setIsImporting] = useState(false);
   const [departmentSettings, setDepartmentSettings] = useState<{
     departments: Array<{id: number, name: string, shortName?: string, backgroundColor?: string, displayOrder?: number}>,
@@ -2030,15 +2031,12 @@ export default function FullMainApp() {
   const handleOpenModal = (schedule: Schedule | null = null, initialData: Partial<Schedule> | null = null, isDragCreated: boolean = false) => {
     // console.log('=== handleOpenModal ===', { schedule, initialData, isDragCreated });
     
-    // モーダル開く前にスクロール位置をキャプチャ（縦・横両対応）
-    const horizontalScroll = bottomScrollRef.current?.scrollLeft || 0;
-    const verticalScroll = window.scrollY || document.documentElement.scrollTop || 0;
+    // シンプルなスクロール位置保存
+    setSavedScrollPosition({ 
+      x: bottomScrollRef.current?.scrollLeft || 0, 
+      y: window.scrollY || 0 
+    });
     
-    // console.log('モーダルオープン時のスクロール位置キャプチャ:');
-    // console.log('- 横スクロール:', horizontalScroll);
-    // console.log('- 縦スクロール:', verticalScroll);
-    
-    setSavedScrollPosition({ x: horizontalScroll, y: verticalScroll });
     
     // 新規作成時（scheduleもinitialDataもない場合）は現在時刻を自動設定
     let finalInitialData = initialData;
@@ -2157,7 +2155,7 @@ export default function FullMainApp() {
       // fetchData完了後、保存した位置に復元 - 縦・横両対応
       const restoreScroll = () => {
         if (topScrollRef.current && bottomScrollRef.current) {
-          // console.log('スクロール復元実行:', savedScrollPosition, 'current横:', topScrollRef.current.scrollLeft, 'current縦:', window.scrollY);
+          console.log('📍 スクロール復元実行:', savedScrollPosition, 'current横:', topScrollRef.current.scrollLeft, 'current縦:', window.scrollY);
           
           // 横スクロール復元
           if (savedScrollPosition.x > 0) {
@@ -2170,7 +2168,7 @@ export default function FullMainApp() {
             window.scrollTo(savedScrollPosition.x || 0, savedScrollPosition.y);
           }
         } else {
-          // console.log('スクロール要素が見つかりません');
+          console.log('スクロール要素が見つかりません');
         }
       };
       // 複数回復元を試行（DOM更新タイミングの違いに対応）
@@ -2216,38 +2214,30 @@ export default function FullMainApp() {
       // データを再取得してUIを更新
       // console.log('復元予定のスクロール位置:', savedScrollPosition);
       await fetchData(displayDate);
-      // データ更新完了後、保存した位置に復元 - 段階的試行
-      const restoreScroll = (attempt = 1) => {
+      
+      // fetchData完了後、保存した位置に復元 - 縦・横両対応（追加処理と同じパターン）
+      const restoreScroll = () => {
         if (topScrollRef.current && bottomScrollRef.current) {
-          const currentPosX = topScrollRef.current.scrollLeft;
-          const currentPosY = window.scrollY;
-          // console.log(`スクロール復元試行${attempt}:`, savedScrollPosition, 'current横:', currentPosX, 'current縦:', currentPosY);
+          console.log('📍 削除後スクロール復元実行:', savedScrollPosition, 'current横:', topScrollRef.current.scrollLeft, 'current縦:', window.scrollY);
+          
+          // 横スクロール復元
           if (savedScrollPosition.x > 0) {
             topScrollRef.current.scrollLeft = savedScrollPosition.x;
             bottomScrollRef.current.scrollLeft = savedScrollPosition.x;
-            // 復元が成功したかチェック
-            setTimeout(() => {
-              const newPosX = topScrollRef.current?.scrollLeft || 0;
-              const newPosY = window.scrollY;
-              const xDiff = Math.abs(newPosX - (savedScrollPosition.x || 0));
-              const yDiff = Math.abs(newPosY - (savedScrollPosition.y || 0));
-              
-              if ((xDiff > 10 || yDiff > 10) && attempt < 5) {
-                // console.log(`復元失敗、再試行${attempt + 1}:`, { newPosX, newPosY }, 'target:', savedScrollPosition);
-                restoreScroll(attempt + 1);
-              } else {
-                // console.log('スクロール復元完了:', { x: newPosX, y: newPosY });
-              }
-            }, 50);
+          }
+          
+          // 縦スクロール復元
+          if (savedScrollPosition.y >= 0) {
+            window.scrollTo(savedScrollPosition.x || 0, savedScrollPosition.y);
           }
         } else {
-          // console.log('スクロール要素未準備、再試行:', attempt);
-          if (attempt < 5) {
-            setTimeout(() => restoreScroll(attempt + 1), 100);
-          }
+          console.log('削除後スクロール要素が見つかりません');
         }
       };
-      setTimeout(() => restoreScroll(1), 100);
+      // 複数回復元を試行（DOM更新タイミングの違いに対応）
+      setTimeout(restoreScroll, 50);
+      setTimeout(restoreScroll, 200);
+      setTimeout(restoreScroll, 500);
     } catch (error) { 
       console.error('予定の削除に失敗しました', error);
       alert(`予定の削除に失敗しました: ${error instanceof Error ? error.message : String(error)}`);
@@ -3581,8 +3571,9 @@ export default function FullMainApp() {
               部署 / グループ / スタッフ名
             </div>
             <div className="flex-1">
-              <div className="min-w-[1120px]">
-                <div className="flex font-bold text-sm">
+              <div className="overflow-x-auto" ref={topScrollRef} onScroll={handleTopScroll} data-scroll-ref="top">
+                <div className="min-w-[1120px]">
+                  <div className="flex font-bold text-sm">
                   {Array.from({ length: 13 }).map((_, i) => {
                     const hour = 8 + i;
                     const isEarlyOrNight = hour === 8 || hour >= 18;
@@ -3597,6 +3588,7 @@ export default function FullMainApp() {
                       </div>
                     );
                   })}
+                  </div>
                 </div>
               </div>
             </div>
@@ -3651,7 +3643,7 @@ export default function FullMainApp() {
             </div>
             <div className="flex-1">
               {/* メインコンテンツ */}
-              <div className="overflow-x-auto" ref={bottomScrollRef} onScroll={handleBottomScroll}>
+              <div className="overflow-x-auto" ref={bottomScrollRef} onScroll={handleBottomScroll} data-scroll-ref="bottom">
                 <div className="min-w-[1120px] relative">
                   {/* グリッド線はスタッフ行に個別配置（下記のスタッフループ内） */}
                   {currentTimePosition !== null && (
@@ -3888,7 +3880,15 @@ export default function FullMainApp() {
                                         )}
                                       </span>
                                       {!isContract && !isHistoricalData && canEdit(schedule.staffId) && (
-                                        <button onClick={(e) => { e.stopPropagation(); setDeletingScheduleId(schedule.id); }} 
+                                        <button onClick={(e) => { 
+                                          e.stopPropagation(); 
+                                          // 削除確認前にスクロール位置を保存
+                                          setSavedScrollPosition({ 
+                                            x: bottomScrollRef.current?.scrollLeft || 0, 
+                                            y: window.scrollY || 0 
+                                          });
+                                          setDeletingScheduleId(schedule.id); 
+                                        }} 
                                                 className="text-white hover:text-red-200 ml-2">×</button>
                                       )}
                                     </div>
