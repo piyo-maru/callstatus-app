@@ -1,7 +1,6 @@
-import { Controller, Get, Post, Body, Query, HttpCode } from '@nestjs/common';
+import { Controller, Get } from '@nestjs/common';
 import { PrismaService } from './prisma.service';
 import { BackupService } from './backup/backup.service';
-import * as bcrypt from 'bcrypt';
 import * as os from 'os';
 import * as process from 'process';
 
@@ -9,7 +8,7 @@ import * as process from 'process';
 export class AppController {
   constructor(
     private prisma: PrismaService,
-    private backupService: BackupService
+    private backupService: BackupService,
   ) {}
 
   // 実際のCPU使用率を取得（100ms測定）
@@ -21,11 +20,11 @@ export class AppController {
       setTimeout(() => {
         const currentUsage = process.cpuUsage(startUsage);
         const currentTime = process.hrtime(startTime);
-        
+
         const elapTimeMS = currentTime[0] * 1000 + currentTime[1] / 1e6;
-        const userPercent = (currentUsage.user / 1000) / elapTimeMS * 100;
-        const systemPercent = (currentUsage.system / 1000) / elapTimeMS * 100;
-        
+        const userPercent = (currentUsage.user / 1000 / elapTimeMS) * 100;
+        const systemPercent = (currentUsage.system / 1000 / elapTimeMS) * 100;
+
         resolve(Math.round((userPercent + systemPercent) * 100) / 100);
       }, 100);
     });
@@ -36,11 +35,11 @@ export class AppController {
     const totalMemory = os.totalmem();
     const freeMemory = os.freemem();
     const usedMemory = totalMemory - freeMemory;
-    
+
     return {
       total: Math.round(totalMemory / 1024 / 1024), // MB
-      free: Math.round(freeMemory / 1024 / 1024),   // MB
-      used: Math.round(usedMemory / 1024 / 1024),   // MB
+      free: Math.round(freeMemory / 1024 / 1024), // MB
+      used: Math.round(usedMemory / 1024 / 1024), // MB
       usagePercent: Math.round((usedMemory / totalMemory) * 100),
     };
   }
@@ -49,45 +48,53 @@ export class AppController {
   private async getRealDatabaseMetrics() {
     try {
       const startTime = Date.now();
-      
+
       // 実際のクエリ実行時間測定
       await this.prisma.$queryRaw`SELECT 1`;
       const responseTime = Date.now() - startTime;
-      
+
       // 実際のスタッフ数取得
       const totalStaffCount = await this.prisma.staff.count(); // 総スタッフ数（論理削除含む）
       const activeStaffCount = await this.prisma.staff.count({
-        where: { isActive: true }
+        where: { isActive: true },
       }); // アクティブスタッフ数
-      
+
       // 今日のスケジュール数取得（2層データレイヤー対応）
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       const tomorrow = new Date(today);
       tomorrow.setDate(tomorrow.getDate() + 1);
-      
+
       // Adjustment層の今日のデータ数
       const adjustmentCount = await this.prisma.adjustment.count({
         where: {
           date: {
             gte: today,
-            lt: tomorrow
-          }
-        }
+            lt: tomorrow,
+          },
+        },
       });
 
       // Contract層の今日のデータ数（activeStaffCountと同じ）
       // 各スタッフは今日の曜日に対応する契約があれば1件としてカウント
       const weekday = today.getDay(); // 0:日曜, 1:月曜, ..., 6:土曜
-      const dayColumns = ['sundayHours', 'mondayHours', 'tuesdayHours', 'wednesdayHours', 'thursdayHours', 'fridayHours', 'saturdayHours'];
+      const dayColumns = [
+        'sundayHours',
+        'mondayHours',
+        'tuesdayHours',
+        'wednesdayHours',
+        'thursdayHours',
+        'fridayHours',
+        'saturdayHours',
+      ];
       const todayColumn = dayColumns[weekday];
-      
+
       const contractCount = await this.prisma.contract.count({
         where: {
           [todayColumn]: {
-            not: null
-          }
-        }
+            not: null,
+          },
+        },
       });
 
       const todayScheduleCount = adjustmentCount + contractCount;
@@ -97,7 +104,7 @@ export class AppController {
         totalStaffCount: totalStaffCount,
         activeStaffCount: activeStaffCount,
         todayScheduleCount: todayScheduleCount,
-        errors: 0 // エラーカウンターは後で実装
+        errors: 0, // エラーカウンターは後で実装
       };
     } catch (error) {
       console.error('Database metrics error:', error);
@@ -106,7 +113,7 @@ export class AppController {
         totalStaffCount: 0,
         activeStaffCount: 0,
         todayScheduleCount: 0,
-        errors: 1
+        errors: 1,
       };
     }
   }
@@ -120,7 +127,7 @@ export class AppController {
       message: 'API server is running',
       timestamp: new Date().toISOString(),
       version: '1.0.0',
-      status: 'ok'
+      status: 'ok',
     };
   }
 
@@ -133,39 +140,50 @@ export class AppController {
     const cpuUsage = await this.getRealCpuUsage();
     const memoryStats = this.getRealMemoryUsage();
     const dbStats = await this.getRealDatabaseMetrics();
-    
-    
+
     // システムヘルス判定
     let healthStatus = 'healthy';
     const issues = [];
-    
+
     // CPU監視
     if (cpuUsage > 85) {
       healthStatus = 'critical';
-      issues.push(`【緊急】CPU使用率危険: ${cpuUsage}% - システム応答性に影響の可能性`);
+      issues.push(
+        `【緊急】CPU使用率危険: ${cpuUsage}% - システム応答性に影響の可能性`,
+      );
     } else if (cpuUsage > 70) {
       healthStatus = 'warning';
-      issues.push(`【注意】CPU使用率高: ${cpuUsage}% - システム応答性低下の兆候`);
+      issues.push(
+        `【注意】CPU使用率高: ${cpuUsage}% - システム応答性低下の兆候`,
+      );
     }
-    
+
     // メモリ監視
     if (memoryStats.usagePercent > 90) {
       healthStatus = 'critical';
-      issues.push(`【緊急】メモリ使用率危険: ${memoryStats.usagePercent}% - システム不安定化リスク`);
+      issues.push(
+        `【緊急】メモリ使用率危険: ${memoryStats.usagePercent}% - システム不安定化リスク`,
+      );
     } else if (memoryStats.usagePercent > 80) {
       if (healthStatus !== 'critical') healthStatus = 'warning';
-      issues.push(`【注意】メモリ使用率高: ${memoryStats.usagePercent}% - メモリ不足の兆候`);
+      issues.push(
+        `【注意】メモリ使用率高: ${memoryStats.usagePercent}% - メモリ不足の兆候`,
+      );
     }
-    
+
     // データベース応答監視
     if (dbStats.responseTime > 100) {
       if (healthStatus !== 'critical') healthStatus = 'warning';
-      issues.push(`【注意】DB応答時間遅延: ${dbStats.responseTime}ms - ユーザー体感への影響開始`);
+      issues.push(
+        `【注意】DB応答時間遅延: ${dbStats.responseTime}ms - ユーザー体感への影響開始`,
+      );
     }
-    
+
     // 正常時のメッセージ
     if (healthStatus === 'healthy') {
-      issues.push(`システム正常稼働中 - アクティブスタッフ${dbStats.activeStaffCount}名（総${dbStats.totalStaffCount}名）・今日の予定${dbStats.todayScheduleCount}件`);
+      issues.push(
+        `システム正常稼働中 - アクティブスタッフ${dbStats.activeStaffCount}名（総${dbStats.totalStaffCount}名）・今日の予定${dbStats.todayScheduleCount}件`,
+      );
     }
 
     return {
@@ -190,7 +208,7 @@ export class AppController {
         availableSpace: 0, // 仮の値
         autoBackupEnabled: false,
         nextScheduledBackup: null,
-        failedBackupsCount: 0
+        failedBackupsCount: 0,
       },
       health: {
         status: healthStatus,
@@ -200,8 +218,8 @@ export class AppController {
       businessContext: {
         companyScale: 'システム監視',
         monitoringFocus: 'システム安定稼働重視',
-        realDataSource: true
-      }
+        realDataSource: true,
+      },
     };
   }
 
@@ -247,7 +265,7 @@ export class AppController {
   // async login(@Body() body: any) {
   //   const { email, password } = body;
   //   console.log('=== ログイン試行 ===', { email });
-  //   
+  //
   //   // ユーザー検索
   //   const user = await this.prisma.user_auth.findUnique({
   //     where: { email },

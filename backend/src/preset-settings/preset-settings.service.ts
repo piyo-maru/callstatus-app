@@ -4,7 +4,7 @@ import { PrismaService } from '../prisma.service';
 // DTOs とインターフェース
 export interface PresetScheduleItemDto {
   status: string;
-  startTime: number;  // 小数点形式 (例: 9.5 = 9:30)
+  startTime: number; // 小数点形式 (例: 9.5 = 9:30)
   endTime: number;
   memo?: string;
   sortOrder?: number;
@@ -75,14 +75,14 @@ export class PresetSettingsService {
     let userPresetSettings = await this.prisma.user_preset_settings.findUnique({
       where: { staffId },
       include: {
-        UserPresets: {
+        user_presets: {
           include: {
-            UserPresetSchedules: {
-              orderBy: { sortOrder: 'asc' }
-            }
-          }
-        }
-      }
+            user_preset_schedules: {
+              orderBy: { sortOrder: 'asc' },
+            },
+          },
+        },
+      },
     });
 
     // 存在しない場合はデフォルト設定を作成
@@ -99,7 +99,7 @@ export class PresetSettingsService {
    */
   async updateUserPresetSettings(
     staffId: number,
-    pagePresetSettings: PagePresetSettingsDto
+    pagePresetSettings: PagePresetSettingsDto,
   ): Promise<UserPresetSettingsDto> {
     // 既存設定を取得または作成
     await this.ensureUserPresetSettingsExists(staffId);
@@ -110,17 +110,17 @@ export class PresetSettingsService {
       data: {
         pagePresetSettings: pagePresetSettings as any,
         lastModified: new Date(),
-        updatedAt: new Date()
+        updatedAt: new Date(),
       },
       include: {
-        UserPresets: {
+        user_presets: {
           include: {
-            UserPresetSchedules: {
-              orderBy: { sortOrder: 'asc' }
-            }
-          }
-        }
-      }
+            user_preset_schedules: {
+              orderBy: { sortOrder: 'asc' },
+            },
+          },
+        },
+      },
     });
 
     return this.convertToUserPresetSettingsDto(updated);
@@ -129,7 +129,10 @@ export class PresetSettingsService {
   /**
    * 新しいプリセットを追加
    */
-  async createPreset(staffId: number, presetData: CreatePresetDto): Promise<UnifiedPresetDto> {
+  async createPreset(
+    staffId: number,
+    presetData: CreatePresetDto,
+  ): Promise<UnifiedPresetDto> {
     // ユーザー設定が存在することを確認
     const userSettings = await this.ensureUserPresetSettingsExists(staffId);
 
@@ -138,9 +141,9 @@ export class PresetSettingsService {
       where: {
         userPresetSettingsId_presetId: {
           userPresetSettingsId: userSettings.id,
-          presetId: presetData.presetId
-        }
-      }
+          presetId: presetData.presetId,
+        },
+      },
     });
 
     if (existingPreset) {
@@ -148,7 +151,7 @@ export class PresetSettingsService {
     }
 
     // プリセットを作成
-    const newPreset = await this.prisma.user_presets.create({
+    const newPreset = await (this.prisma.user_presets.create as any)({
       data: {
         userPresetSettingsId: userSettings.id,
         presetId: presetData.presetId,
@@ -159,23 +162,23 @@ export class PresetSettingsService {
         isActive: presetData.isActive ?? true,
         customizable: presetData.customizable ?? true,
         isDefault: presetData.isDefault ?? false,
-        UserPresetSchedules: {
+        user_preset_schedules: {
           createMany: {
             data: presetData.schedules.map((schedule, index) => ({
               status: schedule.status,
               startTime: schedule.startTime,
               endTime: schedule.endTime,
               memo: schedule.memo,
-              sortOrder: schedule.sortOrder ?? index
-            }))
-          }
-        }
+              sortOrder: schedule.sortOrder ?? index,
+            })),
+          },
+        },
       },
       include: {
-        UserPresetSchedules: {
-          orderBy: { sortOrder: 'asc' }
-        }
-      }
+        user_preset_schedules: {
+          orderBy: { sortOrder: 'asc' },
+        },
+      },
     });
 
     return this.convertToUnifiedPresetDto(newPreset);
@@ -187,11 +190,11 @@ export class PresetSettingsService {
   async updatePreset(
     staffId: number,
     presetId: string,
-    updateData: UpdatePresetDto
+    updateData: UpdatePresetDto,
   ): Promise<UnifiedPresetDto> {
     // ユーザー設定を取得
     const userSettings = await this.prisma.user_preset_settings.findUnique({
-      where: { staffId }
+      where: { staffId },
     });
 
     if (!userSettings) {
@@ -203,9 +206,9 @@ export class PresetSettingsService {
       where: {
         userPresetSettingsId_presetId: {
           userPresetSettingsId: userSettings.id,
-          presetId: presetId
-        }
-      }
+          presetId: presetId,
+        },
+      },
     });
 
     if (!existingPreset) {
@@ -215,17 +218,23 @@ export class PresetSettingsService {
     // プリセット基本情報を更新
     const updatePresetData: any = {};
     if (updateData.name !== undefined) updatePresetData.name = updateData.name;
-    if (updateData.displayName !== undefined) updatePresetData.displayName = updateData.displayName;
-    if (updateData.description !== undefined) updatePresetData.description = updateData.description;
-    if (updateData.category !== undefined) updatePresetData.category = updateData.category;
-    if (updateData.isActive !== undefined) updatePresetData.isActive = updateData.isActive;
-    if (updateData.customizable !== undefined) updatePresetData.customizable = updateData.customizable;
-    if (updateData.isDefault !== undefined) updatePresetData.isDefault = updateData.isDefault;
+    if (updateData.displayName !== undefined)
+      updatePresetData.displayName = updateData.displayName;
+    if (updateData.description !== undefined)
+      updatePresetData.description = updateData.description;
+    if (updateData.category !== undefined)
+      updatePresetData.category = updateData.category;
+    if (updateData.isActive !== undefined)
+      updatePresetData.isActive = updateData.isActive;
+    if (updateData.customizable !== undefined)
+      updatePresetData.customizable = updateData.customizable;
+    if (updateData.isDefault !== undefined)
+      updatePresetData.isDefault = updateData.isDefault;
 
     // スケジュールが更新される場合は既存のスケジュールを削除して再作成
     if (updateData.schedules) {
-      await this.prisma.user_presetsSchedule.deleteMany({
-        where: { userPresetId: existingPreset.id }
+      await this.prisma.user_preset_schedules.deleteMany({
+        where: { userPresetId: existingPreset.id },
       });
     }
 
@@ -235,24 +244,24 @@ export class PresetSettingsService {
         ...updatePresetData,
         updatedAt: new Date(),
         ...(updateData.schedules && {
-          UserPresetSchedules: {
+          user_preset_schedules: {
             createMany: {
               data: updateData.schedules.map((schedule, index) => ({
                 status: schedule.status,
                 startTime: schedule.startTime,
                 endTime: schedule.endTime,
                 memo: schedule.memo,
-                sortOrder: schedule.sortOrder ?? index
-              }))
-            }
-          }
-        })
+                sortOrder: schedule.sortOrder ?? index,
+              })),
+            },
+          },
+        }),
       },
       include: {
-        UserPresetSchedules: {
-          orderBy: { sortOrder: 'asc' }
-        }
-      }
+        user_preset_schedules: {
+          orderBy: { sortOrder: 'asc' },
+        },
+      },
     });
 
     return this.convertToUnifiedPresetDto(updatedPreset);
@@ -264,7 +273,7 @@ export class PresetSettingsService {
   async deletePreset(staffId: number, presetId: string): Promise<void> {
     // ユーザー設定を取得
     const userSettings = await this.prisma.user_preset_settings.findUnique({
-      where: { staffId }
+      where: { staffId },
     });
 
     if (!userSettings) {
@@ -275,8 +284,8 @@ export class PresetSettingsService {
     const deleteResult = await this.prisma.user_presets.deleteMany({
       where: {
         userPresetSettingsId: userSettings.id,
-        presetId: presetId
-      }
+        presetId: presetId,
+      },
     });
 
     if (deleteResult.count === 0) {
@@ -293,17 +302,17 @@ export class PresetSettingsService {
     const categoryStats = await this.prisma.user_presets.groupBy({
       by: ['category'],
       _count: {
-        category: true
-      }
+        category: true,
+      },
     });
 
     return {
       totalUsers,
       totalPresets,
-      categoryStats: categoryStats.map(stat => ({
+      categoryStats: categoryStats.map((stat) => ({
         category: stat.category,
-        count: stat._count.category
-      }))
+        count: stat._count.category,
+      })),
     };
   }
 
@@ -314,7 +323,7 @@ export class PresetSettingsService {
    */
   private async ensureUserPresetSettingsExists(staffId: number) {
     let userSettings = await this.prisma.user_preset_settings.findUnique({
-      where: { staffId }
+      where: { staffId },
     });
 
     if (!userSettings) {
@@ -331,7 +340,7 @@ export class PresetSettingsService {
     // 管理者用固定ID（999）の場合はスタッフチェックをスキップ
     if (staffId !== 999) {
       const staff = await this.prisma.staff.findUnique({
-        where: { id: staffId }
+        where: { id: staffId },
       });
 
       if (!staff) {
@@ -342,28 +351,42 @@ export class PresetSettingsService {
     // デフォルトのページ別プリセット設定
     const defaultPageSettings = {
       monthlyPlanner: {
-        enabledPresetIds: ['standard-work', 'remote-work', 'morning-only', 'afternoon-only', 'off'],
-        defaultPresetId: 'standard-work'
+        enabledPresetIds: [
+          'standard-work',
+          'remote-work',
+          'morning-only',
+          'afternoon-only',
+          'off',
+        ],
+        defaultPresetId: 'standard-work',
       },
       personalPage: {
-        enabledPresetIds: ['standard-work', 'remote-work', 'morning-only', 'afternoon-only', 'off'],
-        defaultPresetId: 'standard-work'
-      }
+        enabledPresetIds: [
+          'standard-work',
+          'remote-work',
+          'morning-only',
+          'afternoon-only',
+          'off',
+        ],
+        defaultPresetId: 'standard-work',
+      },
     };
 
     // UserPresetSettingsを作成
-    const userPresetSettings = await this.prisma.user_preset_settings.create({
+    const userPresetSettings = await (
+      this.prisma.user_preset_settings.create as any
+    )({
       data: {
         staffId,
-        pagePresetSettings: defaultPageSettings
-      }
+        pagePresetSettings: defaultPageSettings,
+      },
     });
 
     // デフォルトプリセットを作成（スケジュール付き）
     const defaultPresets = this.getDefaultPresetsWithSchedules();
-    
+
     for (const presetData of defaultPresets) {
-      await this.prisma.user_presets.create({
+      await (this.prisma.user_presets.create as any)({
         data: {
           userPresetSettingsId: userPresetSettings.id,
           presetId: presetData.presetId,
@@ -374,18 +397,18 @@ export class PresetSettingsService {
           isActive: presetData.isActive,
           customizable: presetData.customizable,
           isDefault: presetData.isDefault,
-          UserPresetSchedules: {
+          user_preset_schedules: {
             createMany: {
               data: presetData.schedules.map((schedule, index) => ({
                 status: schedule.status,
                 startTime: schedule.startTime,
                 endTime: schedule.endTime,
                 memo: schedule.memo,
-                sortOrder: index
-              }))
-            }
-          }
-        }
+                sortOrder: index,
+              })),
+            },
+          },
+        },
       });
     }
 
@@ -393,14 +416,14 @@ export class PresetSettingsService {
     return await this.prisma.user_preset_settings.findUnique({
       where: { id: userPresetSettings.id },
       include: {
-        UserPresets: {
+        user_presets: {
           include: {
-            UserPresetSchedules: {
-              orderBy: { sortOrder: 'asc' }
-            }
-          }
-        }
-      }
+            user_preset_schedules: {
+              orderBy: { sortOrder: 'asc' },
+            },
+          },
+        },
+      },
     });
   }
 
@@ -418,7 +441,7 @@ export class PresetSettingsService {
         category: 'general',
         isActive: true,
         customizable: true,
-        isDefault: true
+        isDefault: true,
       },
       {
         presetId: 'remote-work',
@@ -428,7 +451,7 @@ export class PresetSettingsService {
         category: 'general',
         isActive: true,
         customizable: true,
-        isDefault: false
+        isDefault: false,
       },
       {
         presetId: 'off',
@@ -438,8 +461,8 @@ export class PresetSettingsService {
         category: 'time-off',
         isActive: true,
         customizable: false,
-        isDefault: false
-      }
+        isDefault: false,
+      },
     ];
   }
 
@@ -464,21 +487,21 @@ export class PresetSettingsService {
             status: 'online',
             startTime: 9.0,
             endTime: 12.0,
-            memo: ''
+            memo: '',
           },
           {
             status: 'break',
             startTime: 12.0,
             endTime: 13.0,
-            memo: ''
+            memo: '',
           },
           {
             status: 'online',
             startTime: 13.0,
             endTime: 18.0,
-            memo: ''
-          }
-        ]
+            memo: '',
+          },
+        ],
       },
       {
         presetId: 'part-time-employee',
@@ -494,21 +517,21 @@ export class PresetSettingsService {
             status: 'online',
             startTime: 9.0,
             endTime: 12.0,
-            memo: ''
+            memo: '',
           },
           {
             status: 'break',
             startTime: 12.0,
             endTime: 13.0,
-            memo: ''
+            memo: '',
           },
           {
             status: 'online',
             startTime: 13.0,
             endTime: 16.0,
-            memo: ''
-          }
-        ]
+            memo: '',
+          },
+        ],
       },
       {
         presetId: 'remote-full-time',
@@ -524,21 +547,21 @@ export class PresetSettingsService {
             status: 'remote',
             startTime: 9.0,
             endTime: 12.0,
-            memo: ''
+            memo: '',
           },
           {
             status: 'break',
             startTime: 12.0,
             endTime: 13.0,
-            memo: ''
+            memo: '',
           },
           {
             status: 'remote',
             startTime: 13.0,
             endTime: 18.0,
-            memo: ''
-          }
-        ]
+            memo: '',
+          },
+        ],
       },
       {
         presetId: 'remote-part-time',
@@ -554,21 +577,21 @@ export class PresetSettingsService {
             status: 'remote',
             startTime: 9.0,
             endTime: 12.0,
-            memo: ''
+            memo: '',
           },
           {
             status: 'break',
             startTime: 12.0,
             endTime: 13.0,
-            memo: ''
+            memo: '',
           },
           {
             status: 'remote',
             startTime: 13.0,
             endTime: 16.0,
-            memo: ''
-          }
-        ]
+            memo: '',
+          },
+        ],
       },
       // 休暇カテゴリ
       {
@@ -585,9 +608,9 @@ export class PresetSettingsService {
             status: 'off',
             startTime: 9.0,
             endTime: 18.0,
-            memo: '終日休暇'
-          }
-        ]
+            memo: '終日休暇',
+          },
+        ],
       },
       {
         presetId: 'sudden-off',
@@ -603,9 +626,9 @@ export class PresetSettingsService {
             status: 'off',
             startTime: 9.0,
             endTime: 18.0,
-            memo: '突発休'
-          }
-        ]
+            memo: '突発休',
+          },
+        ],
       },
       {
         presetId: 'morning-off',
@@ -621,9 +644,9 @@ export class PresetSettingsService {
             status: 'off',
             startTime: 9.0,
             endTime: 13.0,
-            memo: '午前休'
-          }
-        ]
+            memo: '午前休',
+          },
+        ],
       },
       {
         presetId: 'afternoon-off',
@@ -639,9 +662,9 @@ export class PresetSettingsService {
             status: 'off',
             startTime: 13.0,
             endTime: 18.0,
-            memo: '午後休'
-          }
-        ]
+            memo: '午後休',
+          },
+        ],
       },
       {
         presetId: 'lunch-break',
@@ -657,9 +680,9 @@ export class PresetSettingsService {
             status: 'break',
             startTime: 12.0,
             endTime: 13.0,
-            memo: '昼休憩'
-          }
-        ]
+            memo: '昼休憩',
+          },
+        ],
       },
       // 夜間担当カテゴリ
       {
@@ -676,9 +699,9 @@ export class PresetSettingsService {
             status: 'night duty',
             startTime: 18.0,
             endTime: 21.0,
-            memo: '夜間担当'
-          }
-        ]
+            memo: '夜間担当',
+          },
+        ],
       },
       {
         presetId: 'night-duty-extended',
@@ -694,9 +717,9 @@ export class PresetSettingsService {
             status: 'night duty',
             startTime: 17.0,
             endTime: 21.0,
-            memo: '夜間担当(延長)'
-          }
-        ]
+            memo: '夜間担当(延長)',
+          },
+        ],
       },
       // その他カテゴリ
       {
@@ -713,9 +736,9 @@ export class PresetSettingsService {
             status: 'meeting',
             startTime: 14.0,
             endTime: 15.0,
-            memo: '定例会議'
-          }
-        ]
+            memo: '定例会議',
+          },
+        ],
       },
       {
         presetId: 'training',
@@ -731,10 +754,10 @@ export class PresetSettingsService {
             status: 'training',
             startTime: 10.0,
             endTime: 16.0,
-            memo: '研修・トレーニング'
-          }
-        ]
-      }
+            memo: '研修・トレーニング',
+          },
+        ],
+      },
     ];
   }
 
@@ -744,12 +767,14 @@ export class PresetSettingsService {
   private convertToUserPresetSettingsDto(dbEntity: any): UserPresetSettingsDto {
     return {
       staffId: dbEntity.staffId,
-      presets: dbEntity.UserPresets.map(preset => this.convertToUnifiedPresetDto(preset)),
+      presets: dbEntity.user_presets.map((preset) =>
+        this.convertToUnifiedPresetDto(preset),
+      ),
       pagePresetSettings: dbEntity.pagePresetSettings || {
         monthlyPlanner: { enabledPresetIds: [], defaultPresetId: undefined },
-        personalPage: { enabledPresetIds: [], defaultPresetId: undefined }
+        personalPage: { enabledPresetIds: [], defaultPresetId: undefined },
       },
-      lastModified: dbEntity.lastModified.toISOString()
+      lastModified: dbEntity.lastModified.toISOString(),
     };
   }
 
@@ -763,16 +788,17 @@ export class PresetSettingsService {
       displayName: dbPreset.displayName,
       description: dbPreset.description,
       category: dbPreset.category,
-      schedules: dbPreset.UserPresetSchedules?.map(schedule => ({
-        status: schedule.status,
-        startTime: parseFloat(schedule.startTime.toString()),
-        endTime: parseFloat(schedule.endTime.toString()),
-        memo: schedule.memo,
-        sortOrder: schedule.sortOrder
-      })) || [],
+      schedules:
+        dbPreset.user_preset_schedules?.map((schedule) => ({
+          status: schedule.status,
+          startTime: parseFloat(schedule.startTime.toString()),
+          endTime: parseFloat(schedule.endTime.toString()),
+          memo: schedule.memo,
+          sortOrder: schedule.sortOrder,
+        })) || [],
       isActive: dbPreset.isActive,
       customizable: dbPreset.customizable,
-      isDefault: dbPreset.isDefault
+      isDefault: dbPreset.isDefault,
     };
   }
 }

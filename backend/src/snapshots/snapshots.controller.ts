@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Delete, Param, Query, Body } from '@nestjs/common';
+import { Controller, Post, Get, Delete, Param, Query } from '@nestjs/common';
 import { SnapshotsService } from './snapshots.service';
 
 @Controller('admin/snapshots')

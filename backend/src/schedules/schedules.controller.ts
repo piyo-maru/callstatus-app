@@ -1,4 +1,13 @@
-import { Controller, Get, Post, Body, Param, Delete, Patch, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  Delete,
+  Patch,
+  Query,
+} from '@nestjs/common';
 import { SchedulesService } from './schedules.service';
 import { LayerManagerService } from '../layer-manager/layer-manager.service';
 import { SnapshotsService } from '../snapshots/snapshots.service';
@@ -15,22 +24,30 @@ export class SchedulesController {
   constructor(
     private readonly schedulesService: SchedulesService,
     private readonly layerManagerService: LayerManagerService,
-    private readonly snapshotsService: SnapshotsService
+    private readonly snapshotsService: SnapshotsService,
   ) {}
 
   @Post()
   async create(
-    @Body() createScheduleDto: { staffId: number; status: string; start: number; end: number; date: string; memo?: string; }
+    @Body()
+    createScheduleDto: {
+      staffId: number;
+      status: string;
+      start: number;
+      end: number;
+      date: string;
+      memo?: string;
+    },
   ) {
     try {
       console.log('Creating schedule with data:', createScheduleDto);
-      
+
       // TODO: 権限チェック実装（認証システム修正後）
       // 現在は一時的にスキップ中だが、以下の権限チェックが必要：
       // 1. STAFFは自分のstaffIdのみ作成可能
       // 2. ADMIN・SYSTEM_ADMINは全staffId作成可能
       // 3. 未認証ユーザーは作成不可
-      
+
       const result = await this.schedulesService.create(createScheduleDto);
       console.log('Schedule created successfully:', result);
       return result;
@@ -70,18 +87,22 @@ export class SchedulesController {
   private getBusinessTodayUtc(): Date {
     // 現在のUTC時刻を取得
     const now_utc = new Date();
-    
+
     // JST時刻に変換して日付を取得
     const now_jst = new Date(now_utc.getTime() + 9 * 60 * 60 * 1000);
     const jst_year = now_jst.getUTCFullYear();
     const jst_month = now_jst.getUTCMonth();
     const jst_date = now_jst.getUTCDate();
-    
+
     // JST基準での「今日」の開始時刻をUTC形式で構築
     // JST 2025-06-25 00:00:00 → UTC 2025-06-24 15:00:00
-    const businessToday_jst = new Date(Date.UTC(jst_year, jst_month, jst_date, 0, 0, 0, 0));
-    const businessToday_utc = new Date(businessToday_jst.getTime() - 9 * 60 * 60 * 1000);
-    
+    const businessToday_jst = new Date(
+      Date.UTC(jst_year, jst_month, jst_date, 0, 0, 0, 0),
+    );
+    const businessToday_utc = new Date(
+      businessToday_jst.getTime() - 9 * 60 * 60 * 1000,
+    );
+
     return businessToday_utc;
   }
 
@@ -91,14 +112,15 @@ export class SchedulesController {
     if (!date) {
       throw new Error('date parameter is required');
     }
-    const layeredSchedules = await this.layerManagerService.getLayeredSchedules(date);
-    
+    const layeredSchedules =
+      await this.layerManagerService.getLayeredSchedules(date);
+
     // スタッフ情報も含めて返す（既存APIとの互換性）
     const staff = await this.schedulesService['prisma'].staff.findMany({
       where: { isActive: true },
-      orderBy: { id: 'asc' }
+      orderBy: { id: 'asc' },
     });
-    
+
     return {
       schedules: layeredSchedules.map((ls, index) => ({
         id: `${ls.layer}_${ls.id}_${index}`,
@@ -107,9 +129,9 @@ export class SchedulesController {
         start: this.convertUtcToJstDecimal(ls.start),
         end: this.convertUtcToJstDecimal(ls.end),
         memo: ls.memo,
-        layer: ls.layer // レイヤー情報を保持
+        layer: ls.layer, // レイヤー情報を保持
       })),
-      staff
+      staff,
     };
   }
 
@@ -120,7 +142,7 @@ export class SchedulesController {
   async findUnified(
     @Query('date') date: string,
     @Query('includeMasking') includeMasking?: string,
-    @Query('staffId') staffId?: string
+    @Query('staffId') staffId?: string,
   ) {
     if (!date) {
       throw new Error('date parameter is required');
@@ -133,7 +155,11 @@ export class SchedulesController {
 
     // 業務日基準で過去の日付は履歴データから取得
     if (targetDate_utc < businessToday_utc) {
-      return this.getHistoricalSchedules(date, includeMasking === 'true', targetStaffId);
+      return this.getHistoricalSchedules(
+        date,
+        includeMasking === 'true',
+        targetStaffId,
+      );
     } else {
       // 業務日基準で今日以降は現在のデータから取得
       return this.getCurrentSchedules(date, targetStaffId);
@@ -143,68 +169,88 @@ export class SchedulesController {
   /**
    * 履歴データを取得して返す（契約レイヤーも含む）
    */
-  private async getHistoricalSchedules(date: string, includeMasking: boolean = false, targetStaffId?: number) {
-    console.log(`履歴データ取得開始: ${date}, マスキング: ${includeMasking}, 対象スタッフ: ${targetStaffId || '全員'}`);
-    
+  private async getHistoricalSchedules(
+    date: string,
+    includeMasking: boolean = false,
+    targetStaffId?: number,
+  ) {
+    console.log(
+      `履歴データ取得開始: ${date}, マスキング: ${includeMasking}, 対象スタッフ: ${targetStaffId || '全員'}`,
+    );
+
     // 1. 履歴データ（調整レイヤー）を取得
-    const historicalData = await this.snapshotsService.getHistoricalSchedules(date);
-    console.log(`履歴データ取得完了: ${historicalData ? historicalData.length : 0}件`);
-    
+    const historicalData =
+      await this.snapshotsService.getHistoricalSchedules(date);
+    console.log(
+      `履歴データ取得完了: ${historicalData ? historicalData.length : 0}件`,
+    );
+
     // 2. 契約レイヤーを動的生成（退職者含む）
     let contractSchedules = [];
     try {
-      contractSchedules = await this.layerManagerService.generateHistoricalContractSchedules(date);
+      contractSchedules =
+        await this.layerManagerService.generateHistoricalContractSchedules(
+          date,
+        );
       console.log(`契約レイヤー生成完了: ${contractSchedules.length}件`);
     } catch (error) {
       console.error(`契約レイヤー生成エラー: ${error.message}`);
       // 契約レイヤー生成に失敗しても履歴データは返す
     }
-    
+
     // 🔧 修正：targetStaffIdによるフィルタリング実装
     let filteredHistoricalData = historicalData;
     let filteredContractSchedules = contractSchedules;
-    
+
     if (targetStaffId) {
       // 履歴データをstaffIdでフィルタリング
-      filteredHistoricalData = historicalData?.filter(h => h.staffId === targetStaffId) || [];
+      filteredHistoricalData =
+        historicalData?.filter((h) => h.staffId === targetStaffId) || [];
       // 契約データをstaffIdでフィルタリング
-      filteredContractSchedules = contractSchedules.filter(c => c.staffId === targetStaffId);
-      
-      console.log(`staffId=${targetStaffId}フィルタリング後: 履歴${filteredHistoricalData.length}件 + 契約${filteredContractSchedules.length}件`);
+      filteredContractSchedules = contractSchedules.filter(
+        (c) => c.staffId === targetStaffId,
+      );
+
+      console.log(
+        `staffId=${targetStaffId}フィルタリング後: 履歴${filteredHistoricalData.length}件 + 契約${filteredContractSchedules.length}件`,
+      );
     }
 
     // データが何もない場合（フィルタリング後のデータで判定）
-    if ((!filteredHistoricalData || filteredHistoricalData.length === 0) && filteredContractSchedules.length === 0) {
-      const message = targetStaffId 
+    if (
+      (!filteredHistoricalData || filteredHistoricalData.length === 0) &&
+      filteredContractSchedules.length === 0
+    ) {
+      const message = targetStaffId
         ? `指定されたスタッフ(ID: ${targetStaffId})の${date}のデータが見つかりません`
         : '該当日のスナップショットデータが見つかりません';
-      
+
       return {
         schedules: [],
         staff: [],
         isHistorical: true,
-        message
+        message,
       };
     }
 
     // 3. スタッフ情報を履歴データと契約データから構築（フィルタリング後データ使用）
     const staffMap = new Map();
-    
+
     // 履歴データからスタッフ情報を構築
     if (filteredHistoricalData) {
       for (const item of filteredHistoricalData) {
         if (!staffMap.has(item.staffId)) {
-          const maskedName = includeMasking 
+          const maskedName = includeMasking
             ? await this.maskStaffName(item.staffName, item.staffId)
             : item.staffName;
-          
+
           staffMap.set(item.staffId, {
             id: item.staffId,
             empNo: item.staffEmpNo,
             name: maskedName,
             department: item.staffDepartment,
             group: item.staffGroup,
-            isActive: item.staffIsActive
+            isActive: item.staffIsActive,
           });
         }
       }
@@ -216,33 +262,33 @@ export class SchedulesController {
         // 契約レイヤーのスタッフ情報を取得
         try {
           const staff = await this.schedulesService['prisma'].staff.findUnique({
-            where: { id: contractSchedule.staffId }
+            where: { id: contractSchedule.staffId },
           });
           if (staff) {
-            const maskedName = includeMasking 
+            const maskedName = includeMasking
               ? await this.maskStaffName(staff.name, staff.id)
               : staff.name;
-            
+
             staffMap.set(staff.id, {
               id: staff.id,
               empNo: staff.empNo,
               name: maskedName,
               department: staff.department,
               group: staff.group,
-              isActive: staff.isActive
+              isActive: staff.isActive,
             });
           }
         } catch (error) {
-          console.error(`スタッフ情報取得エラー (ID: ${contractSchedule.staffId}): ${error.message}`);
+          console.error(
+            `スタッフ情報取得エラー (ID: ${contractSchedule.staffId}): ${error.message}`,
+          );
         }
       }
     }
 
-    const staff = Array.from(staffMap.values());
-
     // 4. スケジュールデータを変換（フィルタリング後データ使用）
     const schedules = [];
-    
+
     // 履歴データ（調整レイヤー）を追加
     if (filteredHistoricalData) {
       const historicalSchedules = filteredHistoricalData.map((item, index) => ({
@@ -252,35 +298,44 @@ export class SchedulesController {
         start: this.convertUtcToJstDecimal(item.start),
         end: this.convertUtcToJstDecimal(item.end),
         memo: item.memo,
-        layer: 'historical' // 履歴データは 'historical' レイヤー
+        layer: 'historical', // 履歴データは 'historical' レイヤー
       }));
       schedules.push(...historicalSchedules);
     }
-    
+
     // 契約レイヤーを追加（フィルタリング後データ使用）
-    const contractSchedulesConverted = filteredContractSchedules.map((cs, index) => ({
-      id: `contract_hist_${cs.id}_${index}`,
-      staffId: cs.staffId,
-      status: cs.status,
-      start: this.convertUtcToJstDecimal(cs.start),
-      end: this.convertUtcToJstDecimal(cs.end),
-      memo: cs.memo,
-      layer: 'contract' // 契約データは 'contract' レイヤー
-    }));
+    const contractSchedulesConverted = filteredContractSchedules.map(
+      (cs, index) => ({
+        id: `contract_hist_${cs.id}_${index}`,
+        staffId: cs.staffId,
+        status: cs.status,
+        start: this.convertUtcToJstDecimal(cs.start),
+        end: this.convertUtcToJstDecimal(cs.end),
+        memo: cs.memo,
+        layer: 'contract', // 契約データは 'contract' レイヤー
+      }),
+    );
     schedules.push(...contractSchedulesConverted);
 
-    console.log(`履歴データ統合完了(フィルタリング後): 履歴${filteredHistoricalData ? filteredHistoricalData.length : 0}件 + 契約${filteredContractSchedules.length}件 = 合計${schedules.length}件`);
+    console.log(
+      `履歴データ統合完了(フィルタリング後): 履歴${filteredHistoricalData ? filteredHistoricalData.length : 0}件 + 契約${filteredContractSchedules.length}件 = 合計${schedules.length}件`,
+    );
 
     return {
       schedules,
       staff: Array.from(staffMap.values()),
       isHistorical: true,
-      snapshotDate: filteredHistoricalData && filteredHistoricalData.length > 0 ? filteredHistoricalData[0]?.snapshotAt : null,
+      snapshotDate:
+        filteredHistoricalData && filteredHistoricalData.length > 0
+          ? filteredHistoricalData[0]?.snapshotAt
+          : null,
       recordCount: schedules.length,
-      historicalRecords: filteredHistoricalData ? filteredHistoricalData.length : 0,
+      historicalRecords: filteredHistoricalData
+        ? filteredHistoricalData.length
+        : 0,
       contractRecords: filteredContractSchedules.length,
       // デバッグ情報追加
-      ...(targetStaffId && { filteredForStaffId: targetStaffId })
+      ...(targetStaffId && { filteredForStaffId: targetStaffId }),
     };
   }
 
@@ -288,20 +343,23 @@ export class SchedulesController {
    * 現在のデータを取得
    */
   private async getCurrentSchedules(date: string, targetStaffId?: number) {
-    const layeredSchedules = await this.layerManagerService.getLayeredSchedules(date);
-    
+    const layeredSchedules =
+      await this.layerManagerService.getLayeredSchedules(date);
+
     // スタッフ情報も含めて返す
-    const staffWhere = targetStaffId ? { isActive: true, id: targetStaffId } : { isActive: true };
+    const staffWhere = targetStaffId
+      ? { isActive: true, id: targetStaffId }
+      : { isActive: true };
     const staff = await this.schedulesService['prisma'].staff.findMany({
       where: staffWhere,
-      orderBy: { id: 'asc' }
+      orderBy: { id: 'asc' },
     });
-    
+
     // スケジュールもstaffIdでフィルタリング
-    const filteredSchedules = targetStaffId 
-      ? layeredSchedules.filter(ls => ls.staffId === targetStaffId)
+    const filteredSchedules = targetStaffId
+      ? layeredSchedules.filter((ls) => ls.staffId === targetStaffId)
       : layeredSchedules;
-    
+
     return {
       schedules: filteredSchedules.map((ls, index) => ({
         id: `${ls.layer}_${ls.id}_${index}`,
@@ -310,21 +368,26 @@ export class SchedulesController {
         start: this.convertUtcToJstDecimal(ls.start),
         end: this.convertUtcToJstDecimal(ls.end),
         memo: ls.memo,
-        layer: ls.layer
+        layer: ls.layer,
       })),
       staff,
-      isHistorical: false
+      isHistorical: false,
     };
   }
 
   /**
    * 非在籍社員名をマスキング
    */
-  private async maskStaffName(originalName: string, staffId: number): Promise<string> {
+  private async maskStaffName(
+    originalName: string,
+    staffId: number,
+  ): Promise<string> {
     try {
       // 現在のスタッフテーブルで該当者を確認
-      const currentStaff = await this.schedulesService['prisma'].staff.findUnique({
-        where: { id: staffId }
+      const currentStaff = await this.schedulesService[
+        'prisma'
+      ].staff.findUnique({
+        where: { id: staffId },
       });
 
       // 現在も在籍している場合は実名表示
@@ -350,33 +413,41 @@ export class SchedulesController {
     try {
       // LayerManagerServiceの動作をテスト
       const layerManager = this.schedulesService.getLayerManager();
-      const contracts = await layerManager['generateContractSchedules'](date || '2025-06-23');
+      const contracts = await layerManager['generateContractSchedules'](
+        date || '2025-06-23',
+      );
       return {
         message: 'Contract test successful',
         date: date || '2025-06-23',
         contractCount: contracts.length,
-        contracts: contracts
+        contracts: contracts,
       };
     } catch (error) {
       return {
         message: 'Contract test failed',
         error: error.message,
-        stack: error.stack
+        stack: error.stack,
       };
     }
   }
 
   @Patch(':id')
   async update(
-    @Param('id') id: string, 
-    @Body() updateScheduleDto: { status?: string; start?: number; end?: number; date: string; }
+    @Param('id') id: string,
+    @Body()
+    updateScheduleDto: {
+      status?: string;
+      start?: number;
+      end?: number;
+      date: string;
+    },
   ) {
     // 権限チェックを一時的にスキップ（認証システム修正まで）
-    
+
     // 文字列IDを数値IDに変換
     let numericId: number;
     console.log(`Parsing ID: ${id}`);
-    
+
     if (id.startsWith('adjustment_adj_')) {
       // "adjustment_adj_2283_397" 形式から実際のIDを抽出
       // 構造: adjustment_adj_{実際のID}_{配列インデックス}
@@ -399,10 +470,13 @@ export class SchedulesController {
       // 通常の数値ID
       numericId = +id;
     }
-    
+
     console.log(`Update schedule: ${id} -> ${numericId}`);
     try {
-      const result = await this.schedulesService.update(numericId, updateScheduleDto);
+      const result = await this.schedulesService.update(
+        numericId,
+        updateScheduleDto,
+      );
       console.log('Update successful:', result);
       return result;
     } catch (error) {
@@ -414,9 +488,9 @@ export class SchedulesController {
   @Delete(':id')
   async remove(@Param('id') id: string) {
     // 一時的に権限チェックをスキップ（認証システム修正まで）
-    
+
     console.log(`Delete schedule request with ID: ${id}, type: ${typeof id}`);
-    
+
     // 文字列IDをそのままサービスに渡す（サービス側でID抽出処理を実行）
     return this.schedulesService.remove(id);
   }

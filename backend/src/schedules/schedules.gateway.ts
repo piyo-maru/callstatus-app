@@ -1,7 +1,7 @@
-import { WebSocketGateway, WebSocketServer, SubscribeMessage, MessageBody } from '@nestjs/websockets';
+import { WebSocketGateway, WebSocketServer } from '@nestjs/websockets';
 import { Server } from 'socket.io';
-const fs = require('fs');
-const ini = require('ini');
+import * as fs from 'fs';
+import * as ini from 'ini';
 
 // 設定ファイルから動的にCORS設定を読み込む
 function loadCorsConfig() {
@@ -10,14 +10,20 @@ function loadCorsConfig() {
     if (fs.existsSync(configPath)) {
       const configFile = fs.readFileSync(configPath, 'utf-8');
       const config = ini.parse(configFile);
-      const allowedOrigins = config.cors?.allowed_origins || 'http://localhost:3000';
-      const origins = allowedOrigins.split(',').map((origin: string) => origin.trim());
+      const allowedOrigins =
+        config.cors?.allowed_origins || 'http://localhost:3000';
+      const origins = allowedOrigins
+        .split(',')
+        .map((origin: string) => origin.trim());
       return origins;
     }
   } catch (error) {
-    console.warn('WebSocket: Config file not found, using default CORS settings:', error.message);
+    console.warn(
+      'WebSocket: Config file not found, using default CORS settings:',
+      error.message,
+    );
   }
-  
+
   // デフォルト設定
   return ['http://localhost:3000'];
 }

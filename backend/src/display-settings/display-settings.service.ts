@@ -19,7 +19,7 @@ export class DisplaySettingsService {
    */
   async getSettings(): Promise<DisplaySettingsDto> {
     let settings = await this.prisma.global_display_settings.findFirst({
-      where: { id: 1 }
+      where: { id: 1 },
     });
 
     // 設定が存在しない場合はデフォルト設定で初期化
@@ -31,7 +31,10 @@ export class DisplaySettingsService {
       maskingEnabled: settings.maskingEnabled,
       timeRange: settings.timeRange,
       customStatusColors: settings.customStatusColors as Record<string, string>,
-      customStatusDisplayNames: settings.customStatusDisplayNames as Record<string, string>,
+      customStatusDisplayNames: settings.customStatusDisplayNames as Record<
+        string,
+        string
+      >,
     };
   }
 
@@ -40,7 +43,6 @@ export class DisplaySettingsService {
    */
   async updateSettings(
     updateData: Partial<DisplaySettingsDto>,
-    updatedByStaffId?: number
   ): Promise<DisplaySettingsDto> {
     // まず現在の設定を取得（存在しない場合は初期化）
     await this.getSettings();
@@ -48,10 +50,18 @@ export class DisplaySettingsService {
     const settings = await this.prisma.global_display_settings.upsert({
       where: { id: 1 },
       update: {
-        ...(updateData.maskingEnabled !== undefined && { maskingEnabled: updateData.maskingEnabled }),
-        ...(updateData.timeRange !== undefined && { timeRange: updateData.timeRange }),
-        ...(updateData.customStatusColors !== undefined && { customStatusColors: updateData.customStatusColors }),
-        ...(updateData.customStatusDisplayNames !== undefined && { customStatusDisplayNames: updateData.customStatusDisplayNames }),
+        ...(updateData.maskingEnabled !== undefined && {
+          maskingEnabled: updateData.maskingEnabled,
+        }),
+        ...(updateData.timeRange !== undefined && {
+          timeRange: updateData.timeRange,
+        }),
+        ...(updateData.customStatusColors !== undefined && {
+          customStatusColors: updateData.customStatusColors,
+        }),
+        ...(updateData.customStatusDisplayNames !== undefined && {
+          customStatusDisplayNames: updateData.customStatusDisplayNames,
+        }),
         updatedAt: new Date(),
       },
       create: {
@@ -68,7 +78,10 @@ export class DisplaySettingsService {
       maskingEnabled: settings.maskingEnabled,
       timeRange: settings.timeRange,
       customStatusColors: settings.customStatusColors as Record<string, string>,
-      customStatusDisplayNames: settings.customStatusDisplayNames as Record<string, string>,
+      customStatusDisplayNames: settings.customStatusDisplayNames as Record<
+        string,
+        string
+      >,
     };
   }
 
@@ -100,9 +113,9 @@ export class DisplaySettingsService {
       where: { id: 1 },
       include: {
         Staff: {
-          select: { id: true, name: true }
-        }
-      }
+          select: { id: true, name: true },
+        },
+      },
     });
 
     if (!settings) {
@@ -111,8 +124,12 @@ export class DisplaySettingsService {
         settings: {
           maskingEnabled: defaultSettings.maskingEnabled,
           timeRange: defaultSettings.timeRange,
-          customStatusColors: defaultSettings.customStatusColors as Record<string, string>,
-          customStatusDisplayNames: defaultSettings.customStatusDisplayNames as Record<string, string>,
+          customStatusColors: defaultSettings.customStatusColors as Record<
+            string,
+            string
+          >,
+          customStatusDisplayNames:
+            defaultSettings.customStatusDisplayNames as Record<string, string>,
         },
         lastUpdatedAt: null,
         lastUpdatedBy: null,
@@ -123,8 +140,14 @@ export class DisplaySettingsService {
       settings: {
         maskingEnabled: settings.maskingEnabled,
         timeRange: settings.timeRange,
-        customStatusColors: settings.customStatusColors as Record<string, string>,
-        customStatusDisplayNames: settings.customStatusDisplayNames as Record<string, string>,
+        customStatusColors: settings.customStatusColors as Record<
+          string,
+          string
+        >,
+        customStatusDisplayNames: settings.customStatusDisplayNames as Record<
+          string,
+          string
+        >,
       },
       lastUpdatedAt: settings.updatedAt,
       lastUpdatedBy: settings.Staff,

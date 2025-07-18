@@ -2,6 +2,44 @@
 
 転職用ポートフォリオとして AWS EC2 にデプロイするための手順書です。
 
+## 📊 最新実装状況（2025-07-18）
+
+### ✅ 実装完了機能
+- **楽観的更新システム（Phase 1-2）**: チャットアプリレベルの即座性体験
+- **2層データレイヤー**: 契約（基本勤務時間）+ 個別調整（例外予定）
+- **日次スナップショット履歴**: 過去データ閲覧・マスキング機能
+- **月次計画 pending/approval システム**: 承認ワークフロー・横スクロールUI統一
+- **システム監視ダッシュボード**: Node.js/PostgreSQL メトリクス・実データ監視
+- **1分単位精度対応**: Excel Online互換の時間入力システム
+- **カードデザイン統一**: 商用製品レベルUI・Tailwind CSS最適化
+- **プロダクト品質向上**: TypeScript型安全性完全修正・lint エラー完全解決
+
+### ⚠️ 調整中・注意事項
+- **認証システム**: フロントエンド権限制御は正常動作、バックエンドAPI権限チェックは段階的復旧中
+- **WebSocket**: 50人規模で性能限界、受付チーム業務継続性を最優先
+- **IP設定**: 現在は `13.112.49.86` に設定（必要に応じて更新）
+
+## 🌐 ライブデモ確認
+
+### サービスURL
+- **フロントエンド**: http://13.112.49.86:3000
+- **バックエンドAPI**: http://13.112.49.86:3002
+- **API疎通テスト**: http://13.112.49.86:3002/api/test
+
+### デモデータ確認
+- **50人スタッフ**: 6部署構成（システム部・営業部・管理部・マーケティング部・カスタマーサポート部・受付チーム）
+- **60日分動的データ**: 実行日基準で前後30日ずつ、約540件の申請データ
+- **承認ワークフロー**: 前半30日承認済み・後半30日承認待ち状態
+- **リアルタイム更新**: WebSocket通信による即座反映（楽観的更新対応）
+- **システム監視**: Node.js/PostgreSQL メトリクス・実データ監視ダッシュボード
+- **履歴機能**: 日次スナップショット・過去データ閲覧・マスキング対応
+
+### 🎯 デモ操作の流れ
+1. **出社状況ページ**: リアルタイム更新・楽観的更新を体験
+2. **個人ページ**: 1分単位精度・横スクロール統一UI確認
+3. **月次計画**: 承認ワークフロー・カスタム複合予定機能
+4. **システム監視**: Node.js/PostgreSQL メトリクス・実データ監視ダッシュボード
+
 ## 📋 デプロイ前チェックリスト
 
 ### 必要なもの
@@ -83,10 +121,12 @@ cd callstatus-app
 ### 2. IP設定の更新
 ```bash
 # 実際のEC2 IPアドレスに置換（例: 54.123.45.67）
-sed -i 's/YOUR-EC2-IP/54.123.45.67/g' config.ini
-sed -i 's/YOUR-EC2-IP/54.123.45.67/g' frontend/public/config.js
-sed -i 's/YOUR-EC2-IP/54.123.45.67/g' backend/src/schedules/schedules.gateway.ts
-sed -i 's/YOUR-EC2-IP/54.123.45.67/g' .env.production
+# 現在の設定値: 13.112.49.86 → 新しいIPアドレスに更新
+sed -i 's/13.112.49.86/54.123.45.67/g' config.ini
+sed -i 's/13.112.49.86/54.123.45.67/g' frontend/public/config.js
+
+# 【重要】IPアドレス変更後は必ずブラウザキャッシュクリア（Ctrl+F5）
+# WebSocket接続・API接続が新しいIPアドレスで動作することを確認
 ```
 
 ### 3. 自動デプロイ実行
@@ -99,30 +139,32 @@ sed -i 's/YOUR-EC2-IP/54.123.45.67/g' .env.production
 # Docker Compose起動
 docker-compose up -d --build
 
-# Prismaセットアップ
+# Prismaセットアップ（必須）
 docker exec callstatus-app-backend-1 npx prisma generate
 docker exec callstatus-app-backend-1 npx prisma migrate deploy
 
-# デモデータ投入
+# ポートフォリオ用50人デモデータ投入（4コマンド）
 docker exec callstatus-app-backend-1 bash -c "cd /app && node prisma/seed_portfolio.js"
 
+# 60日分動的申請データ生成（推奨）
+cd scripts/demo-data
+node generate_portfolio_demo_60days.js
+node register_portfolio_pending_60days.js
+node approve_first_30days_portfolio.js
+cd ../..
+
 # 状態確認
-docker ps
+docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 curl http://localhost:3002/api/test
+curl http://localhost:3002/api/staff  # 50人スタッフデータ確認
 ```
 
-## 🌐 アクセス確認
+## 🌐 デプロイ完了後のアクセス確認
 
-### サービスURL
+### サービスURL（IPアドレス更新後）
 - **フロントエンド**: http://YOUR-EC2-IP:3000
 - **バックエンドAPI**: http://YOUR-EC2-IP:3002
 - **API疎通テスト**: http://YOUR-EC2-IP:3002/api/test
-
-### デモデータ確認
-- 50人スタッフ × 6部署構成
-- 60日分のスケジュールデータ
-- リアルタイム更新機能
-- WebSocket通信確認
 
 ## 💰 無料枠活用・監視設定
 
@@ -155,25 +197,30 @@ curl http://localhost:3002/api/test
 ### 技術スタック説明
 ```
 「NestJS + Next.js + PostgreSQL のフルスタックアプリを
-AWS EC2 の無料枠で12ヶ月間無料運用しています」
+AWS EC2 の無料枠で12ヶ月間無料運用しています。
+楽観的更新システム・2層データレイヤー・WebSocket通信を実装し、
+企業レベルの機能を個人学習で習得しました」
 ```
 
 ### インフラ経験アピール
 ```
 「t2.microでのメモリ最適化、セキュリティグループ設定、
-WebSocket本番環境構築を実践しました」
+WebSocket本番環境構築を実践しました。
+Docker Compose・Prisma ORM・PostgreSQL の本番運用経験があります」
 ```
 
 ### コスト意識アピール
 ```
 「AWS無料枠の制限を理解し、スワップファイル追加や
-メモリ最適化で効率的なリソース活用を実現しています」
+メモリ最適化で効率的なリソース活用を実現しています。
+課金アラート設定による予算管理も実践しています」
 ```
 
-### 継続学習アピール
+### 継続学習・問題解決アピール
 ```
-「課金アラート設定による予算管理、CloudWatch監視など
-本格的なAWS運用スキルを個人学習で習得しました」
+「TypeScript型安全性・lint エラー完全解決・システム監視ダッシュボード実装など、
+企業レベルの保守性・品質向上に取り組んでいます。
+技術問題を段階的に解決し、プロダクト品質を継続的に向上させています」
 ```
 
 ## 🔧 トラブルシューティング
@@ -191,8 +238,12 @@ curl -I http://YOUR-EC2-IP:3002/api/test
 
 #### 2. WebSocket接続失敗
 ```bash
-# CORS設定確認
-grep -n "YOUR-EC2-IP" backend/src/schedules/schedules.gateway.ts
+# 現在のIP設定確認
+grep -n "13.112.49.86" config.ini
+grep -n "13.112.49.86" frontend/public/config.js
+
+# 【重要】IPアドレス変更後はブラウザキャッシュクリア（Ctrl+F5）
+# WebSocket接続エラーの大半はキャッシュが原因
 
 # コンテナ再起動
 docker-compose restart
@@ -203,8 +254,21 @@ docker-compose restart
 # PostgreSQLコンテナ確認
 docker exec callstatus-app-db-1 psql -U user -d mydb -c "SELECT 1;"
 
-# Prisma再生成
+# Prisma再生成（必須）
 docker exec callstatus-app-backend-1 npx prisma generate
+
+# スナップショット機能確認
+docker exec callstatus-app-backend-1 bash -c "cd /app && npx prisma db pull"
+```
+
+#### 4. システム監視ダッシュボードエラー
+```bash
+# バックアップ機能確認（PostgreSQL クライアントが必要）
+docker exec callstatus-app-backend-1 which pg_dump
+
+# 不足している場合はインストール
+docker exec callstatus-app-backend-1 apt-get update
+docker exec callstatus-app-backend-1 apt-get install -y postgresql-client
 ```
 
 ## 📞 サポート
@@ -224,9 +288,12 @@ docker exec callstatus-app-backend-1 npx prisma generate
 
 - **AWS EC2無料枠活用経験**（12ヶ月間$0運用）
 - **Docker本番環境構築**（t2.microメモリ最適化）
-- **WebSocket本番環境動作確認**
+- **WebSocket本番環境動作確認**（楽観的更新システム対応）
 - **AWS監視・アラート設定**（CloudWatch、Billing）
 - **フルスタックアプリ公開経験**（常時アクセス可能）
+- **企業レベル機能実装**（2層データレイヤー、承認ワークフロー、履歴機能）
+- **プロダクト品質向上**（TypeScript型安全性、lint エラー完全解決）
+- **システム監視経験**（Node.js/PostgreSQL メトリクス、実データ監視）
 
 ## 💡 無料枠活用の最大メリット
 
@@ -234,5 +301,30 @@ docker exec callstatus-app-backend-1 npx prisma generate
 - **常時稼働**: ポートフォリオとしていつでもデモ可能
 - **制約対応**: 限られたリソースでの最適化技術習得
 - **転職価値**: 「効率的なエンジニア」として差別化
+- **実践的経験**: 企業レベルの機能・システム監視・品質向上を個人学習で習得
+- **継続的改善**: 技術問題を段階的に解決し、プロダクト品質を継続的に向上
 
-**12ヶ月間無料でAWS実績を作り、転職を成功させましょう！**
+## 🎯 面接での具体的アピール例
+
+### 楽観的更新システム
+```
+「チャットアプリレベルの即座性体験を実現するため、
+楽観的更新システムを実装しました。変更リスク分類・
+指数バックオフリトライ・競合解決機能を個人学習で習得しています」
+```
+
+### 2層データレイヤー
+```
+「契約（基本勤務時間）と調整（例外予定）の2層データ管理により、
+複雑な業務要件に対応できる設計を実装しました。
+LayerManagerService・統合API設計を実践しています」
+```
+
+### システム監視・品質向上
+```
+「Node.js/PostgreSQL メトリクス監視・TypeScript型安全性完全修正・
+lint エラー完全解決により、企業レベルの保守性・品質向上を実現しています。
+技術問題を段階的に解決し、プロダクト品質を継続的に向上させています」
+```
+
+**12ヶ月間無料でAWS実績を作り、企業レベルの技術力をアピールして転職を成功させましょう！**

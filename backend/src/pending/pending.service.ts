@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 
 export interface CreatePendingDto {
@@ -31,7 +35,7 @@ export class PendingService {
   private jstToUtc(decimalHour: number, baseDateString: string): Date {
     const hours = Math.floor(decimalHour);
     const minutes = Math.round((decimalHour % 1) * 60);
-    
+
     const jstIsoString = `${baseDateString}T${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:00+09:00`;
     return new Date(jstIsoString);
   }
@@ -60,16 +64,18 @@ export class PendingService {
 
     // 対象スタッフIDが存在するかチェック
     const targetStaff = await this.prisma.staff.findUnique({
-      where: { id: createPendingDto.staffId }
+      where: { id: createPendingDto.staffId },
     });
 
     if (!targetStaff) {
-      throw new BadRequestException(`スタッフID ${createPendingDto.staffId} が見つかりません`);
+      throw new BadRequestException(
+        `スタッフID ${createPendingDto.staffId} が見つかりません`,
+      );
     }
 
     // 作成者IDが存在するかチェック
     const creator = await this.prisma.staff.findUnique({
-      where: { id: creatorId }
+      where: { id: creatorId },
     });
 
     if (!creator) {
@@ -81,7 +87,10 @@ export class PendingService {
       creatorId = firstStaff.id;
     }
 
-    const startUtc = this.jstToUtc(createPendingDto.start, createPendingDto.date);
+    const startUtc = this.jstToUtc(
+      createPendingDto.start,
+      createPendingDto.date,
+    );
     const endUtc = this.jstToUtc(createPendingDto.end, createPendingDto.date);
 
     const pending = await this.prisma.adjustment.create({
@@ -134,54 +143,57 @@ export class PendingService {
       include: {
         Staff_Adjustment_staffIdToStaff: true,
         Staff_Adjustment_approvedByToStaff: {
-          select: { id: true, name: true }
+          select: { id: true, name: true },
         },
         Staff_Adjustment_rejectedByToStaff: {
-          select: { id: true, name: true }
+          select: { id: true, name: true },
         },
         pending_approval_logs: {
           include: {
             Staff: {
-              select: { id: true, name: true }
-            }
+              select: { id: true, name: true },
+            },
           },
-          orderBy: { createdAt: 'desc' }
-        }
+          orderBy: { createdAt: 'desc' },
+        },
       },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
     });
 
     // 部署フィルター（Staffリレーション経由）
     const filteredPendings = filters.department
-      ? pendings.filter(p => p.Staff_Adjustment_staffIdToStaff.department === filters.department)
+      ? pendings.filter(
+          (p) =>
+            p.Staff_Adjustment_staffIdToStaff.department === filters.department,
+        )
       : pendings;
 
-    return filteredPendings.map(p => this.formatPendingResponse(p));
+    return filteredPendings.map((p) => this.formatPendingResponse(p));
   }
 
   /**
    * 単一Pending取得
    */
-  async findOne(id: number, requesterId: number, isAdmin: boolean = false) {
+  async findOne(id: number) {
     const pending = await this.prisma.adjustment.findUnique({
       where: { id, isPending: true },
       include: {
         Staff_Adjustment_staffIdToStaff: true,
         Staff_Adjustment_approvedByToStaff: {
-          select: { id: true, name: true }
+          select: { id: true, name: true },
         },
         Staff_Adjustment_rejectedByToStaff: {
-          select: { id: true, name: true }
+          select: { id: true, name: true },
         },
         pending_approval_logs: {
           include: {
             Staff: {
-              select: { id: true, name: true }
-            }
+              select: { id: true, name: true },
+            },
           },
-          orderBy: { createdAt: 'desc' }
-        }
-      }
+          orderBy: { createdAt: 'desc' },
+        },
+      },
     });
 
     if (!pending) {
@@ -200,9 +212,9 @@ export class PendingService {
   /**
    * Pending更新（承認前のみ）
    */
-  async update(id: number, updateData: Partial<CreatePendingDto>, updaterId: number) {
+  async update(id: number, updateData: Partial<CreatePendingDto>) {
     const pending = await this.prisma.adjustment.findUnique({
-      where: { id, isPending: true }
+      where: { id, isPending: true },
     });
 
     if (!pending) {
@@ -217,11 +229,13 @@ export class PendingService {
 
     // 承認済み・却下済みは編集不可
     if (pending.approvedAt || pending.rejectedAt) {
-      throw new BadRequestException('承認済み・却下済みのpendingは編集できません');
+      throw new BadRequestException(
+        '承認済み・却下済みのpendingは編集できません',
+      );
     }
 
     const updateFields: any = {};
-    
+
     if (updateData.status) updateFields.status = updateData.status;
     if (updateData.memo !== undefined) updateFields.memo = updateData.memo;
     if (updateData.date) {
@@ -232,7 +246,10 @@ export class PendingService {
       } else if (pending.start) {
         // 既存の時刻を新しい日付で再計算
         const existingStartDecimal = this.utcToJstDecimal(pending.start);
-        updateFields.start = this.jstToUtc(existingStartDecimal, updateData.date);
+        updateFields.start = this.jstToUtc(
+          existingStartDecimal,
+          updateData.date,
+        );
       }
       if (updateData.end) {
         updateFields.end = this.jstToUtc(updateData.end, updateData.date);
@@ -263,9 +280,9 @@ export class PendingService {
   /**
    * Pending削除（承認前のみ）
    */
-  async remove(id: number, deleterId: number) {
+  async remove(id: number) {
     const pending = await this.prisma.adjustment.findUnique({
-      where: { id, isPending: true }
+      where: { id, isPending: true },
     });
 
     if (!pending) {
@@ -285,12 +302,12 @@ export class PendingService {
 
     // まずApprovalLogsを削除
     await this.prisma.pending_approval_logs.deleteMany({
-      where: { adjustmentId: id }
+      where: { adjustmentId: id },
     });
-    
+
     // その後Adjustmentを削除
     await this.prisma.adjustment.delete({
-      where: { id }
+      where: { id },
     });
 
     console.log('Pending deleted:', id);
@@ -302,7 +319,7 @@ export class PendingService {
    */
   async approve(id: number, approvalDto: ApprovalDto, approverId: number) {
     const pending = await this.prisma.adjustment.findUnique({
-      where: { id, isPending: true }
+      where: { id, isPending: true },
     });
 
     if (!pending) {
@@ -315,7 +332,7 @@ export class PendingService {
 
     // 承認者IDが存在するかチェック
     const approver = await this.prisma.staff.findUnique({
-      where: { id: approverId }
+      where: { id: approverId },
     });
 
     if (!approver) {
@@ -355,7 +372,7 @@ export class PendingService {
    */
   async reject(id: number, approvalDto: ApprovalDto, rejectorId: number) {
     const pending = await this.prisma.adjustment.findUnique({
-      where: { id, isPending: true }
+      where: { id, isPending: true },
     });
 
     if (!pending) {
@@ -368,7 +385,7 @@ export class PendingService {
 
     // 却下者IDが存在するかチェック
     const rejector = await this.prisma.staff.findUnique({
-      where: { id: rejectorId }
+      where: { id: rejectorId },
     });
 
     if (!rejector) {
@@ -408,7 +425,7 @@ export class PendingService {
    */
   async unapprove(id: number, reason: string, actorId: number) {
     const pending = await this.prisma.adjustment.findUnique({
-      where: { id, isPending: true }
+      where: { id, isPending: true },
     });
 
     if (!pending) {
@@ -416,7 +433,9 @@ export class PendingService {
     }
 
     if (!pending.approvedAt) {
-      throw new BadRequestException('承認済みでないpendingは取り消しできません');
+      throw new BadRequestException(
+        '承認済みでないpendingは取り消しできません',
+      );
     }
 
     if (pending.rejectedAt) {
@@ -425,7 +444,7 @@ export class PendingService {
 
     // アクターIDが存在するかチェック
     const actor = await this.prisma.staff.findUnique({
-      where: { id: actorId }
+      where: { id: actorId },
     });
 
     if (!actor) {
@@ -465,7 +484,9 @@ export class PendingService {
    * 一括承認・却下
    */
   async bulkApproval(bulkDto: BulkApprovalDto, actorId: number) {
-    console.log(`Bulk ${bulkDto.action} for ${bulkDto.pendingIds.length} pendings`);
+    console.log(
+      `Bulk ${bulkDto.action} for ${bulkDto.pendingIds.length} pendings`,
+    );
 
     const now = new Date();
     let successCount = 0;
@@ -477,30 +498,34 @@ export class PendingService {
       const targetPendings = await this.prisma.adjustment.findMany({
         where: {
           id: { in: bulkDto.pendingIds },
-          isPending: true
+          isPending: true,
         },
-        select: { id: true, staffId: true, approvedAt: true, rejectedAt: true }
+        select: { id: true, staffId: true, approvedAt: true, rejectedAt: true },
       });
 
       // 存在しないIDや既に処理済みのIDをエラーとして記録
-      const existingIds = targetPendings.map(p => p.id);
-      const missingIds = bulkDto.pendingIds.filter(id => !existingIds.includes(id));
-      const processedPendings = targetPendings.filter(p => p.approvedAt || p.rejectedAt);
+      const existingIds = targetPendings.map((p) => p.id);
+      const missingIds = bulkDto.pendingIds.filter(
+        (id) => !existingIds.includes(id),
+      );
+      const processedPendings = targetPendings.filter(
+        (p) => p.approvedAt || p.rejectedAt,
+      );
 
       // エラー記録
-      missingIds.forEach(id => {
+      missingIds.forEach((id) => {
         errors.push({ pendingId: id, error: 'Pendingが見つかりません' });
         failedCount++;
       });
-      processedPendings.forEach(p => {
+      processedPendings.forEach((p) => {
         errors.push({ pendingId: p.id, error: '既に承認または却下済みです' });
         failedCount++;
       });
 
       // 処理可能なPendingのIDリスト
       const validPendingIds = targetPendings
-        .filter(p => !p.approvedAt && !p.rejectedAt)
-        .map(p => p.id);
+        .filter((p) => !p.approvedAt && !p.rejectedAt)
+        .map((p) => p.id);
 
       if (validPendingIds.length > 0) {
         if (bulkDto.action === 'approve') {
@@ -508,73 +533,75 @@ export class PendingService {
           const updateResult = await this.prisma.adjustment.updateMany({
             where: {
               id: { in: validPendingIds },
-              isPending: true
+              isPending: true,
             },
             data: {
               approvedAt: now,
               approvedBy: actorId,
               reason: bulkDto.reason || null,
               // isPending: true を維持（月次計画で承認済み予定を表示するため）
-              updatedAt: now
-            }
+              updatedAt: now,
+            },
           });
           successCount = updateResult.count;
 
           // 承認ログ一括作成
-          const approvalLogs = validPendingIds.map(id => ({
+          const approvalLogs = validPendingIds.map((id) => ({
             adjustmentId: id,
             actorId: actorId,
             action: 'approve' as const,
             reason: bulkDto.reason || null,
-            createdAt: now
+            createdAt: now,
           }));
           await this.prisma.pending_approval_logs.createMany({
-            data: approvalLogs
+            data: approvalLogs,
           });
-
         } else {
           // 一括却下
           const updateResult = await this.prisma.adjustment.updateMany({
             where: {
               id: { in: validPendingIds },
-              isPending: true
+              isPending: true,
             },
             data: {
               rejectedAt: now,
               rejectedBy: actorId,
               rejectionReason: bulkDto.reason || null,
               // isPending: true を維持（月次計画で却下済み予定も表示するため）
-              updatedAt: now
-            }
+              updatedAt: now,
+            },
           });
           successCount = updateResult.count;
 
           // 却下ログ一括作成
-          const rejectionLogs = validPendingIds.map(id => ({
+          const rejectionLogs = validPendingIds.map((id) => ({
             adjustmentId: id,
             actorId: actorId,
             action: 'reject' as const,
             reason: bulkDto.reason || null,
-            createdAt: now
+            createdAt: now,
           }));
           await this.prisma.pending_approval_logs.createMany({
-            data: rejectionLogs
+            data: rejectionLogs,
           });
         }
 
-        console.log(`Bulk ${bulkDto.action} completed: ${successCount} processed`);
+        console.log(
+          `Bulk ${bulkDto.action} completed: ${successCount} processed`,
+        );
       }
-
     } catch (error) {
       console.error('Bulk approval failed:', error);
-      throw new BadRequestException(`一括${bulkDto.action === 'approve' ? '承認' : '却下'}に失敗しました`);
+      throw new BadRequestException(
+        `一括${bulkDto.action === 'approve' ? '承認' : '却下'}に失敗しました`,
+      );
     }
 
     return {
       successCount,
       failedCount,
       errors,
-      totalProcessed: successCount + failedCount
+      totalProcessed: successCount + failedCount,
     };
   }
 
@@ -622,29 +649,32 @@ export class PendingService {
       include: {
         Staff_Adjustment_staffIdToStaff: true,
         Staff_Adjustment_approvedByToStaff: {
-          select: { id: true, name: true }
+          select: { id: true, name: true },
         },
         Staff_Adjustment_rejectedByToStaff: {
-          select: { id: true, name: true }
+          select: { id: true, name: true },
         },
         pending_approval_logs: {
           include: {
             Staff: {
-              select: { id: true, name: true }
-            }
+              select: { id: true, name: true },
+            },
           },
-          orderBy: { createdAt: 'desc' }
-        }
+          orderBy: { createdAt: 'desc' },
+        },
       },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
     });
 
     // 部署フィルター
     const filteredPendings = filters.department
-      ? pendings.filter(p => p.Staff_Adjustment_staffIdToStaff.department === filters.department)
+      ? pendings.filter(
+          (p) =>
+            p.Staff_Adjustment_staffIdToStaff.department === filters.department,
+        )
       : pendings;
 
-    return filteredPendings.map(p => this.formatPendingResponse(p));
+    return filteredPendings.map((p) => this.formatPendingResponse(p));
   }
 
   /**
@@ -652,36 +682,33 @@ export class PendingService {
    */
   async findAllForMonthlyPlanner(year: number, month: number) {
     console.log(`Monthly planner: fetching pendings for ${year}-${month}`);
-    
+
     const startDate = new Date(year, month - 1, 1);
     const endDate = new Date(year, month, 0, 23, 59, 59);
-    
+
     const pendings = await this.prisma.adjustment.findMany({
       where: {
         isPending: true, // pending予定のみ（承認済み・未承認両方）
         date: {
           gte: startDate,
-          lte: endDate
-        }
+          lte: endDate,
+        },
       },
       include: {
         Staff_Adjustment_staffIdToStaff: {
-          select: { id: true, name: true, department: true, group: true }
+          select: { id: true, name: true, department: true, group: true },
         },
         Staff_Adjustment_approvedByToStaff: {
-          select: { id: true, name: true }
+          select: { id: true, name: true },
         },
         Staff_Adjustment_rejectedByToStaff: {
-          select: { id: true, name: true }
-        }
+          select: { id: true, name: true },
+        },
       },
-      orderBy: [
-        { date: 'asc' },
-        { start: 'asc' }
-      ]
+      orderBy: [{ date: 'asc' }, { start: 'asc' }],
     });
 
-    return pendings.map(p => this.formatPendingResponse(p));
+    return pendings.map((p) => this.formatPendingResponse(p));
   }
 
   /**
