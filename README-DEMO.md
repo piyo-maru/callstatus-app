@@ -22,9 +22,9 @@
 ## 🌐 ライブデモ確認
 
 ### サービスURL
-- **フロントエンド**: http://13.112.49.86:3000
-- **バックエンドAPI**: http://13.112.49.86:3002
-- **API疎通テスト**: http://13.112.49.86:3002/api/test
+- **フロントエンド**: https://callstatus.online
+- **バックエンドAPI**: https://callstatus.online/api
+- **API疎通テスト**: https://callstatus.online/api/test
 
 ### デモデータ確認
 - **50人スタッフ**: 6部署構成（システム部・営業部・管理部・マーケティング部・カスタマーサポート部・受付チーム）
@@ -162,9 +162,9 @@ curl http://localhost:3002/api/staff  # 50人スタッフデータ確認
 ## 🌐 デプロイ完了後のアクセス確認
 
 ### サービスURL（IPアドレス更新後）
-- **フロントエンド**: http://YOUR-EC2-IP:3000
-- **バックエンドAPI**: http://YOUR-EC2-IP:3002
-- **API疎通テスト**: http://YOUR-EC2-IP:3002/api/test
+- **フロントエンド**: https://callstatus.online
+- **バックエンドAPI**: https://callstatus.online/api
+- **API疎通テスト**: https://callstatus.online/api/test
 
 ## 💰 無料枠活用・監視設定
 
