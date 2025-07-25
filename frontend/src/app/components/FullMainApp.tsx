@@ -4548,7 +4548,7 @@ export default function FullMainApp() {
             </a>
           )}
           <a
-            href={typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:9000/' : 'http://10.99.129.21:9000/'}
+            href={typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:9000/' : 'https://layout.callstatus.online'}
             target="_blank"
             rel="noopener noreferrer"
             className={BUTTON_STYLES.headerSecondary}

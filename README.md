@@ -109,7 +109,7 @@
 ### インストール・起動
 ```bash
 # リポジトリクローン
-git clone https://github.com/piyopiyo-maru/callstatus-app.git
+git clone https://github.com/piyo-maru/callstatus-app.git
 cd callstatus-app
 
 # 全サービス起動（初回は--buildオプション推奨）
@@ -386,7 +386,7 @@ MIT License - 詳細は[LICENSE](LICENSE)をご覧ください。
 ## 👤 開発者情報
 
 **Atsushi Machida**
-- GitHub: [@piyopiyo-maru](https://github.com/piyopiyo-maru)
+- GitHub: [@piyo-maru](https://github.com/piyo-maru)
 
 ### 💼 転職活動について
 このプロジェクトは実際の企業要件に基づいた開発経験を示すポートフォリオです。  
