@@ -246,13 +246,13 @@ npm run test:ui           # Playwright UIツール
 ### バックエンドテスト
 ```bash
 # 単体・統合テスト
-docker exec callstatus-app_backend_1 bash -c \"cd /app && npm run test\"
+docker exec callstatus-app-backend-1 bash -c \"cd /app && npm run test\"
 
 # E2Eテスト
-docker exec callstatus-app_backend_1 bash -c \"cd /app && npm run test:e2e\"
+docker exec callstatus-app-backend-1 bash -c \"cd /app && npm run test:e2e\"
 
 # カバレッジ測定
-docker exec callstatus-app_backend_1 bash -c \"cd /app && npm run test:cov\"
+docker exec callstatus-app-backend-1 bash -c \"cd /app && npm run test:cov\"
 ```
 
 ---
@@ -325,15 +325,15 @@ docker exec callstatus-app_backend_1 bash -c \"cd /app && npm run test:cov\"
 ### 開発者向けコマンド
 ```bash
 # データベース操作
-docker exec callstatus-app_backend_1 bash -c \"cd /app && npx prisma migrate dev\"
-docker exec callstatus-app_backend_1 bash -c \"cd /app && npm run db:seed\"
+docker exec callstatus-app-backend-1 bash -c \"cd /app && npx prisma migrate dev\"
+docker exec callstatus-app-backend-1 bash -c \"cd /app && npm run db:seed\"
 
 # コード品質チェック
-docker exec callstatus-app_frontend_1 bash -c \"cd /app && npm run lint\"
-docker exec callstatus-app_backend_1 bash -c \"cd /app && npm run format\"
+docker exec callstatus-app-frontend-1 bash -c \"cd /app && npm run lint\"
+docker exec callstatus-app-backend-1 bash -c \"cd /app && npm run format\"
 
 # 型チェック
-docker exec callstatus-app_frontend_1 bash -c \"cd /app && npx tsc --noEmit\"
+docker exec callstatus-app-frontend-1 bash -c \"cd /app && npx tsc --noEmit\"
 ```
 
 ### 運用スクリプト
