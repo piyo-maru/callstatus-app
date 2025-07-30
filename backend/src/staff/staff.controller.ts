@@ -94,7 +94,7 @@ export class StaffController {
 
   @Post('sync-from-json-preview')
   @UseInterceptors(FileInterceptor('file'))
-  async previewSyncFromJson(@UploadedFile() file: Express.Multer.File) {
+  async previewSyncFromJson(@UploadedFile() file: Express.Multer.File | any) {
     console.log('=== Preview sync from JSON called ===');
     try {
       if (!file) {
@@ -125,7 +125,7 @@ export class StaffController {
 
   @Post('sync-from-json')
   @UseInterceptors(FileInterceptor('file'))
-  async syncFromJson(@UploadedFile() file: Express.Multer.File) {
+  async syncFromJson(@UploadedFile() file: Express.Multer.File | any) {
     console.log('=== syncFromJson endpoint called ===');
     console.log('File received:', file ? 'Yes' : 'No');
     
@@ -322,7 +322,7 @@ export class StaffController {
 
   @Post('sync-from-json-chunked')
   @UseInterceptors(FileInterceptor('file'))
-  async syncFromJsonChunked(@UploadedFile() file: Express.Multer.File) {
+  async syncFromJsonChunked(@UploadedFile() file: Express.Multer.File | any) {
     console.log('=== チャンク処理ファイルインポート開始 ===');
     const importId = `import-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     

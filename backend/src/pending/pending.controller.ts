@@ -91,7 +91,7 @@ export class PendingController {
   @Get(':id')
   async findOne(@Param('id', ParseIntPipe) id: number) {
     const mockStaffId = await this.getMockStaffId();
-    return this.pendingService.findOne(id, mockStaffId, true); // admin権限で取得
+    return this.pendingService.findOne(id);
   }
 
   /**
@@ -103,7 +103,7 @@ export class PendingController {
     @Body() updatePendingDto: Partial<CreatePendingDto>
   ) {
     const mockStaffId = await this.getMockStaffId();
-    return this.pendingService.update(id, updatePendingDto, mockStaffId);
+    return this.pendingService.update(id, updatePendingDto);
   }
 
   /**
@@ -112,7 +112,7 @@ export class PendingController {
   @Delete(':id')
   async remove(@Param('id', ParseIntPipe) id: number) {
     const mockStaffId = await this.getMockStaffId();
-    return this.pendingService.remove(id, mockStaffId);
+    return this.pendingService.remove(id);
   }
 
   /**
@@ -203,7 +203,7 @@ export class AdminPendingController {
   @Get(':id')
   async findOneForAdmin(@Param('id', ParseIntPipe) id: number) {
     const mockStaffId = await this.getMockStaffId();
-    return this.pendingService.findOne(id, mockStaffId, true);
+    return this.pendingService.findOne(id);
   }
 
   /**

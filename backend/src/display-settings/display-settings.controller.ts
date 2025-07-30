@@ -24,7 +24,7 @@ export class DisplaySettingsController {
     // リクエストからstaffIdを取得（認証済みの場合）
     const staffId = req?.user?.staffId || req?.staffId;
     
-    return this.displaySettingsService.updateSettings(updateData, staffId);
+    return this.displaySettingsService.updateSettings(updateData);
   }
 
   /**

@@ -511,7 +511,7 @@ const ImportHistoryModal = ({ isOpen, onClose, onRollback, authenticatedFetch }:
     setError(null);
     try {
       const currentApiUrl = getApiUrl();
-      const response = await authenticatedFetch(`${currentApiUrl}/csv-import/history`);
+      const response = await authenticatedFetch(`${currentApiUrl}/api/csv-import/history`);
       if (!response.ok) {
         throw new Error('履歴の取得に失敗しました');
       }
@@ -1394,12 +1394,12 @@ export default function FullMainApp() {
         let response;
         
         if (isUpdate) {
-          response = await authenticatedFetch(`${currentApiUrl}/schedules/${originalPayload.id}`, {
+          response = await authenticatedFetch(`${currentApiUrl}/api/schedules/${originalPayload.id}`, {
             method: 'PATCH',
             body: JSON.stringify(originalPayload)
           });
         } else {
-          response = await authenticatedFetch(`${currentApiUrl}/schedules`, {
+          response = await authenticatedFetch(`${currentApiUrl}/api/schedules`, {
             method: 'POST',
             body: JSON.stringify(originalPayload)
           });
@@ -2111,7 +2111,7 @@ export default function FullMainApp() {
   const fetchDepartmentSettings = useCallback(async () => {
     try {
       const currentApiUrl = getApiUrl();
-      const response = await authenticatedFetch(`${currentApiUrl}/department-settings`);
+      const response = await authenticatedFetch(`${currentApiUrl}/api/department-settings`);
       if (response.ok) {
         const data = await response.json();
         setDepartmentSettings(data);
@@ -2178,7 +2178,7 @@ export default function FullMainApp() {
       // スタッフとスケジュールデータを統合API（履歴対応）で取得
       // マスキング設定も含めて送信
       const maskingParam = maskingEnabled ? 'true' : 'false';
-      const scheduleRes = await fetch(`${currentApiUrl}/schedules/unified?date=${dateString}&includeMasking=${maskingParam}`);
+      const scheduleRes = await fetch(`${currentApiUrl}/api/schedules/unified?date=${dateString}&includeMasking=${maskingParam}`);
       
       if (!scheduleRes.ok) throw new Error(`Unified API response was not ok`);
       
@@ -2203,7 +2203,7 @@ export default function FullMainApp() {
       // 支援データを取得
       let supportData = { assignments: [] };
       try {
-        const supportRes = await fetch(`${getApiUrl()}/daily-assignments?date=${dateString}`);
+        const supportRes = await fetch(`${getApiUrl()}/api/daily-assignments?date=${dateString}`);
         if (supportRes.ok) {
           supportData = await supportRes.json();
           // console.log('Support (daily-assignments) data fetched:', supportData);
@@ -2219,7 +2219,7 @@ export default function FullMainApp() {
       
       // 部署設定データを取得
       try {
-        const departmentRes = await authenticatedFetch(`${getApiUrl()}/department-settings`);
+        const departmentRes = await authenticatedFetch(`${getApiUrl()}/api/department-settings`);
         if (departmentRes.ok) {
           const deptData = await departmentRes.json();
           setDepartmentSettings(deptData);
@@ -3235,19 +3235,19 @@ export default function FullMainApp() {
       if (isDebugEnabled()) {
         console.log('🌐 サーバー通信開始:', {
           method: isUpdate ? 'PATCH' : 'POST',
-          url: isUpdate ? `${getApiUrl()}/schedules/${scheduleData.id}` : `${getApiUrl()}/schedules`,
+          url: isUpdate ? `${getApiUrl()}/api/schedules/${scheduleData.id}` : `${getApiUrl()}/api/schedules`,
           payload
         });
       }
       
       let response;
       if (scheduleData.id) {
-        response = await authenticatedFetch(`${getApiUrl()}/schedules/${scheduleData.id}`, { 
+        response = await authenticatedFetch(`${getApiUrl()}/api/schedules/${scheduleData.id}`, { 
           method: 'PATCH',
           body: JSON.stringify(payload) 
         });
       } else {
-        response = await authenticatedFetch(`${getApiUrl()}/schedules`, { 
+        response = await authenticatedFetch(`${getApiUrl()}/api/schedules`, { 
           method: 'POST',
           body: JSON.stringify(payload) 
         });
@@ -3468,8 +3468,8 @@ export default function FullMainApp() {
   const handleDeleteSchedule = async (id: number | string) => {
     const currentApiUrl = getApiUrl();
     try {
-      // console.log('DELETE request to:', `${getApiUrl()}/schedules/${id}`);
-      const response = await authenticatedFetch(`${getApiUrl()}/schedules/${id}`, { method: 'DELETE' });
+      // console.log('DELETE request to:', `${getApiUrl()}/api/schedules/${id}`);
+      const response = await authenticatedFetch(`${getApiUrl()}/api/schedules/${id}`, { method: 'DELETE' });
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -3575,7 +3575,7 @@ export default function FullMainApp() {
       // console.log('送信データ:', backendData);
       // console.log('API URL:', `${getApiUrl()}/daily-assignments`);
       
-      const response = await authenticatedFetch(`${getApiUrl()}/daily-assignments`, {
+      const response = await authenticatedFetch(`${getApiUrl()}/api/daily-assignments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(backendData)
@@ -3660,7 +3660,7 @@ export default function FullMainApp() {
       // console.log('削除対象スタッフID:', staffId);
       // console.log('API URL:', `${getApiUrl()}/daily-assignments/staff/${staffId}/current`);
       
-      const response = await authenticatedFetch(`${getApiUrl()}/daily-assignments/staff/${staffId}/current`, {
+      const response = await authenticatedFetch(`${getApiUrl()}/api/daily-assignments/staff/${staffId}/current`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' }
       });
@@ -3951,7 +3951,7 @@ export default function FullMainApp() {
   const fetchImportHistory = async (): Promise<ImportHistory[]> => {
     try {
       const currentApiUrl = getApiUrl();
-      const response = await authenticatedFetch(`${currentApiUrl}/csv-import/history`);
+      const response = await authenticatedFetch(`${currentApiUrl}/api/csv-import/history`);
       
       if (!response.ok) {
         throw new Error('履歴の取得に失敗しました');
@@ -4070,8 +4070,8 @@ export default function FullMainApp() {
     const date = `${year}-${month}-${day}`;
     
     try {
-      // console.log('MOVE PATCH request to:', `${getApiUrl()}/schedules/${scheduleId}`);
-      const response = await authenticatedFetch(`${getApiUrl()}/schedules/${scheduleId}`, {
+      // console.log('MOVE PATCH request to:', `${getApiUrl()}/api/schedules/${scheduleId}`);
+      const response = await authenticatedFetch(`${getApiUrl()}/api/schedules/${scheduleId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

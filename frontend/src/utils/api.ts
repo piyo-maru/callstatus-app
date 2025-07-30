@@ -30,7 +30,7 @@ export const getApiUrl = (): string => {
   }
   
   if (hostname === '10.99.129.21') {
-    return `http://${hostname}:3003`; // 外部アクセス用ポート
+    return `http://${hostname}:3002`; // ローカル開発環境用ポート
   }
   
   return `http://${hostname}:3002`;

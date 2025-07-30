@@ -7,7 +7,7 @@ export class BackupController {
 
   @Post('execute')
   async executeBackup(@Body() body: { triggeredBy?: string }) {
-    const result = await this.backupService.executeBackup(body.triggeredBy || 'manual');
+    const result = await this.backupService.executeBackup();
     
     if (!result.success) {
       throw new HttpException(result.message, HttpStatus.INTERNAL_SERVER_ERROR);
